@@ -90,7 +90,7 @@ except Exception:
 DB_PATH = Path(os.environ.get("BRAIN_DB", str(Path.home() / "agentmemory" / "db" / "brain.db")))
 BLOBS_DIR = Path.home() / "agentmemory" / "blobs"
 BACKUPS_DIR = Path.home() / "agentmemory" / "backups"
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 
 VALID_MEMORY_CATEGORIES = {
     "identity", "user", "environment", "convention",
@@ -218,8 +218,8 @@ def _age_str(created_at_str):
 
 def get_db() -> sqlite3.Connection:
     if not DB_PATH.exists():
-        print(f"ERROR: Database not found at {DB_PATH}", file=sys.stderr)
-        print("Run: sqlite3 ~/agentmemory/db/brain.db < ~/agentmemory/db/init_schema.sql", file=sys.stderr)
+        json_out({"error": f"Database not found at {DB_PATH}",
+                  "hint": "Run 'brainctl init' to create a new database, or set BRAIN_DB env var."})
         sys.exit(1)
     conn = sqlite3.connect(str(DB_PATH), timeout=10)
     conn.row_factory = sqlite3.Row
@@ -12217,6 +12217,36 @@ def main():
         fn = dispatch.get(args.command)
 
     if fn:
-        fn(args)
+        try:
+            fn(args)
+        except SystemExit:
+            raise  # let argparse exits through
+        except KeyboardInterrupt:
+            sys.exit(130)
+        except sqlite3.OperationalError as e:
+            err_msg = str(e)
+            if "no such table" in err_msg:
+                json_out({"error": f"Database table missing: {err_msg}",
+                          "hint": "Run 'brainctl init' to create a fresh database, or 'brainctl init --force' to reset."})
+            elif "database is locked" in err_msg:
+                json_out({"error": "Database is locked. Another process may be writing.",
+                          "hint": "Wait a moment and retry, or check for hung processes."})
+            else:
+                json_out({"error": f"Database error: {err_msg}"})
+            sys.exit(1)
+        except sqlite3.IntegrityError as e:
+            json_out({"error": f"Integrity constraint: {e}",
+                      "hint": "A required record may be missing. Check agent exists or use --force."})
+            sys.exit(1)
+        except (TypeError, ValueError) as e:
+            json_out({"error": f"Invalid input: {e}"})
+            sys.exit(1)
+        except FileNotFoundError as e:
+            json_out({"error": f"File not found: {e}",
+                      "hint": "Run 'brainctl init' to create the database."})
+            sys.exit(1)
+        except Exception as e:
+            json_out({"error": f"{type(e).__name__}: {e}"})
+            sys.exit(1)
     else:
         parser.print_help()

@@ -98,14 +98,15 @@ brainctl stats
 ## Architecture
 
 ```
-brain.db (single SQLite file)
+brain.db (single SQLite file, 80+ tables)
 ├── memories        FTS5 full-text + optional vec search
 ├── events          timestamped logs with importance scoring
 ├── entities        typed nodes (person, project, tool, concept...)
 ├── knowledge_edges directed relations between any table rows
 ├── decisions       recorded with rationale
 ├── memory_triggers prospective memory (fire on future conditions)
-└── 20+ more tables (consolidation, beliefs, policies, epochs...)
+├── affect_log      per-agent functional affect state tracking
+└── 60+ more tables (consolidation, beliefs, policies, epochs...)
 
 Consolidation Engine (hippocampus.py)
 ├── Confidence decay    — unused memories fade
@@ -119,6 +120,24 @@ Write Gate (W(m))
 ├── Surprise scoring    — reject redundant memories at the door
 ├── Worthiness check    — surprise × importance × (1 - redundancy)
 └── Force flag          — bypass for explicit writes
+```
+
+## Consolidation Engine
+
+The hippocampus is brainctl's memory consolidation system — it makes memories behave like biological memory:
+
+```bash
+brainctl-consolidate decay          # confidence decay on unused memories
+brainctl-consolidate compress       # merge redundant memories
+brainctl-consolidate dream          # discover non-obvious connections
+brainctl-consolidate promote        # promote important events to memories
+brainctl-consolidate sweep          # full maintenance cycle
+```
+
+Schedule it with cron for autonomous memory maintenance:
+```bash
+# Run consolidation every 4 hours
+0 */4 * * * BRAIN_DB=~/brain.db brainctl-consolidate sweep
 ```
 
 ## Vector Search (Optional)
