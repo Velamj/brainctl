@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+"""
+brainctl v3 — Unified agent memory CLI
+
+Thin wrapper that delegates to the modular package at src/agentmemory/.
+"""
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
+from agentmemory.cli import main
+main()

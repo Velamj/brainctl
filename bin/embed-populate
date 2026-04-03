@@ -1,0 +1,478 @@
+#!/usr/bin/env python3
+"""
+embed-populate — Batch embedding pipeline for brain.db
+
+Embeds all unembedded memories, events, and context chunks using
+nomic-embed-text via Ollama, then populates:
+  - embeddings table (portable blob storage)
+  - vec_memories / vec_context / vec_events (sqlite-vec virtual tables)
+
+Usage:
+  embed-populate [--tables memories,events,context] [--dry-run] [--force]
+"""
+
+import argparse
+import json
+import sqlite3
+import struct
+import sys
+import urllib.request
+import urllib.error
+from pathlib import Path
+
+DB_PATH = Path.home() / "agentmemory" / "db" / "brain.db"
+def _find_vec_dylib():
+    """Auto-discover the sqlite-vec loadable extension path."""
+    try:
+        import sqlite_vec
+        return sqlite_vec.loadable_path()
+    except (ImportError, AttributeError):
+        pass
+    import glob
+    for pattern in ['/opt/homebrew/lib/python*/site-packages/sqlite_vec/vec0.*',
+                    '/usr/lib/python*/site-packages/sqlite_vec/vec0.*']:
+        matches = sorted(glob.glob(pattern), reverse=True)
+        if matches:
+            return matches[0]
+    return None
+
+VEC_DYLIB = _find_vec_dylib()
+OLLAMA_URL = "http://localhost:11434/api/embed"
+EMBED_MODEL = "nomic-embed-text:latest"
+DIMENSIONS = 768
+
+
+def get_db() -> sqlite3.Connection:
+    conn = sqlite3.connect(str(DB_PATH), timeout=30)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.enable_load_extension(True)
+    conn.load_extension(VEC_DYLIB)
+    conn.enable_load_extension(False)
+    return conn
+
+
+MAX_EMBED_CHARS = 6000  # nomic-embed-text context limit ~8192 tokens; 6000 chars is safe
+
+
+def embed(text: str) -> list[float]:
+    """Call Ollama to get embedding for text. Returns list of floats.
+    Truncates text to MAX_EMBED_CHARS to avoid context-length errors on large memories.
+    """
+    if len(text) > MAX_EMBED_CHARS:
+        print(f"  [TRUNCATE] text length {len(text)} > {MAX_EMBED_CHARS}, truncating for embedding")
+        text = text[:MAX_EMBED_CHARS]
+    payload = json.dumps({"model": EMBED_MODEL, "input": text}).encode()
+    req = urllib.request.Request(
+        OLLAMA_URL,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+            # Ollama returns {"embeddings": [[...float...]]}
+            vec = data["embeddings"][0]
+            if len(vec) != DIMENSIONS:
+                raise ValueError(f"Expected {DIMENSIONS}d, got {len(vec)}d")
+            return vec
+    except urllib.error.URLError as e:
+        print(f"ERROR: Ollama not reachable: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def floats_to_blob(floats: list[float]) -> bytes:
+    return struct.pack(f"{len(floats)}f", *floats)
+
+
+def already_embedded(conn, source_table: str, source_id: int) -> bool:
+    row = conn.execute(
+        "SELECT id FROM embeddings WHERE source_table=? AND source_id=?",
+        (source_table, source_id),
+    ).fetchone()
+    return row is not None
+
+
+def get_existing_embedding(conn, source_table: str, source_id: int) -> list[float] | None:
+    """Return the stored embedding as a list of floats, or None if not found."""
+    row = conn.execute(
+        "SELECT vector FROM embeddings WHERE source_table=? AND source_id=?",
+        (source_table, source_id),
+    ).fetchone()
+    if row is None:
+        return None
+    blob = row["vector"]
+    n = len(blob) // 4
+    return list(struct.unpack(f"{n}f", blob))
+
+
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Return cosine similarity between two equal-length vectors."""
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = sum(x * x for x in a) ** 0.5
+    norm_b = sum(x * x for x in b) ** 0.5
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+DRIFT_THRESHOLD = 0.85  # cosine sim below this = potential semantic drift
+
+
+def check_embedding_drift(
+    conn, source_table: str, source_id: int, new_vec: list[float], dry_run: bool
+) -> bool:
+    """Compare new embedding against stored one. If cosine sim < DRIFT_THRESHOLD,
+    log a semantic_drift event and return True (drift detected). Returns False
+    if no prior embedding or similarity is acceptable.
+
+    Called during --force re-embed to catch model-version-induced semantic drift.
+    """
+    old_vec = get_existing_embedding(conn, source_table, source_id)
+    if old_vec is None or len(old_vec) != len(new_vec):
+        return False
+    sim = cosine_similarity(old_vec, new_vec)
+    if sim >= DRIFT_THRESHOLD:
+        return False
+    # Drift detected — log an event so it surfaces in brainctl searches
+    print(
+        f"  [DRIFT] {source_table} id={source_id} cosine_sim={sim:.4f} "
+        f"(threshold={DRIFT_THRESHOLD}) — potential semantic drift detected"
+    )
+    if not dry_run:
+        try:
+            # Determine an agent_id to log under (use the first available agent)
+            agent_row = conn.execute(
+                "SELECT id FROM agents ORDER BY created_at LIMIT 1"
+            ).fetchone()
+            agent_id = agent_row["id"] if agent_row else "embed-populate"
+            conn.execute(
+                """
+                INSERT INTO events (agent_id, event_type, summary, detail, importance)
+                VALUES (?, 'warning', ?, ?, ?)
+                """,
+                (
+                    agent_id,
+                    f"Semantic drift: {source_table} id={source_id} sim={sim:.4f}",
+                    f"Re-embedding {source_table}/{source_id} produced cosine similarity "
+                    f"{sim:.4f} vs stored vector (threshold {DRIFT_THRESHOLD}). "
+                    "Possible model version change or content mutation. Old embedding preserved.",
+                    0.8,
+                ),
+            )
+            conn.commit()
+        except Exception:
+            pass  # event logging is best-effort
+    return True
+
+
+def insert_embedding(conn, source_table: str, source_id: int, vec: list[float]):
+    blob = floats_to_blob(vec)
+    conn.execute(
+        "INSERT INTO embeddings (source_table, source_id, model, dimensions, vector) VALUES (?,?,?,?,?)",
+        (source_table, source_id, EMBED_MODEL, DIMENSIONS, blob),
+    )
+    # Insert into corresponding vec virtual table (rowid matches source id)
+    vec_table = f"vec_{source_table if source_table != 'context' else 'context'}"
+    conn.execute(
+        f"INSERT OR REPLACE INTO {vec_table}(rowid, embedding) VALUES (?,?)",
+        (source_id, blob),
+    )
+
+
+def purge_retired_memories(conn, dry_run: bool) -> int:
+    """
+    Remove vec_memories and embeddings rows for memories that have been
+    retired (retired_at IS NOT NULL).  Without this, retired memories
+    contaminate vsearch results indefinitely.
+
+    Returns the number of rows pruned from vec_memories.
+    """
+    retired = conn.execute(
+        "SELECT id FROM memories WHERE retired_at IS NOT NULL"
+    ).fetchall()
+    if not retired:
+        return 0
+
+    retired_ids = [r["id"] for r in retired]
+    pruned = 0
+    for rid in retired_ids:
+        # Check whether a vec row actually exists before reporting a prune
+        exists = conn.execute(
+            "SELECT rowid FROM vec_memories WHERE rowid=?", (rid,)
+        ).fetchone()
+        if not exists:
+            continue
+        if dry_run:
+            print(f"  [dry-run] would purge vec_memories rowid={rid}")
+        else:
+            conn.execute("DELETE FROM vec_memories WHERE rowid=?", (rid,))
+            conn.execute(
+                "DELETE FROM embeddings WHERE source_table='memories' AND source_id=?",
+                (rid,),
+            )
+        pruned += 1
+
+    if not dry_run and pruned:
+        conn.commit()
+        print(f"  purged {pruned} retired memory embeddings from vec_memories")
+
+    return pruned
+
+
+def process_memories(conn, dry_run: bool, force: bool) -> int:
+    # Always clean up retired memories first so vsearch stays uncontaminated.
+    pruned = purge_retired_memories(conn, dry_run)
+    if pruned:
+        print(f"  (purged {pruned} retired rows before embedding pass)")
+
+    rows = conn.execute(
+        "SELECT id, content FROM memories WHERE retired_at IS NULL ORDER BY id"
+    ).fetchall()
+    count = 0
+    drift_count = 0
+    for row in rows:
+        rid, content = row["id"], row["content"]
+        if not force and already_embedded(conn, "memories", rid):
+            continue
+        if dry_run:
+            print(f"  [dry-run] would embed memory id={rid}: {content[:60]}")
+            count += 1
+            continue
+        vec = embed(content)
+        # Embedding stability check: on forced re-embed, compare cosine
+        # similarity with old vector. If drift detected, skip overwrite and flag.
+        if force and check_embedding_drift(conn, "memories", rid, vec, dry_run):
+            drift_count += 1
+            continue  # preserve old embedding; drift event already logged
+        insert_embedding(conn, "memories", rid, vec)
+        conn.commit()
+        print(f"  embedded memory id={rid}: {content[:60]}")
+        count += 1
+    if drift_count:
+        print(f"  [DRIFT] {drift_count} memory embeddings flagged for semantic drift — not overwritten")
+    return count
+
+
+def process_events(conn, dry_run: bool, force: bool) -> int:
+    rows = conn.execute(
+        "SELECT id, summary FROM events ORDER BY id"
+    ).fetchall()
+    count = 0
+    for row in rows:
+        rid, summary = row["id"], row["summary"]
+        if not force and already_embedded(conn, "events", rid):
+            continue
+        if dry_run:
+            print(f"  [dry-run] would embed event id={rid}: {summary[:60]}")
+            count += 1
+            continue
+        vec = embed(summary)
+        insert_embedding(conn, "events", rid, vec)
+        conn.commit()
+        print(f"  embedded event id={rid}: {summary[:60]}")
+        count += 1
+    return count
+
+
+def process_context(conn, dry_run: bool, force: bool) -> int:
+    rows = conn.execute(
+        "SELECT id, content, summary FROM context WHERE stale_at IS NULL ORDER BY id"
+    ).fetchall()
+    count = 0
+    for row in rows:
+        rid = row["id"]
+        # Prefer summary for embedding if available (shorter, more signal-dense)
+        text = row["summary"] or row["content"]
+        if not force and already_embedded(conn, "context", rid):
+            continue
+        if dry_run:
+            print(f"  [dry-run] would embed context id={rid}: {text[:60]}")
+            count += 1
+            continue
+        vec = embed(text)
+        insert_embedding(conn, "context", rid, vec)
+        conn.commit()
+        print(f"  embedded context id={rid}: {text[:60]}")
+        count += 1
+    return count
+
+
+# ---------------------------------------------------------------------------
+# Semantic edge detection — auto-populate knowledge_edges via KNN similarity
+# ---------------------------------------------------------------------------
+
+def detect_semantic_edges(conn, tables, threshold: float, k: int, dry_run: bool) -> int:
+    """
+    For each embedded record in the given tables, run a KNN search against
+    its own vec table to find the k nearest neighbors. Write a
+    'semantic_similar' edge to knowledge_edges for any pair whose cosine
+    distance is below (1 - threshold).
+
+    Returns the number of new edges written.
+    """
+    added = 0
+    max_distance = 1.0 - threshold  # sqlite-vec cosine distance: lower = more similar
+
+    TABLE_VEC = {
+        "memories": ("vec_memories", "memories", "content"),
+        "events":   ("vec_events",   "events",   "summary"),
+        "context":  ("vec_context",  "context",  "content"),
+        "entities": ("vec_entities", "entities", "name"),
+    }
+
+    for tbl in tables:
+        if tbl not in TABLE_VEC:
+            continue
+        vec_table, src_table, text_col = TABLE_VEC[tbl]
+
+        # Fetch all rowids that have embeddings
+        rowids = [r[0] for r in conn.execute(
+            f"SELECT rowid FROM {vec_table}"
+        ).fetchall()]
+
+        print(f"  [{tbl}] {len(rowids)} embedded records — scanning for semantic edges ...")
+
+        for rowid in rowids:
+            # Retrieve the stored embedding blob
+            try:
+                emb_blob = conn.execute(
+                    f"SELECT embedding FROM {vec_table} WHERE rowid=?", (rowid,)
+                ).fetchone()
+            except Exception:
+                continue
+            if not emb_blob:
+                continue
+
+            # KNN search: get k+1 neighbors (first result is self)
+            try:
+                neighbors = conn.execute(
+                    f"SELECT rowid, distance FROM {vec_table} "
+                    f"WHERE embedding MATCH ? AND k=?",
+                    (emb_blob[0], k + 1),
+                ).fetchall()
+            except Exception:
+                continue
+
+            for nbr in neighbors:
+                nbr_id = nbr[0]
+                dist = nbr[1]
+                if nbr_id == rowid:
+                    continue  # skip self
+                if dist > max_distance:
+                    continue  # below threshold
+                weight = round(1.0 - dist, 4)
+
+                # Canonical ordering: smaller id first to avoid duplicates
+                src_id, tgt_id = (rowid, nbr_id) if rowid < nbr_id else (nbr_id, rowid)
+
+                if dry_run:
+                    added += 1
+                    continue
+
+                conn.execute(
+                    "INSERT OR IGNORE INTO knowledge_edges "
+                    "(source_table, source_id, target_table, target_id, relation_type, weight, agent_id) "
+                    "VALUES (?,?,?,?,?,?,?)",
+                    (tbl, src_id, tbl, tgt_id, "semantic_similar", weight, "embed-populate"),
+                )
+                added += 1
+
+        if not dry_run:
+            conn.commit()
+
+    return added
+
+
+def process_entities(conn, dry_run: bool, force: bool) -> int:
+    """Embed entities using name + type + observations as the text."""
+    import json as _json
+    rows = conn.execute(
+        "SELECT id, name, entity_type, observations FROM entities WHERE retired_at IS NULL ORDER BY id"
+    ).fetchall()
+    count = 0
+    for row in rows:
+        rid = row["id"]
+        if not force and already_embedded(conn, "entities", rid):
+            continue
+        obs = _json.loads(row["observations"]) if row["observations"] else []
+        text = f"{row['name']} ({row['entity_type']}): {' '.join(obs)}"
+        if dry_run:
+            print(f"  [dry-run] would embed entity id={rid}: {text[:60]}")
+            count += 1
+            continue
+        vec = embed(text)
+        insert_embedding(conn, "entities", rid, vec)
+        conn.commit()
+        print(f"  embedded entity id={rid}: {text[:60]}")
+        count += 1
+    return count
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Batch embed brain.db records")
+    parser.add_argument("--tables", default="memories,events,context,entities",
+                        help="Comma-separated tables to embed (default: memories,events,context,entities)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Show what would be embedded without writing")
+    parser.add_argument("--force", action="store_true",
+                        help="Re-embed even if already embedded")
+    parser.add_argument("--graph-edges", action="store_true", dest="graph_edges",
+                        help="After embedding, detect semantic_similar edges via KNN and write to knowledge_edges")
+    parser.add_argument("--similarity-threshold", type=float, default=0.80, dest="sim_threshold",
+                        help="Cosine similarity threshold for semantic edges (default: 0.80)")
+    parser.add_argument("--knn", type=int, default=5,
+                        help="Number of nearest neighbors to consider per record (default: 5)")
+    args = parser.parse_args()
+
+    tables = [t.strip() for t in args.tables.split(",")]
+    conn = get_db()
+
+    # Verify sqlite-vec loaded
+    ver = conn.execute("SELECT vec_version()").fetchone()[0]
+    print(f"sqlite-vec {ver} loaded")
+    print(f"Embedding model: {EMBED_MODEL} ({DIMENSIONS}d)")
+    print(f"Tables: {tables}")
+    if args.dry_run:
+        print("DRY RUN — no writes")
+    print()
+
+    total = 0
+    if "memories" in tables:
+        print("--- Memories ---")
+        n = process_memories(conn, args.dry_run, args.force)
+        print(f"  {n} memories processed")
+        total += n
+
+    if "events" in tables:
+        print("--- Events ---")
+        n = process_events(conn, args.dry_run, args.force)
+        print(f"  {n} events processed")
+        total += n
+
+    if "context" in tables:
+        print("--- Context ---")
+        n = process_context(conn, args.dry_run, args.force)
+        print(f"  {n} context chunks processed")
+        total += n
+
+    if "entities" in tables:
+        print("--- Entities ---")
+        n = process_entities(conn, args.dry_run, args.force)
+        print(f"  {n} entities processed")
+        total += n
+
+    print(f"\nDone. Total embedded: {total}")
+
+    if args.graph_edges:
+        print(f"\n--- Semantic Edge Detection (threshold={args.sim_threshold}, knn={args.knn}) ---")
+        n_edges = detect_semantic_edges(conn, tables, args.sim_threshold, args.knn, args.dry_run)
+        verb = "would add" if args.dry_run else "added"
+        print(f"  {n_edges} semantic_similar edges {verb} to knowledge_edges")
+
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()

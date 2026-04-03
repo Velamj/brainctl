@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+db/brain.db
+db/brain.db-wal
+db/brain.db-shm
+logs/
+blobs/
+backups/
+.DS_Store
+/tmp/
+*.swp
+config/distill-cron.sh

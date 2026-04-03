@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brainctl"
+version = "0.1.0"
+description = "A cognitive memory system for AI agents — episodic, semantic, and procedural memory with FTS5 search, vector embeddings, neuromodulation, and MCP server integration."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Terrence Schonleber"}
+]
+keywords = ["ai", "agents", "memory", "mcp", "sqlite", "cognitive-architecture"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.27.0"]
+vec = ["sqlite-vec>=0.1.0"]
+all = ["mcp>=1.27.0", "sqlite-vec>=0.1.0"]
+
+[project.scripts]
+brainctl = "agentmemory.cli:main"
+brainctl-mcp = "agentmemory.mcp_server:main"
+
+[project.urls]
+Homepage = "https://github.com/TSchonleber/brainctl"
+Repository = "https://github.com/TSchonleber/brainctl"
+Documentation = "https://github.com/TSchonleber/brainctl/blob/main/ARCHITECTURE.md"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+agentmemory = ["db/*.sql"]
