@@ -5066,6 +5066,143 @@ def cmd_cost(args):
     json_out(report)
 
 
+# ---------------------------------------------------------------------------
+# AFFECT TRACKING — functional affect states for AI agents
+# Grounded in Anthropic "Emotion Concepts in LLMs" (2026)
+# ---------------------------------------------------------------------------
+
+def cmd_affect_log(args):
+    """Log an affect observation for an agent by classifying text."""
+    from agentmemory.affect import classify_affect
+    db = get_db()
+    text = args.text
+    result = classify_affect(text)
+
+    safety = None
+    if result["safety_flags"]:
+        safety = result["safety_flags"][0]["severity"]
+
+    db.execute(
+        "INSERT INTO affect_log (agent_id, valence, arousal, dominance, affect_label, "
+        "cluster, functional_state, safety_flag, trigger, source, metadata, created_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,strftime('%Y-%m-%dT%H:%M:%S','now'))",
+        (args.agent or "unknown", result["valence"], result["arousal"], result["dominance"],
+         result["affect_label"], result["cluster"], result["functional_state"],
+         safety, text[:200], args.source or "observation",
+         json.dumps({"emotions": result["emotions"], "safety_flags": result["safety_flags"]}))
+    )
+    db.commit()
+    json_out(result)
+
+
+def cmd_affect_check(args):
+    """Check current affect state for an agent (latest entry + safety probe)."""
+    from agentmemory.affect import SAFETY_PATTERNS, affect_velocity
+    db = get_db()
+    agent = args.agent or "unknown"
+
+    # Latest entry
+    row = db.execute(
+        "SELECT * FROM affect_log WHERE agent_id=? ORDER BY created_at DESC LIMIT 1",
+        (agent,)
+    ).fetchone()
+    if not row:
+        json_out({"agent": agent, "status": "no_data"})
+        return
+
+    current = dict(row)
+
+    # Recent history for velocity
+    history_rows = db.execute(
+        "SELECT valence, arousal, dominance FROM affect_log WHERE agent_id=? ORDER BY created_at DESC LIMIT 10",
+        (agent,)
+    ).fetchall()
+    history = list(reversed([dict(r) for r in history_rows]))
+    velocity = affect_velocity(history)
+
+    # Safety check on current state
+    v, a, d = current["valence"], current["arousal"], current["dominance"]
+    active_flags = []
+    for name, pattern in SAFETY_PATTERNS.items():
+        try:
+            if pattern["conditions"](v, a, d):
+                active_flags.append({"pattern": name, "severity": pattern["severity"],
+                                     "description": pattern["description"]})
+        except Exception:
+            pass
+
+    json_out({
+        "agent": agent,
+        "current": {
+            "valence": current["valence"], "arousal": current["arousal"],
+            "dominance": current["dominance"], "affect_label": current["affect_label"],
+            "cluster": current["cluster"], "functional_state": current["functional_state"],
+            "recorded_at": current["created_at"],
+        },
+        "velocity": velocity,
+        "safety_flags": active_flags,
+        "status": "critical" if any(f["severity"] == "critical" for f in active_flags)
+                  else "warning" if active_flags
+                  else "healthy",
+    })
+
+
+def cmd_affect_history(args):
+    """Show affect history for an agent."""
+    db = get_db()
+    agent = args.agent or "unknown"
+    limit = args.limit or 20
+
+    rows = db.execute(
+        "SELECT id, valence, arousal, dominance, affect_label, cluster, "
+        "functional_state, safety_flag, trigger, created_at "
+        "FROM affect_log WHERE agent_id=? ORDER BY created_at DESC LIMIT ?",
+        (agent, limit)
+    ).fetchall()
+    json_out(rows_to_list(rows))
+
+
+def cmd_affect_monitor(args):
+    """Fleet-wide affect monitoring — scan all agents for safety flags."""
+    from agentmemory.affect import SAFETY_PATTERNS, fleet_affect_summary
+    db = get_db()
+
+    # Get latest affect state per agent
+    rows = db.execute("""
+        SELECT a.agent_id, a.valence, a.arousal, a.dominance,
+               a.affect_label, a.cluster, a.functional_state, a.safety_flag
+        FROM affect_log a
+        INNER JOIN (
+            SELECT agent_id, MAX(id) as max_id FROM affect_log GROUP BY agent_id
+        ) latest ON a.id = latest.max_id
+    """).fetchall()
+
+    agent_states = {}
+    for r in rows:
+        state = dict(r)
+        v, a, d = state["valence"], state["arousal"], state["dominance"]
+        flags = []
+        for name, pattern in SAFETY_PATTERNS.items():
+            try:
+                if pattern["conditions"](v, a, d):
+                    flags.append({"pattern": name, "severity": pattern["severity"],
+                                  "description": pattern["description"]})
+            except Exception:
+                pass
+        state["safety_flags"] = flags
+        agent_states[state["agent_id"]] = state
+
+    summary = fleet_affect_summary(agent_states)
+    json_out(summary)
+
+
+def cmd_affect_classify(args):
+    """Classify affect from text without logging. Dry-run mode."""
+    from agentmemory.affect import classify_affect
+    result = classify_affect(args.text)
+    json_out(result)
+
+
 def cmd_prune_access_log(args):
     db = get_db()
     days = args.days or 30
@@ -10977,6 +11114,23 @@ def build_parser():
     sub.add_parser("cost", help="Token cost analysis — shows format savings, query costs, and optimization tips")
     sub.add_parser("validate", help="Validate database integrity")
 
+    # --- affect ---
+    aff = sub.add_parser("affect", help="Functional affect tracking (grounded in Anthropic 2026 emotion research)")
+    aff_sub = aff.add_subparsers(dest="affect_cmd")
+    aff_log = aff_sub.add_parser("log", help="Log affect observation by classifying text")
+    aff_log.add_argument("text", help="Text to classify for affect state")
+    aff_log.add_argument("--source", default="observation", help="Source type: observation, self_report, probe, automatic")
+
+    aff_check = aff_sub.add_parser("check", help="Check current affect state + safety probe for an agent")
+
+    aff_hist = aff_sub.add_parser("history", help="Show affect history for an agent")
+    aff_hist.add_argument("--limit", "-l", type=int, default=20)
+
+    aff_mon = aff_sub.add_parser("monitor", help="Fleet-wide affect monitoring — scan all agents for safety flags")
+
+    aff_cls = aff_sub.add_parser("classify", help="Classify affect from text (dry-run, no logging)")
+    aff_cls.add_argument("text", help="Text to classify")
+
     prune = sub.add_parser("prune-log", help="Prune old access log entries")
     prune.add_argument("--days", type=int, default=30)
 
@@ -11671,6 +11825,7 @@ def main():
         "backup": cmd_backup,
         "stats": cmd_stats,
         "cost": cmd_cost,
+        "affect": None,  # subcommand dispatch below
         "validate": cmd_validate,
         "prune-log": cmd_prune_access_log,
         "push": None,  # handled below
@@ -11765,6 +11920,13 @@ def main():
             "update": cmd_expertise_update,
         }
         fn = dispatch.get(args.exp_cmd)
+    elif args.command == "affect":
+        dispatch = {
+            "log": cmd_affect_log, "check": cmd_affect_check,
+            "history": cmd_affect_history, "monitor": cmd_affect_monitor,
+            "classify": cmd_affect_classify,
+        }
+        fn = dispatch.get(args.affect_cmd)
     elif args.command == "whosknows":
         fn = cmd_whosknows
     elif args.command == "ui":
