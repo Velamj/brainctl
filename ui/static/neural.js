@@ -294,8 +294,12 @@ function buildScene() {
     if (tgtNode && (tgtNode.kind === 'agent' || tgtNode.type === 'agent')) connectedAgentIds.add(tgtNode.id);
   });
 
-  // All nodes visible in all modes — orphan agents just render small
-  let visibleNodes = nodes;
+  // Hide orphan agents completely — they're visual noise with no information
+  let visibleNodes = nodes.filter(n => {
+    const kind = n.kind || n.type;
+    if (kind === 'agent' && !connectedAgentIds.has(n.id)) return false;
+    return true;
+  });
 
   // Initial positions based on brain region + jitter
   visibleNodes.forEach(node => {
@@ -304,31 +308,16 @@ function buildScene() {
     const region = getRegion(node);
     const center = REGION_CENTERS[region] || { x: 0, y: 0, z: 0 };
 
-    let sx, sy, sz, nodeSize;
-    if (isOrphanAgent) {
-      // Distribute orphan agents in a ring/shell around the brain
-      const angle = Math.random() * Math.PI * 2;
-      const elevation = (Math.random() - 0.5) * Math.PI * 0.8;
-      const radius = 280 + Math.random() * 80;
-      sx = Math.cos(angle) * Math.cos(elevation) * radius;
-      sy = Math.sin(elevation) * radius * 0.6;
-      sz = Math.sin(angle) * Math.cos(elevation) * radius;
-      nodeSize = 0.6;
-    } else {
-      const spread = isNarrative(node) ? 80 : 60;
-      sx = center.x + (Math.random() - 0.5) * spread;
-      sy = center.y + (Math.random() - 0.5) * spread;
-      sz = center.z + (Math.random() - 0.5) * spread;
-      nodeSize = getNodeSize(node);
-    }
-
+    const spread = isNarrative(node) ? 100 : 70; // wider spread to reduce center blob
     const sn = {
       ...node,
-      x: sx, y: sy, z: sz,
+      x: center.x + (Math.random() - 0.5) * spread,
+      y: center.y + (Math.random() - 0.5) * spread,
+      z: center.z + (Math.random() - 0.5) * spread,
       vx: 0, vy: 0, vz: 0,
       region,
-      size: nodeSize,
-      isOrphan: isOrphanAgent,
+      size: getNodeSize(node),
+      isOrphan: false,
     };
     simNodes.push(sn);
     nodeMap[node.id] = sn;
@@ -386,12 +375,14 @@ function buildScene() {
     }
   });
 
-  // Edges as lines
+  // Edges as lines — authored_by connections are prominent
   simEdges.forEach(edge => {
     const isEntity = edge.kind === 'entity';
     const isAuthored = edge.kind === 'authored_by';
-    const color = isEntity ? 0x4fc3f7 : isAuthored ? 0x5c6bc0 : 0x223344;
-    const opacity = isEntity ? 0.45 : isAuthored ? 0.35 : 0.12;
+    const isDecision = edge.kind === 'decision';
+    const isMemory = edge.kind === 'memory';
+    const color = isEntity ? 0x4fc3f7 : isAuthored ? 0x7c4dff : isDecision ? 0xffd54f : isMemory ? 0x66bb6a : 0x1a2a3a;
+    const opacity = isEntity ? 0.5 : isAuthored ? 0.55 : isDecision ? 0.4 : isMemory ? 0.35 : 0.08;
     const geo = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(edge.src.x, edge.src.y, edge.src.z),
       new THREE.Vector3(edge.tgt.x, edge.tgt.y, edge.tgt.z),

@@ -83,6 +83,22 @@
       <button id="neuralZoomOut" title="Zoom Out">−</button>
       <button id="neuralReset" title="Reset">⟲</button>
     </div>
+    <div id="neuralLegend" style="position:absolute;top:56px;right:12px;background:rgba(5,10,20,0.85);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:10px 14px;font:11px system-ui;color:#999;z-index:50;pointer-events:none;">
+      <div style="font-weight:600;color:#ccc;margin-bottom:6px;">Node Types</div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#5c6bc0"></span> Agent</div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4fc3f7"></span> Person / Org</div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#81c784"></span> Project</div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ffb74d"></span> Tool</div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ce93d8"></span> Concept</div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4dd0e1"></span> Event</div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ffd54f"></span> Decision</div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#66bb6a"></span> Memory</div>
+      <div style="font-weight:600;color:#ccc;margin:8px 0 4px;">Edges</div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="display:inline-block;width:16px;height:2px;background:#7c4dff"></span> Agent → Content</div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="display:inline-block;width:16px;height:2px;background:#4fc3f7"></span> Entity Relation</div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="display:inline-block;width:16px;height:2px;background:#ffd54f"></span> Decision Link</div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="display:inline-block;width:16px;height:2px;background:#66bb6a"></span> Memory Link</div>
+    </div>
     <div id="neuralTooltip" class="neural-tooltip hidden"></div>
     <div id="neuralDetail" class="neural-detail hidden"></div>
   </div>
