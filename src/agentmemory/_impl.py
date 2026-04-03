@@ -12519,11 +12519,13 @@ def main():
     elif args.command == "whosknows":
         fn = cmd_whosknows
     elif args.command == "ui":
-        import sys as _sys
-        _sys.path.insert(0, str(Path.home() / "agentmemory" / "ui"))
-        # Also try the standard location
-        _sys.path.insert(0, str(Path.home() / "agentmemory" / "ui"))
-        from server import serve as _ui_serve
+        try:
+            from agentmemory.ui.server import serve as _ui_serve
+        except ImportError:
+            # Fallback for dev checkout
+            import sys as _sys
+            _sys.path.insert(0, str(Path.home() / "agentmemory" / "ui"))
+            from server import serve as _ui_serve
         _ui_serve(port=args.port, db_path=str(DB_PATH), open_browser=not args.no_browser)
         return
     elif args.command == "push":

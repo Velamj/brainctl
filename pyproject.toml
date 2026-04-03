@@ -43,4 +43,4 @@ Documentation = "https://github.com/TSchonleber/brainctl/blob/main/ARCHITECTURE.
 where = ["src"]
 
 [tool.setuptools.package-data]
-agentmemory = ["db/*.sql"]
+agentmemory = ["db/*.sql", "ui/static/*.html", "ui/static/*.css", "ui/static/*.js"]

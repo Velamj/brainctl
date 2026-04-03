@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>brainctl — Knowledge Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Top Bar -->
+  <header id="topbar">
+    <div class="topbar-left">
+      <div class="logo">🧠 <span>brainctl</span></div>
+      <div class="view-switcher">
+        <button class="view-btn active" data-view="explorer">Explorer</button>
+        <button class="view-btn" data-view="neural">Neural Map</button>
+      </div>
+    </div>
+    <div class="topbar-center">
+      <div class="global-search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="globalSearch" placeholder="Search memories, entities, events…" autocomplete="off">
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="stats-pills" id="statsPills"></div>
+    </div>
+  </header>
+
+  <!-- Explorer View -->
+  <div id="explorerView" class="view active">
+    <aside id="sidebar">
+      <nav>
+        <a class="nav-item active" data-section="memories">
+          <span class="nav-icon">💭</span>Memories
+        </a>
+        <a class="nav-item" data-section="entities">
+          <span class="nav-icon">🔮</span>Entities
+        </a>
+        <a class="nav-item" data-section="events">
+          <span class="nav-icon">⚡</span>Events
+        </a>
+        <a class="nav-item" data-section="decisions">
+          <span class="nav-icon">🎯</span>Decisions
+        </a>
+        <a class="nav-item" data-section="triggers">
+          <span class="nav-icon">🔔</span>Triggers
+        </a>
+        <a class="nav-item" data-section="health">
+          <span class="nav-icon">📊</span>Health
+        </a>
+      </nav>
+    </aside>
+    <main id="content">
+      <div id="contentArea"></div>
+    </main>
+  </div>
+
+  <!-- Neural Map View -->
+  <div id="neuralView" class="view">
+    <canvas id="neuralCanvas"></canvas>
+    <div id="neuralFilterBar">
+      <div class="neural-filter-group">
+        <button class="neural-filter-btn active" data-filter="overview">Structure</button>
+        <button class="neural-filter-btn" data-filter="thinking">Activity</button>
+        <button class="neural-filter-btn" data-filter="all">Full Brain</button>
+      </div>
+      <label class="neural-toggle">
+        <input type="checkbox" id="neuralEventsToggle" checked>
+        <span>Thoughts</span>
+      </label>
+      <label class="neural-toggle">
+        <input type="checkbox" id="neuralDecisionsToggle" checked>
+        <span>Decisions</span>
+      </label>
+      <label class="neural-toggle">
+        <input type="checkbox" id="neuralMemoriesToggle" checked>
+        <span>Memories</span>
+      </label>
+    </div>
+    <div id="neuralControls">
+      <button id="neuralZoomIn" title="Zoom In">+</button>
+      <button id="neuralZoomOut" title="Zoom Out">−</button>
+      <button id="neuralReset" title="Reset">⟲</button>
+    </div>
+    <div id="neuralTooltip" class="neural-tooltip hidden"></div>
+    <div id="neuralDetail" class="neural-detail hidden"></div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="neural.js"></script>
+</body>
+</html>
