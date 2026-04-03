@@ -3,6 +3,31 @@
 All notable changes to **brainctl** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0] — 2026-04-03
+
+Stable release. Every feature verified end-to-end on clean pip install.
+
+### Highlights
+- **102 tests** passing in CI (Python 3.11-3.13)
+- **81-table production schema** via `brainctl init`
+- **44-emotion affect tracking** with 6 safety patterns
+- **11-pass consolidation engine** (decay, merge, dream, Hebbian learning)
+- **3D neural map** with brain-region layout and live activity feed
+- **23-tool MCP server** for Claude Desktop / VS Code
+- **Zero-LLM-cost** search, classify, consolidate — all local computation
+- **`brainctl report`** compiles knowledge into readable markdown
+- **`brainctl lint`** health checks with auto-fix
+- Clean JSON error handling on all commands
+- Full documentation: README, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY
+
+### Added since 0.5.0
+- CI fix: test fixtures use `brainctl init` (no production DB dependency)
+- Neural Map v6: removed empty bubbles, color-coded edges, legend panel
+- Orphan agents hidden, connected agents positioned by content
+- `/api/activity` endpoint for live visualization feed
+- Crypto team redirected: cancelled over-engineered Solana contract work
+- `brainctl-consolidate` entry point for pip install
+
 ## [0.3.0] — 2026-04-03
 
 ### Added

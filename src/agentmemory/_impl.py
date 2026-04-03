@@ -90,7 +90,7 @@ except Exception:
 DB_PATH = Path(os.environ.get("BRAIN_DB", str(Path.home() / "agentmemory" / "db" / "brain.db")))
 BLOBS_DIR = Path.home() / "agentmemory" / "blobs"
 BACKUPS_DIR = Path.home() / "agentmemory" / "backups"
-VERSION = "0.5.0"
+VERSION = "1.0.1"
 
 VALID_MEMORY_CATEGORIES = {
     "identity", "user", "environment", "convention",
