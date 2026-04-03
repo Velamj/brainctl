@@ -90,7 +90,7 @@ except Exception:
 DB_PATH = Path(os.environ.get("BRAIN_DB", str(Path.home() / "agentmemory" / "db" / "brain.db")))
 BLOBS_DIR = Path.home() / "agentmemory" / "blobs"
 BACKUPS_DIR = Path.home() / "agentmemory" / "backups"
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 
 VALID_MEMORY_CATEGORIES = {
     "identity", "user", "environment", "convention",
@@ -5288,6 +5288,461 @@ def cmd_affect_classify(args):
     from agentmemory.affect import classify_affect
     result = classify_affect(args.text)
     json_out(result)
+
+
+# ---------------------------------------------------------------------------
+# REPORT — compile brain knowledge into readable markdown
+# ---------------------------------------------------------------------------
+
+def cmd_report(args):
+    """Compile brain knowledge into a structured markdown report."""
+    db = get_db()
+    topic = getattr(args, "topic", None)
+    agent = args.agent
+    entity_name = getattr(args, "entity", None)
+    out_file = getattr(args, "out", None)
+    limit = getattr(args, "limit", 20) or 20
+
+    lines = []
+
+    def h1(text): lines.append(f"\n# {text}\n")
+    def h2(text): lines.append(f"\n## {text}\n")
+    def h3(text): lines.append(f"\n### {text}\n")
+    def p(text): lines.append(f"{text}\n")
+    def bullet(text): lines.append(f"- {text}")
+    def blank(): lines.append("")
+
+    # --- Header ---
+    h1("Brain Report")
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    p(f"*Generated: {now_str}*")
+    if topic:
+        p(f"*Topic filter: {topic}*")
+    if agent:
+        p(f"*Agent filter: {agent}*")
+    if entity_name:
+        p(f"*Entity focus: {entity_name}*")
+
+    # --- Stats overview ---
+    h2("Overview")
+    stats = {}
+    for tbl in ["memories", "events", "entities", "decisions", "knowledge_edges"]:
+        try:
+            stats[tbl] = db.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]
+        except Exception:
+            stats[tbl] = 0
+    active = db.execute("SELECT COUNT(*) FROM memories WHERE retired_at IS NULL").fetchone()[0]
+    p(f"**{active}** active memories, **{stats['entities']}** entities, "
+      f"**{stats['events']}** events, **{stats['decisions']}** decisions, "
+      f"**{stats['knowledge_edges']}** knowledge edges")
+
+    # --- Entity focus mode ---
+    if entity_name:
+        _report_entity(db, entity_name, lines, h2, h3, p, bullet, blank, limit)
+
+    # --- Memories ---
+    h2("Key Memories")
+    mem_sql = "SELECT id, category, content, confidence, created_at FROM memories WHERE retired_at IS NULL"
+    mem_params = []
+    if topic:
+        mem_sql += " AND (content LIKE ? OR category LIKE ?)"
+        mem_params.extend([f"%{topic}%", f"%{topic}%"])
+    if agent:
+        mem_sql += " AND agent_id = ?"
+        mem_params.append(agent)
+    mem_sql += " ORDER BY confidence DESC, updated_at DESC LIMIT ?"
+    mem_params.append(limit)
+    rows = db.execute(mem_sql, mem_params).fetchall()
+
+    if rows:
+        # Group by category
+        by_cat = {}
+        for r in rows:
+            cat = r["category"] or "general"
+            by_cat.setdefault(cat, []).append(r)
+        for cat, mems in sorted(by_cat.items()):
+            h3(f"{cat.title()} ({len(mems)})")
+            for m in mems:
+                conf = f"[{m['confidence']:.0%}]" if m["confidence"] else ""
+                bullet(f"{m['content'][:200]} {conf}")
+            blank()
+    else:
+        p("*No memories found.*")
+
+    # --- Entities ---
+    h2("Entities")
+    ent_sql = "SELECT id, name, entity_type, observations, confidence FROM entities WHERE retired_at IS NULL"
+    ent_params = []
+    if topic:
+        ent_sql += " AND (name LIKE ? OR observations LIKE ?)"
+        ent_params.extend([f"%{topic}%", f"%{topic}%"])
+    ent_sql += " ORDER BY confidence DESC LIMIT ?"
+    ent_params.append(limit)
+    ent_rows = db.execute(ent_sql, ent_params).fetchall()
+
+    if ent_rows:
+        for e in ent_rows:
+            obs = []
+            try:
+                obs = json.loads(e["observations"] or "[]")
+            except Exception:
+                pass
+            obs_str = "; ".join(str(o)[:80] for o in obs[:3]) if obs else ""
+            bullet(f"**{e['name']}** ({e['entity_type']}) — {obs_str}")
+        blank()
+
+        # Relations between listed entities
+        ent_ids = [e["id"] for e in ent_rows]
+        if ent_ids:
+            ph = ",".join("?" * len(ent_ids))
+            edges = db.execute(
+                f"SELECT ke.relation_type, es.name as src, et.name as tgt "
+                f"FROM knowledge_edges ke "
+                f"JOIN entities es ON ke.source_id = es.id AND ke.source_table = 'entities' "
+                f"JOIN entities et ON ke.target_id = et.id AND ke.target_table = 'entities' "
+                f"WHERE ke.source_id IN ({ph}) OR ke.target_id IN ({ph})",
+                ent_ids + ent_ids
+            ).fetchall()
+            if edges:
+                h3("Relations")
+                seen = set()
+                for edge in edges:
+                    key = f"{edge['src']}-{edge['relation_type']}-{edge['tgt']}"
+                    if key not in seen:
+                        bullet(f"{edge['src']} **{edge['relation_type']}** → {edge['tgt']}")
+                        seen.add(key)
+                blank()
+    else:
+        p("*No entities found.*")
+
+    # --- Recent Decisions ---
+    h2("Recent Decisions")
+    dec_sql = "SELECT title, rationale, project, created_at FROM decisions"
+    dec_params = []
+    if topic:
+        dec_sql += " WHERE title LIKE ? OR rationale LIKE ?"
+        dec_params.extend([f"%{topic}%", f"%{topic}%"])
+    dec_sql += " ORDER BY created_at DESC LIMIT ?"
+    dec_params.append(min(limit, 10))
+    dec_rows = db.execute(dec_sql, dec_params).fetchall()
+
+    if dec_rows:
+        for d in dec_rows:
+            proj = f" [{d['project']}]" if d["project"] else ""
+            bullet(f"**{d['title']}**{proj}")
+            p(f"  *{d['rationale'][:200]}*")
+        blank()
+    else:
+        p("*No decisions found.*")
+
+    # --- Recent Events ---
+    h2("Recent Activity")
+    ev_sql = "SELECT event_type, summary, project, created_at FROM events"
+    ev_params = []
+    if topic:
+        ev_sql += " WHERE summary LIKE ?"
+        ev_params.append(f"%{topic}%")
+    if agent:
+        ev_sql += (" AND" if topic else " WHERE") + " agent_id = ?"
+        ev_params.append(agent)
+    ev_sql += " ORDER BY created_at DESC LIMIT ?"
+    ev_params.append(min(limit, 15))
+    ev_rows = db.execute(ev_sql, ev_params).fetchall()
+
+    if ev_rows:
+        for e in ev_rows:
+            ts = e["created_at"][:10] if e["created_at"] else ""
+            proj = f" [{e['project']}]" if e["project"] else ""
+            bullet(f"`{ts}` {e['event_type']}{proj}: {(e['summary'] or '')[:150]}")
+        blank()
+
+    # --- Affect State ---
+    h2("Current Affect State")
+    try:
+        aff_rows = db.execute("""
+            SELECT a.agent_id, a.valence, a.arousal, a.dominance,
+                   a.affect_label, a.functional_state, a.safety_flag
+            FROM affect_log a INNER JOIN (
+                SELECT agent_id, MAX(id) as max_id FROM affect_log GROUP BY agent_id
+            ) latest ON a.id = latest.max_id
+            ORDER BY a.created_at DESC LIMIT 10
+        """).fetchall()
+        if aff_rows:
+            for a in aff_rows:
+                flag = f" ⚠️ {a['safety_flag']}" if a["safety_flag"] else ""
+                bullet(f"**{a['agent_id']}**: {a['affect_label']} (v={a['valence']:.2f} "
+                       f"a={a['arousal']:.2f} d={a['dominance']:.2f}) → {a['functional_state']}{flag}")
+            blank()
+        else:
+            p("*No affect data.*")
+    except Exception:
+        p("*Affect tracking not available.*")
+
+    # --- Output ---
+    report = "\n".join(lines) + "\n"
+
+    if out_file:
+        Path(out_file).write_text(report)
+        json_out({"ok": True, "path": out_file, "lines": len(lines), "chars": len(report)})
+    else:
+        print(report)
+
+
+def _report_entity(db, name, lines, h2, h3, p, bullet, blank, limit):
+    """Focused report on a single entity and everything connected to it."""
+    row = db.execute(
+        "SELECT * FROM entities WHERE name LIKE ? AND retired_at IS NULL LIMIT 1",
+        (f"%{name}%",)
+    ).fetchone()
+    if not row:
+        p(f"*Entity '{name}' not found.*")
+        return
+
+    ent = dict(row)
+    h2(f"Entity: {ent['name']}")
+    p(f"**Type:** {ent['entity_type']}  |  **Confidence:** {ent['confidence']:.0%}  |  **Created:** {ent['created_at'][:10]}")
+
+    obs = []
+    try:
+        obs = json.loads(ent.get("observations") or "[]")
+    except Exception:
+        pass
+    if obs:
+        h3("Observations")
+        for o in obs:
+            bullet(str(o))
+        blank()
+
+    # Outgoing relations
+    out_edges = db.execute(
+        "SELECT ke.relation_type, et.name, et.entity_type FROM knowledge_edges ke "
+        "JOIN entities et ON ke.target_id = et.id AND ke.target_table = 'entities' "
+        "WHERE ke.source_table = 'entities' AND ke.source_id = ? LIMIT ?",
+        (ent["id"], limit)
+    ).fetchall()
+    if out_edges:
+        h3("Relationships (outgoing)")
+        for e in out_edges:
+            bullet(f"**{e['relation_type']}** → {e['name']} ({e['entity_type']})")
+        blank()
+
+    # Incoming relations
+    in_edges = db.execute(
+        "SELECT ke.relation_type, es.name, es.entity_type FROM knowledge_edges ke "
+        "JOIN entities es ON ke.source_id = es.id AND ke.source_table = 'entities' "
+        "WHERE ke.target_table = 'entities' AND ke.target_id = ? LIMIT ?",
+        (ent["id"], limit)
+    ).fetchall()
+    if in_edges:
+        h3("Relationships (incoming)")
+        for e in in_edges:
+            bullet(f"{e['name']} ({e['entity_type']}) **{e['relation_type']}** → this")
+        blank()
+
+    # Related memories (by name mention)
+    related_mems = db.execute(
+        "SELECT content, confidence, created_at FROM memories "
+        "WHERE retired_at IS NULL AND content LIKE ? ORDER BY confidence DESC LIMIT ?",
+        (f"%{ent['name']}%", limit)
+    ).fetchall()
+    if related_mems:
+        h3("Related Memories")
+        for m in related_mems:
+            bullet(f"{m['content'][:200]} [{m['confidence']:.0%}]")
+        blank()
+
+
+# ---------------------------------------------------------------------------
+# LINT — brain health check
+# ---------------------------------------------------------------------------
+
+def cmd_lint(args):
+    """Run health checks on brain.db — find issues, suggest fixes."""
+    db = get_db()
+    fix = getattr(args, "fix", False)
+    issues = []
+    fixed = 0
+
+    # 1. Low-confidence memories
+    low_conf = db.execute(
+        "SELECT id, content, confidence FROM memories WHERE retired_at IS NULL AND confidence < 0.3"
+    ).fetchall()
+    if low_conf:
+        issues.append({
+            "check": "low_confidence",
+            "severity": "warning",
+            "count": len(low_conf),
+            "description": f"{len(low_conf)} memories with confidence < 0.3 — may be unreliable",
+            "items": [{"id": r["id"], "confidence": r["confidence"],
+                       "preview": r["content"][:100]} for r in low_conf[:5]],
+        })
+
+    # 2. Never-recalled memories (potentially useless)
+    never_recalled = db.execute(
+        "SELECT COUNT(*) FROM memories WHERE retired_at IS NULL AND recalled_count = 0"
+    ).fetchone()[0]
+    active = db.execute("SELECT COUNT(*) FROM memories WHERE retired_at IS NULL").fetchone()[0]
+    if never_recalled > 0 and active > 0:
+        pct = round(never_recalled / active * 100, 1)
+        issues.append({
+            "check": "never_recalled",
+            "severity": "info" if pct < 50 else "warning",
+            "count": never_recalled,
+            "description": f"{never_recalled}/{active} memories ({pct}%) have never been recalled — potential dead weight",
+        })
+
+    # 3. Orphan entities (no edges)
+    orphans = db.execute("""
+        SELECT e.id, e.name, e.entity_type FROM entities e
+        WHERE e.retired_at IS NULL
+        AND NOT EXISTS (
+            SELECT 1 FROM knowledge_edges ke
+            WHERE (ke.source_table='entities' AND ke.source_id=e.id)
+               OR (ke.target_table='entities' AND ke.target_id=e.id)
+        )
+    """).fetchall()
+    if orphans:
+        issues.append({
+            "check": "orphan_entities",
+            "severity": "info",
+            "count": len(orphans),
+            "description": f"{len(orphans)} entities have no edges — isolated in the knowledge graph",
+            "items": [{"id": r["id"], "name": r["name"], "type": r["entity_type"]}
+                      for r in orphans[:10]],
+        })
+
+    # 4. Knowledge gaps (unresolved)
+    try:
+        gaps = db.execute(
+            "SELECT COUNT(*) FROM knowledge_gaps WHERE resolved_at IS NULL"
+        ).fetchone()[0]
+        if gaps > 0:
+            gap_rows = db.execute(
+                "SELECT domain, gap_description FROM knowledge_gaps WHERE resolved_at IS NULL ORDER BY created_at DESC LIMIT 5"
+            ).fetchall()
+            issues.append({
+                "check": "knowledge_gaps",
+                "severity": "warning",
+                "count": gaps,
+                "description": f"{gaps} unresolved knowledge gaps detected",
+                "items": [{"domain": r["domain"], "gap": r["gap_description"][:100]}
+                          for r in gap_rows],
+            })
+    except Exception:
+        pass
+
+    # 5. Duplicate entity names (case-insensitive)
+    dupes = db.execute("""
+        SELECT LOWER(name) as lname, COUNT(*) as c, GROUP_CONCAT(id) as ids
+        FROM entities WHERE retired_at IS NULL
+        GROUP BY LOWER(name) HAVING c > 1
+    """).fetchall()
+    if dupes:
+        issues.append({
+            "check": "duplicate_entities",
+            "severity": "warning",
+            "count": len(dupes),
+            "description": f"{len(dupes)} entity names appear more than once (case-insensitive)",
+            "items": [{"name": r["lname"], "count": r["c"], "ids": r["ids"]}
+                      for r in dupes[:5]],
+        })
+        if fix:
+            # Auto-fix: retire duplicates, keep the one with highest confidence
+            for d in dupes:
+                ids = [int(x) for x in d["ids"].split(",")]
+                rows = db.execute(
+                    f"SELECT id, confidence FROM entities WHERE id IN ({','.join('?' * len(ids))}) ORDER BY confidence DESC",
+                    ids
+                ).fetchall()
+                keep = rows[0]["id"]
+                retire = [r["id"] for r in rows[1:]]
+                for rid in retire:
+                    db.execute("UPDATE entities SET retired_at = strftime('%Y-%m-%dT%H:%M:%S','now') WHERE id = ?", (rid,))
+                    fixed += 1
+            db.commit()
+
+    # 6. Stale affect data (agents not reporting)
+    try:
+        stale_affect = db.execute("""
+            SELECT agent_id, MAX(created_at) as last_report
+            FROM affect_log
+            GROUP BY agent_id
+            HAVING last_report < datetime('now', '-7 days')
+        """).fetchall()
+        if stale_affect:
+            issues.append({
+                "check": "stale_affect",
+                "severity": "info",
+                "count": len(stale_affect),
+                "description": f"{len(stale_affect)} agents haven't reported affect state in 7+ days",
+                "items": [{"agent": r["agent_id"], "last_report": r["last_report"]}
+                          for r in stale_affect[:5]],
+            })
+    except Exception:
+        pass
+
+    # 7. Access log bloat
+    try:
+        log_count = db.execute("SELECT COUNT(*) FROM access_log").fetchone()[0]
+        if log_count > 10000:
+            issues.append({
+                "check": "access_log_bloat",
+                "severity": "info",
+                "count": log_count,
+                "description": f"Access log has {log_count:,} entries — consider running brainctl prune-log",
+            })
+            if fix:
+                cutoff = (datetime.utcnow() - timedelta(days=30)).isoformat()
+                cursor = db.execute("DELETE FROM access_log WHERE created_at < ?", (cutoff,))
+                db.commit()
+                fixed += cursor.rowcount
+    except Exception:
+        pass
+
+    # 8. DB size check
+    try:
+        db_size = DB_PATH.stat().st_size / 1048576
+        if db_size > 100:
+            issues.append({
+                "check": "large_database",
+                "severity": "warning",
+                "count": 1,
+                "description": f"Database is {db_size:.1f} MB — consider running consolidation (brainctl-consolidate sweep)",
+            })
+    except Exception:
+        pass
+
+    # Summary
+    critical = sum(1 for i in issues if i["severity"] == "critical")
+    warnings = sum(1 for i in issues if i["severity"] == "warning")
+    infos = sum(1 for i in issues if i["severity"] == "info")
+
+    result = {
+        "health": "critical" if critical else "warning" if warnings else "healthy",
+        "issues": len(issues),
+        "critical": critical,
+        "warnings": warnings,
+        "info": infos,
+        "fixed": fixed,
+        "checks": issues,
+    }
+
+    _ofmt = getattr(args, "output", "json")
+    if _ofmt == "text":
+        # Human-readable text output
+        print(f"Brain Health: {result['health'].upper()}")
+        print(f"  {critical} critical, {warnings} warnings, {infos} info")
+        if fixed:
+            print(f"  {fixed} issues auto-fixed")
+        print()
+        for issue in issues:
+            icon = "🔴" if issue["severity"] == "critical" else "🟡" if issue["severity"] == "warning" else "🔵"
+            print(f"  {icon} [{issue['check']}] {issue['description']}")
+            for item in issue.get("items", [])[:3]:
+                print(f"      {item}")
+        print()
+    else:
+        json_out(result)
 
 
 def cmd_prune_access_log(args):
@@ -10757,6 +11212,8 @@ def build_parser():
                     "  trigger       Prospective memory triggers\n"
                     "  decision      Record decisions with rationale\n"
                     "  graph         Knowledge graph operations\n"
+                    "  report        Compile brain knowledge into markdown reports\n"
+                    "  lint          Health check — find issues, suggest fixes\n"
                     "  neurostate    Neuromodulation state management\n"
                     "  ui            Web dashboard (port 3939)\n",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -11240,6 +11697,18 @@ def build_parser():
 
     aff_cls = aff_sub.add_parser("classify", help="Classify affect from text (dry-run, no logging)")
     aff_cls.add_argument("text", help="Text to classify")
+
+    # --- report ---
+    rpt = sub.add_parser("report", help="Compile brain knowledge into a readable markdown report")
+    rpt.add_argument("--topic", "-t", help="Filter report to a specific topic")
+    rpt.add_argument("--entity", "-e", help="Focus report on a specific entity")
+    rpt.add_argument("--out", help="Write report to file instead of stdout")
+    rpt.add_argument("--limit", "-l", type=int, default=20, help="Max items per section (default: 20)")
+
+    # --- lint ---
+    lnt = sub.add_parser("lint", help="Brain health check — find issues, suggest fixes")
+    lnt.add_argument("--fix", action="store_true", help="Auto-fix safe issues (duplicates, log bloat)")
+    lnt.add_argument("--output", "-o", choices=["json", "text"], default="json", help="Output format")
 
     prune = sub.add_parser("prune-log", help="Prune old access log entries")
     prune.add_argument("--days", type=int, default=30)
@@ -11944,6 +12413,8 @@ def main():
         "stats": cmd_stats,
         "cost": cmd_cost,
         "affect": None,  # subcommand dispatch below
+        "report": cmd_report,
+        "lint": cmd_lint,
         "validate": cmd_validate,
         "prune-log": cmd_prune_access_log,
         "push": None,  # handled below

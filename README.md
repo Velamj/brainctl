@@ -71,6 +71,17 @@ brainctl search "deployment"
 brainctl trigger create "Alice mentions vacation" -k vacation,alice -a "Remind about project deadline"
 brainctl trigger check "alice is going on vacation"
 
+# Reports — compile knowledge into readable markdown
+brainctl report                    # full brain report
+brainctl report --topic "deploy"   # topic-focused
+brainctl report --entity "Alice"   # entity deep-dive
+brainctl report --out report.md    # save to file
+
+# Lint — health check
+brainctl lint                      # JSON output
+brainctl lint --output text        # human-readable
+brainctl lint --fix                # auto-fix safe issues
+
 # Stats
 brainctl stats
 ```
