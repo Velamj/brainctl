@@ -29,19 +29,18 @@ const REGION_COLORS = {
   amygdala: 0xef5350,    // affect — red
 };
 
-// Brain region target positions (spherical-ish layout)
+// Brain region target positions (organic layout, no symmetric balls)
 const REGION_CENTERS = {
-  prefrontal:  { x: 0, y: 220, z: 80 },    // top — decisions, planning
-  temporal_l:  { x: -250, y: -30, z: 50 },  // left — older events
-  temporal_r:  { x: 250, y: -30, z: 50 },   // right — recent events
-  hippocampus: { x: 0, y: -20, z: 0 },      // center — memories
-  cortex_top:  { x: 0, y: 160, z: -120 },   // upper back — concepts
-  cortex_left: { x: -200, y: 80, z: -60 },  // left — tools
-  cortex_right:{ x: 200, y: 80, z: -60 },   // right — projects
-  cortex_front:{ x: 0, y: 40, z: 180 },     // front — people, orgs
-  amygdala:    { x: 0, y: -100, z: 60 },     // below center — affect
-  agents_l:    { x: -180, y: -140, z: -40 }, // lower left — agents cluster
-  agents_r:    { x: 180, y: -140, z: -40 },  // lower right — agents cluster
+  prefrontal:  { x: 0, y: 200, z: 60 },     // top — decisions, planning
+  temporal_l:  { x: -220, y: -20, z: 40 },   // left — older events
+  temporal_r:  { x: 220, y: -20, z: 40 },    // right — recent events
+  hippocampus: { x: 0, y: 0, z: 0 },         // center — memories (core)
+  cortex_top:  { x: 0, y: 150, z: -100 },    // upper back — concepts
+  cortex_left: { x: -170, y: 80, z: -50 },   // left — tools
+  cortex_right:{ x: 170, y: 80, z: -50 },    // right — projects
+  cortex_front:{ x: 0, y: 60, z: 160 },      // front — people, orgs
+  amygdala:    { x: 0, y: -80, z: 40 },      // below center — affect
+  periphery:   { x: 0, y: -150, z: -80 },    // far back — unconnected agents (tiny, out of way)
 };
 
 function getRegion(node) {
@@ -58,12 +57,15 @@ function getRegion(node) {
   if (kind === 'project') return 'cortex_right';
   if (kind === 'person' || kind === 'organization') return 'cortex_front';
   if (kind === 'agent') {
-    // Split agents across two clusters by hash
-    const hash = (node.label || '').charCodeAt(0) || 0;
-    return hash % 2 === 0 ? 'agents_l' : 'agents_r';
+    // Connected agents get positioned by force-directed pull to their content.
+    // Orphan agents go to periphery as tiny dust.
+    return 'periphery';
   }
   return 'hippocampus';
 }
+
+// Track which agents have edges (set during buildScene)
+let connectedAgentIds = new Set();
 
 function getRegionColor(node) {
   const kind = node.kind || node.type;
@@ -127,12 +129,22 @@ async function initNeural() {
 
   controls = new THREE.OrbitControls(camera3d, renderer.domElement);
   controls.enableDamping = true;
-  controls.dampingFactor = 0.06;
-  controls.rotateSpeed = 0.5;
+  controls.dampingFactor = 0.12;
+  controls.rotateSpeed = 0.4;
+  controls.panSpeed = 0.8;
+  controls.zoomSpeed = 0.8;
+  controls.enablePan = true;       // right-click + drag to pan
   controls.autoRotate = true;
-  controls.autoRotateSpeed = 0.3;
-  controls.minDistance = 120;
-  controls.maxDistance = 2500;
+  controls.autoRotateSpeed = 0.25;
+  controls.minDistance = 60;
+  controls.maxDistance = 2000;
+  controls.mouseButtons = {
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.DOLLY,
+    RIGHT: THREE.MOUSE.PAN
+  };
+  // Smooth zoom with scroll
+  controls.enableZoom = true;
 
   // Lighting
   scene.add(new THREE.AmbientLight(0x1a1a3e, 0.5));
@@ -273,11 +285,31 @@ function buildScene() {
   const { nodes, edges } = getFilteredData();
   const nodeMap = {};
 
+  // Pre-compute which agents have edges
+  connectedAgentIds = new Set();
+  edges.forEach(e => {
+    const srcNode = nodes.find(n => n.id === e.source);
+    const tgtNode = nodes.find(n => n.id === e.target);
+    if (srcNode && (srcNode.kind === 'agent' || srcNode.type === 'agent')) connectedAgentIds.add(srcNode.id);
+    if (tgtNode && (tgtNode.kind === 'agent' || tgtNode.type === 'agent')) connectedAgentIds.add(tgtNode.id);
+  });
+
+  // Filter out orphan agents in Structure and Activity views (keep in Full Brain but tiny)
+  let visibleNodes = nodes;
+  if (neuralFilters.scope !== 'all') {
+    visibleNodes = nodes.filter(n => {
+      if ((n.kind === 'agent' || n.type === 'agent') && !connectedAgentIds.has(n.id)) return false;
+      return true;
+    });
+  }
+
   // Initial positions based on brain region + jitter
-  nodes.forEach(node => {
+  visibleNodes.forEach(node => {
+    const kind = node.kind || node.type;
+    const isOrphanAgent = kind === 'agent' && !connectedAgentIds.has(node.id);
     const region = getRegion(node);
     const center = REGION_CENTERS[region] || { x: 0, y: 0, z: 0 };
-    const spread = isNarrative(node) ? 80 : 60;
+    const spread = isOrphanAgent ? 200 : isNarrative(node) ? 80 : 60;
     const sn = {
       ...node,
       x: center.x + (Math.random() - 0.5) * spread,
@@ -285,7 +317,8 @@ function buildScene() {
       z: center.z + (Math.random() - 0.5) * spread,
       vx: 0, vy: 0, vz: 0,
       region,
-      size: getNodeSize(node),
+      size: isOrphanAgent ? 0.3 : getNodeSize(node), // orphans are dust
+      isOrphan: isOrphanAgent,
     };
     simNodes.push(sn);
     nodeMap[node.id] = sn;
@@ -295,6 +328,17 @@ function buildScene() {
     const src = nodeMap[edge.source];
     const tgt = nodeMap[edge.target];
     if (src && tgt) simEdges.push({ ...edge, src, tgt });
+  });
+
+  // Override region for connected agents — let edges pull them to their content
+  simNodes.forEach(sn => {
+    if ((sn.kind === 'agent' || sn.type === 'agent') && connectedAgentIds.has(sn.id)) {
+      // Position near center initially, let force-directed layout pull them to their edges
+      sn.region = 'hippocampus'; // central, gets pulled by edge forces
+      sn.x = (Math.random() - 0.5) * 100;
+      sn.y = (Math.random() - 0.5) * 100;
+      sn.z = (Math.random() - 0.5) * 100;
+    }
   });
 
   // Run force simulation
@@ -315,28 +359,32 @@ function buildScene() {
     scene.add(mesh);
     nodeMeshes.set(sn.id, mesh);
 
-    // Glow
-    const glowMat = new THREE.SpriteMaterial({
-      map: makeGlow(color), blending: THREE.AdditiveBlending,
-      transparent: true, opacity: 0.3
-    });
-    const glow = new THREE.Sprite(glowMat);
-    glow.scale.set(sn.size * 5, sn.size * 5, 1);
-    mesh.add(glow);
+    // Skip glow and label for orphan dust
+    if (!sn.isOrphan) {
+      // Glow
+      const glowMat = new THREE.SpriteMaterial({
+        map: makeGlow(color), blending: THREE.AdditiveBlending,
+        transparent: true, opacity: 0.3
+      });
+      const glow = new THREE.Sprite(glowMat);
+      glow.scale.set(sn.size * 5, sn.size * 5, 1);
+      mesh.add(glow);
 
-    // Label for significant nodes
-    if (sn.size > 1.8 || !isNarrative(sn)) {
-      const label = makeLabel(sn.label || sn.id, color);
-      label.position.set(0, -(sn.size + 2.5), 0);
-      mesh.add(label);
+      // Label for significant nodes
+      if (sn.size > 1.8 || !isNarrative(sn)) {
+        const label = makeLabel(sn.label || sn.id, color);
+        label.position.set(0, -(sn.size + 2.5), 0);
+        mesh.add(label);
+      }
     }
   });
 
   // Edges as lines
   simEdges.forEach(edge => {
     const isEntity = edge.kind === 'entity';
-    const color = isEntity ? 0x4fc3f7 : 0x223344;
-    const opacity = isEntity ? 0.45 : 0.12;
+    const isAuthored = edge.kind === 'authored_by';
+    const color = isEntity ? 0x4fc3f7 : isAuthored ? 0x5c6bc0 : 0x223344;
+    const opacity = isEntity ? 0.45 : isAuthored ? 0.35 : 0.12;
     const geo = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(edge.src.x, edge.src.y, edge.src.z),
       new THREE.Vector3(edge.tgt.x, edge.tgt.y, edge.tgt.z),
@@ -366,11 +414,13 @@ function stepSim() {
 
   for (let i = 0; i < simNodes.length; i++) {
     const a = simNodes[i];
-    // Pull toward brain region center
+    // Pull toward brain region center (weaker for connected agents — edges dominate)
     const rc = REGION_CENTERS[a.region] || { x: 0, y: 0, z: 0 };
-    a.vx += (rc.x - a.x) * regionPull;
-    a.vy += (rc.y - a.y) * regionPull;
-    a.vz += (rc.z - a.z) * regionPull;
+    const isConnAgent = (a.kind === 'agent' || a.type === 'agent') && connectedAgentIds.has(a.id);
+    const rp = isConnAgent ? regionPull * 0.15 : regionPull; // agents: mostly edge-positioned
+    a.vx += (rc.x - a.x) * rp;
+    a.vy += (rc.y - a.y) * rp;
+    a.vz += (rc.z - a.z) * rp;
 
     for (let j = i + 1; j < simNodes.length; j++) {
       const b = simNodes[j];
