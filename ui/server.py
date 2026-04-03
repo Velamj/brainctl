@@ -833,6 +833,69 @@ def api_cost(params, db):
     return report
 
 
+def api_activity(params, db):
+    """Live activity feed — returns recent events, new memories, new edges, and retirements since a timestamp."""
+    since = (params.get("since", [""])[0] or "").strip()
+    if not since:
+        # Default: last 30 seconds
+        from datetime import datetime, timedelta, timezone
+        since = (datetime.now(timezone.utc) - timedelta(seconds=30)).strftime("%Y-%m-%dT%H:%M:%S")
+
+    result = {"since": since, "events": [], "new_memories": [], "new_edges": [], "retirements": [], "affect": []}
+
+    # Recent events
+    try:
+        rows = db.execute(
+            "SELECT id, agent_id, event_type, summary, importance, created_at "
+            "FROM events WHERE created_at > ? ORDER BY created_at DESC LIMIT 20", (since,)
+        ).fetchall()
+        result["events"] = rows_to_list(rows)
+    except Exception:
+        pass
+
+    # New memories
+    try:
+        rows = db.execute(
+            "SELECT id, agent_id, category, content, confidence, created_at "
+            "FROM memories WHERE created_at > ? AND retired_at IS NULL ORDER BY created_at DESC LIMIT 10", (since,)
+        ).fetchall()
+        result["new_memories"] = rows_to_list(rows)
+    except Exception:
+        pass
+
+    # New edges
+    try:
+        rows = db.execute(
+            "SELECT id, source_table, source_id, target_table, target_id, relation_type, weight, created_at "
+            "FROM knowledge_edges WHERE created_at > ? ORDER BY created_at DESC LIMIT 20", (since,)
+        ).fetchall()
+        result["new_edges"] = rows_to_list(rows)
+    except Exception:
+        pass
+
+    # Recent retirements
+    try:
+        rows = db.execute(
+            "SELECT id, content, category, retired_at "
+            "FROM memories WHERE retired_at > ? ORDER BY retired_at DESC LIMIT 10", (since,)
+        ).fetchall()
+        result["retirements"] = rows_to_list(rows)
+    except Exception:
+        pass
+
+    # Affect changes
+    try:
+        rows = db.execute(
+            "SELECT id, agent_id, valence, arousal, dominance, affect_label, functional_state, safety_flag, created_at "
+            "FROM affect_log WHERE created_at > ? ORDER BY created_at DESC LIMIT 10", (since,)
+        ).fetchall()
+        result["affect"] = rows_to_list(rows)
+    except Exception:
+        pass
+
+    return result
+
+
 ROUTES = {
     "/api/memories": api_memories,
     "/api/entities": api_entities,
@@ -844,6 +907,7 @@ ROUTES = {
     "/api/graph": api_graph,
     "/api/stats": api_stats,
     "/api/update": api_update,
+    "/api/activity": api_activity,
 }
 
 

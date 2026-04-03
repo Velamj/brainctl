@@ -199,6 +199,7 @@ async function initNeural() {
   });
 
   await loadGraph();
+  startActivityFeed();
   animate();
 }
 
@@ -494,6 +495,9 @@ function animate() {
     if (!isS) mesh.material.emissiveIntensity = isH ? 0.5 : (selectedNode && !isConnected ? 0.05 : 0.35);
   });
 
+  // Birth/death particle effects
+  animateBirthEffects(dt);
+
   renderer.render(scene, camera3d);
 }
 
@@ -584,4 +588,170 @@ function showDetail(node) {
 
 function hideDetail() { document.getElementById('neuralDetail').classList.add('hidden'); }
 
-function esc(v) { return v ? String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
+// ===== LIVE ACTIVITY FEED — poll for new data every 3s =====
+let lastActivityTs = new Date().toISOString().replace('Z','').slice(0,19);
+let activityInterval = null;
+let birthEffects = []; // nodes being born (scale up animation)
+let deathEffects = []; // nodes being retired (fade out)
+
+function startActivityFeed() {
+  if (activityInterval) return;
+  activityInterval = setInterval(pollActivity, 3000);
+}
+
+async function pollActivity() {
+  try {
+    const res = await fetch(`/api/activity?since=${encodeURIComponent(lastActivityTs)}`);
+    const data = await res.json();
+
+    let hasNew = false;
+
+    // New events — flash a burst at the temporal region
+    if (data.events && data.events.length > 0) {
+      data.events.forEach(ev => {
+        spawnBurst(REGION_CENTERS.temporal_r, REGION_COLORS.temporal, 8);
+      });
+      hasNew = true;
+    }
+
+    // New memories — flash at hippocampus
+    if (data.new_memories && data.new_memories.length > 0) {
+      data.new_memories.forEach(m => {
+        spawnBurst(REGION_CENTERS.hippocampus, REGION_COLORS.hippocampus, 12);
+      });
+      hasNew = true;
+    }
+
+    // New edges — flash impulse along a random existing edge
+    if (data.new_edges && data.new_edges.length > 0) {
+      data.new_edges.forEach(() => {
+        if (simEdges.length > 0) {
+          const edge = simEdges[Math.floor(Math.random() * simEdges.length)];
+          spawnImpulse(edge, 0x4fc3f7, 2.0);
+        }
+      });
+      hasNew = true;
+    }
+
+    // Retirements — flash red at hippocampus
+    if (data.retirements && data.retirements.length > 0) {
+      data.retirements.forEach(() => {
+        spawnBurst(REGION_CENTERS.hippocampus, 0xef5350, 6);
+      });
+      hasNew = true;
+    }
+
+    // Affect changes — flash at amygdala
+    if (data.affect && data.affect.length > 0) {
+      data.affect.forEach(a => {
+        const color = a.valence > 0 ? 0x66bb6a : a.valence < -0.3 ? 0xef5350 : 0xffd54f;
+        spawnBurst(REGION_CENTERS.amygdala, color, 10);
+      });
+      hasNew = true;
+    }
+
+    // Update activity log display
+    if (hasNew) {
+      updateActivityLog(data);
+    }
+
+    // Advance timestamp
+    const allTimes = [
+      ...(data.events || []).map(e => e.created_at),
+      ...(data.new_memories || []).map(m => m.created_at),
+      ...(data.affect || []).map(a => a.created_at),
+    ].filter(Boolean).sort();
+    if (allTimes.length > 0) {
+      lastActivityTs = allTimes[allTimes.length - 1];
+    }
+  } catch (err) {
+    // Polling failure is silent
+  }
+}
+
+function spawnBurst(center, color, count) {
+  if (!scene) return;
+  for (let i = 0; i < count; i++) {
+    const geo = new THREE.SphereGeometry(0.8, 6, 4);
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(
+      center.x + (Math.random() - 0.5) * 20,
+      center.y + (Math.random() - 0.5) * 20,
+      center.z + (Math.random() - 0.5) * 20,
+    );
+    scene.add(mesh);
+    birthEffects.push({
+      mesh, age: 0, maxAge: 1.5 + Math.random(),
+      vx: (Math.random() - 0.5) * 40,
+      vy: (Math.random() - 0.5) * 40,
+      vz: (Math.random() - 0.5) * 40,
+    });
+  }
+}
+
+function spawnImpulse(edge, color, size) {
+  if (!scene) return;
+  const geo = new THREE.SphereGeometry(size, 6, 4);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1.0 });
+  const mesh = new THREE.Mesh(geo, mat);
+  scene.add(mesh);
+  impulseParticles.push({ mesh, edge, t: 0, speed: 0.015 + Math.random() * 0.01 });
+}
+
+function updateActivityLog(data) {
+  // Show a small activity feed overlay
+  let log = document.getElementById('activityLog');
+  if (!log) {
+    log = document.createElement('div');
+    log.id = 'activityLog';
+    log.style.cssText = 'position:absolute;bottom:12px;left:12px;max-width:340px;max-height:200px;overflow:hidden;font:11px system-ui;color:#8af;pointer-events:none;z-index:50;';
+    document.getElementById('neuralView').appendChild(log);
+  }
+  const items = [];
+  (data.events || []).slice(0, 3).forEach(e => {
+    items.push(`<div style="opacity:0.7;margin:2px 0">⚡ ${esc((e.summary||'').slice(0,80))}</div>`);
+  });
+  (data.new_memories || []).slice(0, 2).forEach(m => {
+    items.push(`<div style="opacity:0.7;margin:2px 0;color:#6b6">💭 ${esc((m.content||'').slice(0,80))}</div>`);
+  });
+  (data.retirements || []).slice(0, 2).forEach(r => {
+    items.push(`<div style="opacity:0.7;margin:2px 0;color:#e55">🗑 retired: ${esc((r.content||'').slice(0,60))}</div>`);
+  });
+  (data.affect || []).slice(0, 2).forEach(a => {
+    const c = a.valence > 0 ? '#6b6' : a.valence < -0.3 ? '#e55' : '#fd5';
+    items.push(`<div style="opacity:0.7;margin:2px 0;color:${c}">🧠 ${esc(a.agent_id)}: ${esc(a.affect_label)} (v=${a.valence?.toFixed(2)})</div>`);
+  });
+  if (items.length > 0) {
+    log.innerHTML = items.join('');
+    log.style.opacity = '1';
+    setTimeout(() => { log.style.opacity = '0.3'; }, 4000);
+  }
+}
+
+// Birth/death effect animations (called from main animate loop)
+function animateBirthEffects(dt) {
+  for (let i = birthEffects.length - 1; i >= 0; i--) {
+    const b = birthEffects[i];
+    b.age += dt;
+    b.mesh.position.x += b.vx * dt;
+    b.mesh.position.y += b.vy * dt;
+    b.mesh.position.z += b.vz * dt;
+    b.mesh.material.opacity = Math.max(0, 1 - b.age / b.maxAge);
+    const s = 0.5 + b.age * 2;
+    b.mesh.scale.set(s, s, s);
+    if (b.age > b.maxAge) {
+      scene.remove(b.mesh);
+      birthEffects.splice(i, 1);
+    }
+  }
+  // Clean up finished impulses
+  for (let i = impulseParticles.length - 1; i >= 0; i--) {
+    if (impulseParticles[i].t > 1) {
+      scene.remove(impulseParticles[i].mesh);
+      impulseParticles.splice(i, 1);
+    }
+  }
+}
+
+// (activity feed started inside initNeural after loadGraph)
