@@ -41,41 +41,40 @@ def brain_with_data(brain):
 def cli_db(tmp_path):
     """Create an empty DB with the full production schema for CLI tests.
 
-    Copies the production DB structure (including FTS tables) by cloning
-    the real DB and then deleting all data rows.
+    Uses brainctl init which loads the packaged init_schema.sql — works
+    both locally and in CI (no dependency on a pre-existing brain.db).
     """
-    import shutil
+    import subprocess
     db_file = tmp_path / "brain.db"
-    if PROD_DB.exists():
-        shutil.copy2(str(PROD_DB), str(db_file))
-        # Delete all data to get a clean slate
-        conn = sqlite3.connect(str(db_file))
-        tables = [r[0] for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '%_fts%'"
-        ).fetchall()]
-        for t in tables:
-            try:
-                conn.execute(f"DELETE FROM {t}")
-            except Exception:
-                pass
-        # Insert test agents to satisfy FK constraints
-        for aid in ('tester', 'fmt', 'unknown', 'default'):
+
+    # Use brainctl init to create full schema (same as pip install user would)
+    result = subprocess.run(
+        [sys.executable, "-c",
+         f"import sys; sys.path.insert(0, {str(SRC)!r}); "
+         f"import agentmemory._impl as _i; from pathlib import Path; "
+         f"_i.DB_PATH = Path({str(db_file)!r}); "
+         f"sys.argv = ['brainctl', 'init', '--path', {str(db_file)!r}]; "
+         f"_i.main()"],
+        capture_output=True, text=True, timeout=30,
+        env={**os.environ, "PYTHONPATH": str(SRC)},
+    )
+
+    if result.returncode != 0 or not db_file.exists():
+        # Fallback: use Brain class for minimal schema
+        Brain(db_path=str(db_file), agent_id="default")
+
+    # Insert test agents to satisfy FK constraints
+    conn = sqlite3.connect(str(db_file))
+    for aid in ('tester', 'fmt', 'unknown', 'default'):
+        try:
             conn.execute(
-                "INSERT OR IGNORE INTO agents (id, display_name, agent_type) VALUES (?, ?, 'test')",
+                "INSERT OR IGNORE INTO agents (id, display_name, agent_type, status, "
+                "created_at, updated_at) VALUES (?, ?, 'test', 'active', "
+                "strftime('%Y-%m-%dT%H:%M:%S','now'), strftime('%Y-%m-%dT%H:%M:%S','now'))",
                 (aid, aid)
             )
-        conn.commit()
-        conn.close()
-    else:
-        # Fallback: create minimal schema via Brain + extra tables
-        b = Brain(db_path=str(db_file), agent_id="default")
-        conn = sqlite3.connect(str(db_file))
-        conn.executescript("""
-            CREATE TABLE IF NOT EXISTS agents (id TEXT PRIMARY KEY, created_at TEXT DEFAULT (datetime('now')));
-            CREATE TABLE IF NOT EXISTS context (id INTEGER PRIMARY KEY, agent_id TEXT, content TEXT, created_at TEXT DEFAULT (datetime('now')));
-            CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY, agent_id TEXT, title TEXT, created_at TEXT DEFAULT (datetime('now')));
-            CREATE TABLE IF NOT EXISTS blobs (id INTEGER PRIMARY KEY, ref TEXT, created_at TEXT DEFAULT (datetime('now')));
-            CREATE TABLE IF NOT EXISTS access_log (id INTEGER PRIMARY KEY, agent_id TEXT, action TEXT, target_table TEXT, target_id INTEGER, query TEXT, result_count INTEGER, tokens_consumed INTEGER, created_at TEXT DEFAULT (datetime('now')));
-        """)
-        conn.close()
+        except Exception:
+            pass
+    conn.commit()
+    conn.close()
     return db_file
