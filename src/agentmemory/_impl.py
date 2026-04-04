@@ -130,6 +130,35 @@ RECENCY_LAMBDA = {
 }
 
 # ---------------------------------------------------------------------------
+# Category-based half-life (days) — inspired by TORMENT retention tiers.
+# Memories in higher tiers persist longer. "protected" temporal_class or
+# category=identity memories never decay (infinite half-life).
+# ---------------------------------------------------------------------------
+CATEGORY_HALF_LIFE = {
+    "identity":    365.0,   # ~1 year — who the user/agent is
+    "user":        365.0,
+    "convention":  180.0,   # ~6 months — project standards
+    "environment": 180.0,
+    "preference":  120.0,   # ~4 months — user likes/dislikes
+    "project":      90.0,   # ~3 months — project-specific facts
+    "decision":     60.0,   # ~2 months — decisions made
+    "lesson":       60.0,
+    "integration":  30.0,   # ~1 month — integration details change fast
+}
+DEFAULT_HALF_LIFE = 90.0  # fallback
+
+# Minimum score floor — prevents ghost memories from polluting results
+DECAY_FLOOR = 0.03
+
+# Hard memory cap per agent — emergency compression fires above this
+HARD_MEMORY_CAP = 10_000
+HARD_MEMORY_TARGET = 8_000
+
+# Pre-ingest duplicate FTS similarity threshold (0-1 range for normalized score)
+DEDUP_FTS_MIN_RESULTS = 1
+DEDUP_CONTENT_SIMILARITY_THRESHOLD = 0.85  # Jaccard word overlap
+
+# ---------------------------------------------------------------------------
 # Temporal recency helpers
 # ---------------------------------------------------------------------------
 
@@ -177,6 +206,45 @@ def _days_since(created_at_str):
 def _temporal_weight(created_at_str, scope=None):
     """Return recency weight in (0, 1] using exponential decay."""
     return math.exp(-_scope_lambda(scope) * _days_since(created_at_str))
+
+
+def _halflife_decay(memory_row):
+    """Query-time half-life decay — inspired by TORMENT.
+
+    Uses 2^(-age/half_life) where age is measured from the more recent of
+    created_at and last_recalled_at (reinforcement resets the clock).
+    Protected memories and identity categories return 1.0 (no decay).
+    Returns a score in [DECAY_FLOOR, 1.0].
+    """
+    # Protected memories never decay
+    if memory_row.get("protected") or memory_row.get("temporal_class") == "permanent":
+        return 1.0
+
+    category = memory_row.get("category", "")
+    half_life = CATEGORY_HALF_LIFE.get(category, DEFAULT_HALF_LIFE)
+
+    # Use the more recent of created_at and last_recalled_at
+    created = memory_row.get("created_at")
+    recalled = memory_row.get("last_recalled_at")
+    reference_ts = recalled if recalled else created
+
+    age_days = _days_since(reference_ts)
+    if age_days <= 0 or half_life <= 0:
+        return 1.0
+
+    decay = 2.0 ** (-age_days / half_life)
+    return max(DECAY_FLOOR, decay)
+
+
+def _jaccard_word_similarity(a, b):
+    """Word-level Jaccard similarity between two strings."""
+    words_a = set(a.lower().split())
+    words_b = set(b.lower().split())
+    if not words_a or not words_b:
+        return 0.0
+    intersection = words_a & words_b
+    union = words_a | words_b
+    return len(intersection) / len(union)
 
 def _is_reflexion(r):
     """Return True if a memory result is tagged 'reflexion'."""
@@ -1001,6 +1069,81 @@ def cmd_memory_add(args):
         }
         alpha_floor = 1 + math.ceil(max(0.0, incumbent_pii - 0.20) * 0.5 * 5)
 
+    # ── Pre-ingest duplicate suppression (TORMENT-inspired) ────────────
+    # Before inserting, check if a very similar memory already exists for
+    # this agent. If so, reinforce it instead of creating a duplicate.
+    # This prevents unbounded growth from repeated similar observations.
+    dedup_hit = None
+    if not force_write and args.agent:
+        try:
+            fts_q = _sanitize_fts_query(args.content)
+            if fts_q:
+                candidates = db.execute(
+                    "SELECT m.id, m.content, m.confidence, m.category, m.recalled_count "
+                    "FROM memories m JOIN memories_fts f ON m.id = f.rowid "
+                    "WHERE memories_fts MATCH ? AND m.agent_id = ? AND m.retired_at IS NULL "
+                    "AND m.category = ? "
+                    "ORDER BY f.rank LIMIT 5",
+                    (fts_q, args.agent, args.category)
+                ).fetchall()
+                for cand in candidates:
+                    sim = _jaccard_word_similarity(args.content, cand["content"])
+                    if sim >= DEDUP_CONTENT_SIMILARITY_THRESHOLD:
+                        # Reinforce existing memory instead of duplicating
+                        new_conf = min(0.98, cand["confidence"] + (1.0 - cand["confidence"]) * 0.3)
+                        db.execute(
+                            "UPDATE memories SET confidence=?, recalled_count=recalled_count+1, "
+                            "last_recalled_at=?, updated_at=? WHERE id=?",
+                            (new_conf, _now_ts(), _now_ts(), cand["id"])
+                        )
+                        db.commit()
+                        dedup_hit = cand["id"]
+                        json_out({
+                            "ok": True,
+                            "deduplicated": True,
+                            "reinforced_memory_id": cand["id"],
+                            "similarity": round(sim, 4),
+                            "new_confidence": round(new_conf, 4),
+                        })
+                        return
+        except Exception:
+            pass  # dedup failure is non-fatal; proceed with insert
+
+    # ── Hard memory cap check (TORMENT-inspired) ─────────────────────
+    # If this agent has exceeded the hard cap, force-compress before inserting.
+    if args.agent:
+        try:
+            count_row = db.execute(
+                "SELECT COUNT(*) as cnt FROM memories WHERE agent_id=? AND retired_at IS NULL",
+                (args.agent,)
+            ).fetchone()
+            if count_row and count_row["cnt"] >= HARD_MEMORY_CAP:
+                # Emergency compression: retire lowest-confidence memories down to target
+                excess = count_row["cnt"] - HARD_MEMORY_TARGET
+                if excess > 0:
+                    db.execute(
+                        "UPDATE memories SET retired_at=?, retraction_reason='hard_cap_emergency' "
+                        "WHERE id IN ("
+                        "  SELECT id FROM memories WHERE agent_id=? AND retired_at IS NULL "
+                        "  AND protected=0 AND temporal_class != 'permanent' "
+                        "  ORDER BY confidence ASC, created_at ASC LIMIT ?"
+                        ")",
+                        (_now_ts(), args.agent, excess)
+                    )
+                    db.commit()
+                    # Log the emergency compression
+                    db.execute(
+                        "INSERT INTO events (agent_id, event_type, summary, created_at) "
+                        "VALUES (?, 'warning', ?, ?)",
+                        (args.agent,
+                         f"Hard memory cap hit ({count_row['cnt']}/{HARD_MEMORY_CAP}). "
+                         f"Emergency-retired {excess} lowest-confidence memories.",
+                         _now_ts())
+                    )
+                    db.commit()
+        except Exception:
+            pass  # cap check failure is non-fatal
+
     cursor = db.execute(
         "INSERT INTO memories (agent_id, category, scope, content, confidence, tags, source_event_id, "
         "memory_type, supersedes_id, alpha, created_at, updated_at) "
@@ -1104,9 +1247,11 @@ def cmd_memory_search(args):
         if not no_recency:
             for r in results:
                 tw = _temporal_weight(r.get("created_at"), r.get("scope"))
+                hl = _halflife_decay(r)
                 r["temporal_weight"] = round(tw, 4)
+                r["halflife_decay"] = round(hl, 4)
                 r["age"] = _age_str(r.get("created_at"))
-                score = (r.get("confidence") or 1.0) * tw
+                score = (r.get("confidence") or 1.0) * tw * hl
                 if _is_reflexion(r):
                     score *= REFLEXION_BOOST
                     r["reflexion_boosted"] = True
@@ -1136,10 +1281,12 @@ def cmd_memory_search(args):
         if not no_recency:
             for r in results:
                 tw = _temporal_weight(r.get("created_at"), r.get("scope"))
+                hl = _halflife_decay(r)
                 r["temporal_weight"] = round(tw, 4)
+                r["halflife_decay"] = round(hl, 4)
                 r["age"] = _age_str(r.get("created_at"))
-                # fts_rank is negative; multiply by tw to boost recent items
-                score = (r.get("fts_rank") or 0.0) * tw
+                # fts_rank is negative; multiply by tw and halflife to boost recent/reinforced items
+                score = (r.get("fts_rank") or 0.0) * tw * hl
                 if _is_reflexion(r):
                     score *= REFLEXION_BOOST
                     r["reflexion_boosted"] = True
