@@ -11711,7 +11711,7 @@ def build_parser():
     lnt.add_argument("--output", "-o", choices=["json", "text"], default="json", help="Output format")
 
     # --- batch ---
-    bat = sub.add_parser("batch", help="Anthropic Batch API — 50% cost for bulk LLM operations")
+    bat = sub.add_parser("batch", help="Anthropic Batch API - 50%% cost for bulk LLM operations")
     bat_sub = bat.add_subparsers(dest="batch_cmd")
     bat_submit = bat_sub.add_parser("submit", help="Submit prompts file as batch (one prompt per line)")
     bat_submit.add_argument("file", help="Path to prompts file")
