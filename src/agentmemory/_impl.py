@@ -1144,13 +1144,15 @@ def cmd_memory_add(args):
         except Exception:
             pass  # cap check failure is non-fatal
 
+    file_path = getattr(args, "file_path", None)
+    file_line = getattr(args, "file_line", None)
     cursor = db.execute(
         "INSERT INTO memories (agent_id, category, scope, content, confidence, tags, source_event_id, "
-        "memory_type, supersedes_id, alpha, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "memory_type, supersedes_id, alpha, file_path, file_line, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (args.agent, args.category, args.scope or "global", args.content,
          effective_confidence, tags_json, args.source_event, memory_type,
-         supersedes_id, float(alpha_floor), _now_ts(), _now_ts())
+         supersedes_id, float(alpha_floor), file_path, file_line, _now_ts(), _now_ts())
     )
     memory_id = cursor.lastrowid
 
@@ -1296,6 +1298,11 @@ def cmd_memory_search(args):
                 precision_weight = 0.90 + 0.10 * (trust * conf)
                 score *= precision_weight
                 r["precision_weight"] = round(precision_weight, 4)
+                # File proximity boost: memories anchored to the queried file rank higher
+                search_file = getattr(args, "file_path", None)
+                if search_file and r.get("file_path") and search_file in r["file_path"]:
+                    score *= 1.5  # fts_rank is negative, so *1.5 makes it more negative = higher rank
+                    r["file_proximity_boost"] = True
                 r["final_score"] = score
             # ascending sort: more negative = better FTS match + recent boost
             results.sort(key=lambda r: r["final_score"])
@@ -11410,6 +11417,10 @@ def build_parser():
                          help="Compute W(m) score and show result without writing")
     mem_add.add_argument("--supersedes", type=int, metavar="ID", dest="supersedes",
                          help="ID of memory being superseded; applies PII recency gate")
+    mem_add.add_argument("--file", dest="file_path",
+                         help="Anchor memory to a source file (e.g. src/auth/jwt.ts)")
+    mem_add.add_argument("--line", type=int, dest="file_line",
+                         help="Optional line number within the anchored file")
 
     mem_search = mem_sub.add_parser("search", help="Search memories (FTS5)")
     mem_search.add_argument("query", help="Search query")
@@ -11423,6 +11434,8 @@ def build_parser():
                              help="Epistemic foraging mode: prioritize memories with confidence < 0.6 (high uncertainty = high info value)")
     mem_search.add_argument("--output", "-o", choices=["json", "compact", "oneline"], default="json",
                              help="Output format: json (default), compact (minified), oneline (ID|type|text)")
+    mem_search.add_argument("--file", dest="file_path",
+                             help="Boost memories anchored to this file path (substring match)")
 
     mem_list = mem_sub.add_parser("list", help="List memories")
     mem_list.add_argument("--category", "-c")
