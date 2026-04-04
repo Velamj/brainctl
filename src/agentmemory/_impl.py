@@ -8373,6 +8373,156 @@ def cmd_belief_seed(args):
             print(f"Seeded beliefs: {created} created, {updated} updated across {len(target_agents)} agents")
 
 
+# ---------------------------------------------------------------------------
+# INDEX — browsable catalog of all knowledge (Karpathy LLM Wiki pattern)
+# ---------------------------------------------------------------------------
+
+def cmd_index(args):
+    """Generate a browsable catalog of all knowledge in the brain.
+
+    Inspired by Karpathy's LLM Wiki pattern: an index.md that lets the LLM
+    (or human) quickly orient — see what's known, find relevant pages, and
+    identify gaps. The index is a snapshot, not a live view.
+    """
+    db = get_db()
+    category_filter = getattr(args, "category", None)
+    scope_filter = getattr(args, "scope", None)
+    out_format = getattr(args, "format", "markdown")
+    out_file = getattr(args, "out", None)
+
+    # ── Gather memories ──────────────────────────────────────────────
+    where_clauses = ["retired_at IS NULL"]
+    params = []
+    if category_filter:
+        where_clauses.append("category = ?")
+        params.append(category_filter)
+    if scope_filter:
+        where_clauses.append("scope = ?")
+        params.append(scope_filter)
+
+    where = " AND ".join(where_clauses)
+    memories = db.execute(
+        f"SELECT id, category, scope, content, confidence, recalled_count, "
+        f"file_path, file_line, created_at, agent_id "
+        f"FROM memories WHERE {where} ORDER BY category, confidence DESC",
+        params
+    ).fetchall()
+
+    # ── Gather entities ──────────────────────────────────────────────
+    entities = db.execute(
+        "SELECT id, name, entity_type, created_at FROM entities "
+        "WHERE retired_at IS NULL ORDER BY entity_type, name"
+    ).fetchall()
+
+    # ── Gather decisions ─────────────────────────────────────────────
+    decisions = db.execute(
+        "SELECT id, title, rationale, agent_id, created_at FROM decisions "
+        "ORDER BY created_at DESC LIMIT 50"
+    ).fetchall()
+
+    if out_format == "json":
+        result = {
+            "memories_by_category": {},
+            "entities_by_type": {},
+            "decisions": [],
+            "stats": {
+                "total_memories": len(memories),
+                "total_entities": len(entities),
+                "total_decisions": len(decisions),
+            }
+        }
+        for m in memories:
+            cat = m["category"]
+            if cat not in result["memories_by_category"]:
+                result["memories_by_category"][cat] = []
+            entry = {
+                "id": m["id"],
+                "content": m["content"][:200],
+                "confidence": m["confidence"],
+                "recalled": m["recalled_count"],
+                "scope": m["scope"],
+                "agent": m["agent_id"],
+                "created": m["created_at"],
+            }
+            if m["file_path"]:
+                entry["file"] = m["file_path"]
+                if m["file_line"]:
+                    entry["line"] = m["file_line"]
+            result["memories_by_category"][cat].append(entry)
+        for e in entities:
+            etype = e["entity_type"]
+            if etype not in result["entities_by_type"]:
+                result["entities_by_type"][etype] = []
+            result["entities_by_type"][etype].append({
+                "id": e["id"], "name": e["name"], "created": e["created_at"],
+            })
+        for d in decisions:
+            result["decisions"].append({
+                "id": d["id"],
+                "title": d["title"][:200],
+                "rationale": (d["rationale"] or "")[:100],
+                "agent": d["agent_id"],
+                "created": d["created_at"],
+            })
+        output = json.dumps(result, indent=2)
+    else:
+        # Markdown format
+        lines = ["# Brain Index", ""]
+        lines.append(f"Generated: {_now_ts()}  ")
+        lines.append(f"Memories: {len(memories)} | Entities: {len(entities)} | Decisions: {len(decisions)}")
+        lines.append("")
+
+        # Group memories by category
+        by_cat = {}
+        for m in memories:
+            by_cat.setdefault(m["category"], []).append(m)
+
+        for cat in sorted(by_cat.keys()):
+            items = by_cat[cat]
+            lines.append(f"## {cat.title()} ({len(items)})")
+            lines.append("")
+            for m in items[:30]:  # cap per category for readability
+                preview = m["content"][:120].replace("\n", " ")
+                file_tag = f" `{m['file_path']}`" if m["file_path"] else ""
+                conf = f" (conf={m['confidence']:.2f})" if m["confidence"] < 1.0 else ""
+                lines.append(f"- **[{m['id']}]** {preview}{file_tag}{conf}")
+            if len(items) > 30:
+                lines.append(f"- *...and {len(items) - 30} more*")
+            lines.append("")
+
+        # Entities
+        if entities:
+            lines.append("## Entities")
+            lines.append("")
+            by_type = {}
+            for e in entities:
+                by_type.setdefault(e["entity_type"], []).append(e)
+            for etype in sorted(by_type.keys()):
+                items = by_type[etype]
+                names = ", ".join(e["name"] for e in items[:20])
+                if len(items) > 20:
+                    names += f", ...+{len(items) - 20}"
+                lines.append(f"- **{etype}** ({len(items)}): {names}")
+            lines.append("")
+
+        # Decisions
+        if decisions:
+            lines.append("## Recent Decisions")
+            lines.append("")
+            for d in decisions[:15]:
+                lines.append(f"- **[{d['id']}]** {d['title'][:100]}")
+            lines.append("")
+
+        output = "\n".join(lines)
+
+    if out_file:
+        with open(out_file, "w") as f:
+            f.write(output)
+        print(f"Index written to {out_file}")
+    else:
+        print(output)
+
+
 def cmd_validate(args):
     db = get_db()
     issues = []
@@ -11872,6 +12022,14 @@ def build_parser():
 
     # batch subcommand not available — brainctl is model-agnostic
 
+    # --- index (Karpathy LLM Wiki pattern) ---
+    idx = sub.add_parser("index", help="Generate a browsable catalog of all knowledge (memories, entities, decisions)")
+    idx.add_argument("--category", "-c", help="Filter to a specific memory category")
+    idx.add_argument("--scope", "-s", help="Filter to a specific scope")
+    idx.add_argument("--out", help="Write index to file instead of stdout")
+    idx.add_argument("--format", choices=["markdown", "json"], default="markdown",
+                     help="Output format: markdown (human-readable) or json (machine-readable)")
+
     prune = sub.add_parser("prune-log", help="Prune old access log entries")
     prune.add_argument("--days", type=int, default=30)
 
@@ -12577,6 +12735,7 @@ def main():
         "affect": None,  # subcommand dispatch below
         "report": cmd_report,
         "lint": cmd_lint,
+        "index": cmd_index,
 
         "validate": cmd_validate,
         "prune-log": cmd_prune_access_log,
