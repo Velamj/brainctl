@@ -24,7 +24,7 @@ format results appropriately.
 ### Corpus
 
 341 unique queries from `access_log` spanning March–April 2026. Agents: `task-tracker-recall`
-(370 total calls), `unknown` (128), `hermes` (17), `openclaw` (9), `Aegis` (4).
+(370 total calls), `unknown` (128), `hermes` (17), `agent-1` (9), `Aegis` (4).
 
 ### Observed Query Taxonomy
 

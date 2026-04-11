@@ -429,9 +429,9 @@ Running the algorithm against the 3 current WARNING findings from `coherence-che
 ### Finding #2: epoch ↔ task-tracker-weaver (15% topic overlap)
 - Same as above
 
-### Finding #3: openclaw ↔ task-tracker-weaver (19% topic overlap)
+### Finding #3: agent-1 ↔ task-tracker-weaver (19% topic overlap)
 - Higher overlap — more likely a real contradiction
-- openclaw has `strength=0.85` on task domains; task-tracker-weaver is project-focused
+- agent-1 has `strength=0.85` on task domains; task-tracker-weaver is project-focused
 - Domain-specific expertise should break the tie
 
 All three are in the auto-resolvable tier given their topic overlap scores (below the threshold for permanent conflicts), assuming neither memory involved is `temporal_class = 'permanent'`.

@@ -510,7 +510,7 @@ def recompute_agent_category_trust(db, agent_id: str, category: str, scope: str 
 New agents have no history. Options:
 1. **Neutral prior (0.5):** Conservative — new agents get standard retrieval weight
 2. **Manager prior:** Inherit trust from their `chainOfCommand` manager's scores
-3. **Role prior:** Agent type defaults (hermes=0.85, task-tracker=0.70, openclaw=0.75)
+3. **Role prior:** Agent type defaults (hermes=0.85, task-tracker=0.70, agent-1=0.75)
 
 **Recommendation:** Use role prior for new agents, transition to computed score after 10+ memories in a category. Prevents an agent with zero retraction history (but also zero history) from appearing perfectly trustworthy.
 

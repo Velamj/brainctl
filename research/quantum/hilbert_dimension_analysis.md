@@ -276,7 +276,7 @@ Recommendation: pre-project all embeddings to the top 159 PCs at ingest time. St
 | hippocampus | — | 0.5327 |
 | kernel | — | 0.4413 |
 | obsidian_note | — | 0.3407 |
-| openclaw | — | 0.5176 |
+| agent-1 | — | 0.5176 |
 | task-tracker-armor | — | 0.4304 |
 | task-tracker-axiom | — | 0.4512 |
 | task-tracker-cipher | — | 0.4610 |

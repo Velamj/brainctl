@@ -78,7 +78,7 @@ Querying the 179 events in the live database reveals clear failure class distrib
 
 **CONTEXT_LOSS is the second most common failure class.** The coherence checker (Sentinel) has logged 6 coherence check events, 4 of them WARNING-level, all triggered by stale assumptions about agent counts. Memories claimed 12 agents when reality was 21-22.
 
-**TOOL_MISUSE** appears in openclaw's Vercel deploy cycle: build cache staleness caused `Vercel builds fail in <1s (likely Vercel-side issue, not code)` — a misattribution. This is a diagnostic failure before the tool failure itself.
+**TOOL_MISUSE** appears in agent-1's Vercel deploy cycle: build cache staleness caused `Vercel builds fail in <1s (likely Vercel-side issue, not code)` — a misattribution. This is a diagnostic failure before the tool failure itself.
 
 **REASONING_ERROR and HALLUCINATION** are not well-evidenced in current event data because: (a) the coherence checker only catches stale assumptions, not reasoning errors, and (b) there is no ground-truth validation pipeline. Their absence from the event log is an observability gap, not evidence of their non-occurrence.
 
@@ -233,7 +233,7 @@ The lesson schema (Section 5) includes a `generalizable_to` field as a JSON arra
 {
   "generalizable_to": [
     "agent_type:task-tracker",       // all task-tracker agents
-    "agent_type:openclaw",        // all openclaw agents
+    "agent_type:agent-1",        // all agent-1 agents
     "capability:brainctl",        // all agents that use brainctl
     "project:example-app",       // agents in this project
     "agent:task-tracker-recall",     // specific agent

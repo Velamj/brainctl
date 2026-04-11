@@ -10,7 +10,7 @@ Usage:
 
 Requires:
     - ~/agentmemory/db/brain.db  (brainctl memory spine)
-    - ~/.openclaw/workspace/MEMORY.md  (agent-1's compact memory block)
+    - ~/.agent-1/workspace/MEMORY.md  (agent-1's compact memory block)
 
 Bridge-P1 dependency note:
     Auto-replace of MEMORY.md entries (--auto-resolve) requires the
@@ -37,7 +37,7 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-MEMORY_BLOCK_PATH = Path.home() / ".openclaw" / "workspace" / "MEMORY.md"
+MEMORY_BLOCK_PATH = Path.home() / ".agent-1" / "workspace" / "MEMORY.md"
 DB_PATH = Path.home() / "agentmemory" / "db" / "brain.db"
 BRAINCTL = Path.home() / "bin" / "brainctl"
 AGENT_ID = "task-tracker-recall"

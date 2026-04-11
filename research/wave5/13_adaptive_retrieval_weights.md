@@ -393,7 +393,7 @@ changes slowly (memories are written on heartbeats, not per-token).
 2. **Cross-agent weight consistency**: different agents may benefit from different
    default profiles. Hermes (consolidation-focused) should weight recency lower
    than a tactical agent running daily sprints. A `per_agent_profile` override in
-   `openclaw.json` is worth considering.
+   `agent-1.json` is worth considering.
 
 3. **Category-specific decay**: `lesson` and `decision` memories may warrant slower
    recency decay than `project` memories. A per-category temporal_class default would

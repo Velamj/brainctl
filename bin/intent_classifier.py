@@ -88,7 +88,7 @@ _IDENTITY_STMT_RE = re.compile(
     re.IGNORECASE
 )
 _AGENT_NAMES = {
-    "kokoro", "hermes", "legion", "scribe", "weaver", "cipher",
+    "agent-1", "hermes", "legion", "scribe", "weaver", "cipher",
     "cortex", "engram", "nexus", "tempo", "stratos", "tensor",
     "probe", "aegis", "sentinel", "epoch", "hippocampus",
 }

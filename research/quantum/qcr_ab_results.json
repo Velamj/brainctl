@@ -124,7 +124,7 @@
     {
       "query_id": "Q02",
       "group": "canonical",
-      "query": "CostClock time tracking invoicing SaaS Next.js",
+      "query": "example-app time tracking invoicing SaaS Next.js",
       "expected_ids": [
         130,
         78,
@@ -422,7 +422,7 @@
     {
       "query_id": "Q06",
       "group": "canonical",
-      "query": "CostClock security hardening test coverage production readiness",
+      "query": "example-app security hardening test coverage production readiness",
       "expected_ids": [
         130,
         78
@@ -496,7 +496,7 @@
     {
       "query_id": "Q07",
       "group": "canonical",
-      "query": "Nexus heartbeat Kokoro token checkout authentication fails",
+      "query": "Nexus heartbeat agent-1 token checkout authentication fails",
       "expected_ids": [
         130,
         93
@@ -940,7 +940,7 @@
     {
       "query_id": "Q13",
       "group": "canonical",
-      "query": "CostClock cron endpoint daily cleanup authorization bearer secret",
+      "query": "example-app cron endpoint daily cleanup authorization bearer secret",
       "expected_ids": [
         130,
         78
@@ -1235,7 +1235,7 @@
     {
       "query_id": "Q17",
       "group": "canonical",
-      "query": "OpenClaw AI agent framework local execution deployment",
+      "query": "agent-framework AI agent framework local execution deployment",
       "expected_ids": [
         376,
         125,
@@ -1310,7 +1310,7 @@
     {
       "query_id": "Q18",
       "group": "canonical",
-      "query": "Paperclip task heartbeat assignment checkout workflow status",
+      "query": "task-tracker task heartbeat assignment checkout workflow status",
       "expected_ids": [
         130,
         804,
@@ -1385,7 +1385,7 @@
     {
       "query_id": "Q19",
       "group": "canonical",
-      "query": "Nara external data integration REST API polling synchronization",
+      "query": "agent-2 external data integration REST API polling synchronization",
       "expected_ids": [
         376,
         93
@@ -1831,7 +1831,7 @@
     {
       "query_id": "Q25",
       "group": "access_log",
-      "query": "costclock pentest security api vulnerability",
+      "query": "example-app pentest security api vulnerability",
       "expected_ids": [
         130,
         78
@@ -3226,7 +3226,7 @@
     {
       "query_id": "Q44",
       "group": "access_log",
-      "query": "CostClock invoice compression test memories scope",
+      "query": "example-app invoice compression test memories scope",
       "expected_ids": [
         106,
         78,
@@ -3301,7 +3301,7 @@
     {
       "query_id": "Q45",
       "group": "access_log",
-      "query": "Paperclip temporal cognition epoch filed issues COG BRN",
+      "query": "task-tracker temporal cognition epoch filed issues COG BRN",
       "expected_ids": [
         376,
         804,

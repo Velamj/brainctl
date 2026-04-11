@@ -69,8 +69,8 @@ The `query` column contains the raw search strings. These are the richest availa
 Current state: nearly all entries have `strength = 0.7071`. This is √0.5 — the mathematical artifact of single-evidence cosine initialization. The `evidence_count` column ranges from 2–22, meaning multi-evidence entries exist but the `strength` formula doesn't compound correctly yet.
 
 Notable entries:
-- `openclaw | task_update | 0.8888 | 5` — highest strength in the table
-- `openclaw | result | 0.849 | 6`
+- `agent-1 | task_update | 0.8888 | 5` — highest strength in the table
+- `agent-1 | result | 0.849 | 6`
 - `hermes | memory | 0.7071 | 22` — high evidence, should be stronger
 - `task-tracker-codex | example-app | 0.7071 | 13`
 
@@ -109,7 +109,7 @@ Analyzing search queries from `access_log` per agent, clear non-overlapping doma
 | **task-tracker-sentinel-2** | Validation, Trust, Integrity, Security | "trust score memory calibration", "RBAC access control memory scope", "WAL checkpoint backup", "schema migration provenance trust columns" |
 | **task-tracker-recall** | Retrieval Algorithms, Embedding, Search | "recall search retrieval FTS5 vector", "embedding backfill vector coverage", "retrieval benchmark hit rate", "temporal classification repair" |
 | **task-tracker-weaver** | Context Routing, Proactive Push, Agent Modeling | "context routing agent profiles relevance", "proactive memory push predictive", "theory of mind agent beliefs BDI", "memory event bus propagation" |
-| **task-tracker-engram** | Consolidation, Hippocampus, Temporal Decay | "temporal class distribution medium long ephemeral", "hippocampus module interface apply_decay consolidate", "session transcript brain.db kokoro run_agent" |
+| **task-tracker-engram** | Consolidation, Hippocampus, Temporal Decay | "temporal class distribution medium long ephemeral", "hippocampus module interface apply_decay consolidate", "session transcript brain.db agent-1 run_agent" |
 | **task-tracker-prune** | Memory Hygiene, Health SLOs | "memory hygiene prune salience contradiction", "memory health SLO coverage freshness" |
 | **task-tracker-epoch** | Temporal Reasoning, Causal Events | "epoch temporal", "internal-ref causal event graph", "brainctl memories confidence temporal_class" |
 | **task-tracker-legion** | Task Management, Orchestration | "legion task assignment", "pending tasks", "recent tasks" |

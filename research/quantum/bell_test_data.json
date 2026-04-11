@@ -8,7 +8,7 @@
       "agent_a": "hermes",
       "conf_a": 0.999999149484536,
       "content_a": "Agent memory spine current state (2026-03-28): 22 active age",
-      "agent_b": "openclaw",
+      "agent_b": "agent-1",
       "conf_b": 0.9999999291280148,
       "content_b": "brainctl push gate threshold: originally 50 active memories,"
     },
@@ -20,7 +20,7 @@
       "agent_a": "hermes",
       "conf_a": 1.0,
       "content_a": "Kernel (COS-207) integrated brainctl as Hermes tools: brain_",
-      "agent_b": "openclaw",
+      "agent_b": "agent-1",
       "conf_b": 0.9999999291280148,
       "content_b": "brainctl push gate threshold: originally 50 active memories,"
     },
@@ -29,12 +29,12 @@
       "relation_type": "co_referenced",
       "weight": 1.0,
       "co_activation_count": 5,
-      "agent_a": "openclaw",
+      "agent_a": "agent-1",
       "conf_a": 0.9999999291280148,
       "content_a": "brainctl push gate threshold: originally 50 active memories,",
       "agent_b": "hermes",
       "conf_b": 1.0,
-      "content_b": "CostClock AI: Next.js SaaS for financial ops \u2014 time tracking"
+      "content_b": ""example data""
     },
     {
       "id": 4615,
@@ -44,18 +44,18 @@
       "agent_a": "hermes",
       "conf_a": 0.999999149484536,
       "content_a": "Agent memory spine current state (2026-03-28): 22 active age",
-      "agent_b": "paperclip-lattice",
+      "agent_b": "task-tracker-lattice",
       "conf_b": 0.9987106596638656,
-      "content_b": "Compressed 15 memories in scope project:costclock-ai:invoice"
+      "content_b": "Compressed 15 memories in scope project:example-app:feature"
     },
     {
       "id": 4623,
       "relation_type": "co_referenced",
       "weight": 1.0,
       "co_activation_count": 4,
-      "agent_a": "paperclip-lattice",
+      "agent_a": "task-tracker-lattice",
       "conf_a": 0.9987106596638656,
-      "content_a": "Compressed 15 memories in scope project:costclock-ai:invoice",
+      "content_a": "Compressed 15 memories in scope project:example-app:feature",
       "agent_b": "hermes",
       "conf_b": 1.0,
       "content_b": "Kernel (COS-207) integrated brainctl as Hermes tools: brain_"
@@ -65,10 +65,10 @@
       "relation_type": "co_referenced",
       "weight": 1.0,
       "co_activation_count": 4,
-      "agent_a": "paperclip-lattice",
+      "agent_a": "task-tracker-lattice",
       "conf_a": 0.9987106596638656,
-      "content_a": "Compressed 15 memories in scope project:costclock-ai:invoice",
-      "agent_b": "openclaw",
+      "content_a": "Compressed 15 memories in scope project:example-app:feature",
+      "agent_b": "agent-1",
       "conf_b": 0.9999999291280148,
       "content_b": "brainctl push gate threshold: originally 50 active memories,"
     },
@@ -77,21 +77,21 @@
       "relation_type": "co_referenced",
       "weight": 1.0,
       "co_activation_count": 4,
-      "agent_a": "paperclip-lattice",
+      "agent_a": "task-tracker-lattice",
       "conf_a": 0.9987106596638656,
-      "content_a": "Compressed 15 memories in scope project:costclock-ai:invoice",
+      "content_a": "Compressed 15 memories in scope project:example-app:feature",
       "agent_b": "hermes",
       "conf_b": 1.0,
-      "content_b": "CostClock AI: Next.js SaaS for financial ops \u2014 time tracking"
+      "content_b": ""example data""
     },
     {
       "id": 4598,
       "relation_type": "co_referenced",
       "weight": 1.0,
       "co_activation_count": 3,
-      "agent_a": "paperclip-lattice",
+      "agent_a": "task-tracker-lattice",
       "conf_a": 0.981671,
-      "content_a": "CostClock invoice subsystem note 1: invoice lifecycle includ",
+      "content_a": ""example data"",
       "agent_b": "hermes",
       "conf_b": 0.999835,
       "content_b": "NEXT SESSION: Chief is delivering a master prompt that will "
@@ -101,9 +101,9 @@
       "relation_type": "co_referenced",
       "weight": 1.0,
       "co_activation_count": 3,
-      "agent_a": "paperclip-lattice",
+      "agent_a": "task-tracker-lattice",
       "conf_a": 0.981671,
-      "content_a": "CostClock invoice subsystem note 1: invoice lifecycle includ",
+      "content_a": ""example data"",
       "agent_b": "hermes",
       "conf_b": 0.999999149484536,
       "content_b": "Agent memory spine current state (2026-03-28): 22 active age"
@@ -116,18 +116,18 @@
       "agent_a": "hermes",
       "conf_a": 0.999835,
       "content_a": "NEXT SESSION: Chief is delivering a master prompt that will ",
-      "agent_b": "paperclip-lattice",
+      "agent_b": "task-tracker-lattice",
       "conf_b": 0.9987106596638656,
-      "content_b": "Compressed 15 memories in scope project:costclock-ai:invoice"
+      "content_b": "Compressed 15 memories in scope project:example-app:feature"
     },
     {
       "id": 4602,
       "relation_type": "co_referenced",
       "weight": 1.0,
       "co_activation_count": 3,
-      "agent_a": "paperclip-lattice",
+      "agent_a": "task-tracker-lattice",
       "conf_a": 0.981671,
-      "content_a": "CostClock invoice subsystem note 1: invoice lifecycle includ",
+      "content_a": ""example data"",
       "agent_b": "hermes",
       "conf_b": 1.0,
       "content_b": "Kernel (COS-207) integrated brainctl as Hermes tools: brain_"
@@ -137,10 +137,10 @@
       "relation_type": "co_referenced",
       "weight": 1.0,
       "co_activation_count": 3,
-      "agent_a": "paperclip-lattice",
+      "agent_a": "task-tracker-lattice",
       "conf_a": 0.981671,
-      "content_a": "CostClock invoice subsystem note 1: invoice lifecycle includ",
-      "agent_b": "openclaw",
+      "content_a": ""example data"",
+      "agent_b": "agent-1",
       "conf_b": 0.9999999291280148,
       "content_b": "brainctl push gate threshold: originally 50 active memories,"
     },
@@ -152,7 +152,7 @@
       "agent_a": "hermes",
       "conf_a": 0.999835,
       "content_a": "NEXT SESSION: Chief is delivering a master prompt that will ",
-      "agent_b": "openclaw",
+      "agent_b": "agent-1",
       "conf_b": 0.9999999291280148,
       "content_b": "brainctl push gate threshold: originally 50 active memories,"
     },
@@ -161,21 +161,21 @@
       "relation_type": "co_referenced",
       "weight": 1.0,
       "co_activation_count": 3,
-      "agent_a": "paperclip-lattice",
+      "agent_a": "task-tracker-lattice",
       "conf_a": 0.981671,
-      "content_a": "CostClock invoice subsystem note 1: invoice lifecycle includ",
+      "content_a": ""example data"",
       "agent_b": "hermes",
       "conf_b": 1.0,
-      "content_b": "CostClock AI: Next.js SaaS for financial ops \u2014 time tracking"
+      "content_b": ""example data""
     },
     {
       "id": 4923,
       "relation_type": "co_referenced",
       "weight": 0.8,
       "co_activation_count": 4,
-      "agent_a": "paperclip-lattice",
+      "agent_a": "task-tracker-lattice",
       "conf_a": 0.9987106596638656,
-      "content_a": "Compressed 15 memories in scope project:costclock-ai:invoice",
+      "content_a": "Compressed 15 memories in scope project:example-app:feature",
       "agent_b": "hermes",
       "conf_b": 0.9979906188389923,
       "content_b": "brain_tool.py integration complete for COS-207"
@@ -185,7 +185,7 @@
       "relation_type": "co_referenced",
       "weight": 0.8,
       "co_activation_count": 4,
-      "agent_a": "openclaw",
+      "agent_a": "agent-1",
       "conf_a": 0.9999999291280148,
       "content_a": "brainctl push gate threshold: originally 50 active memories,",
       "agent_b": "hermes",
@@ -200,7 +200,7 @@
       "agent_a": "hermes",
       "conf_a": 0.999999149484536,
       "content_a": "Agent memory spine current state (2026-03-28): 22 active age",
-      "agent_b": "paperclip-recall",
+      "agent_b": "task-tracker-recall",
       "conf_b": 0.9979047956674473,
       "content_b": "COS-269 done: implemented brainctl reason (L1+L2) and brainc"
     },
@@ -209,10 +209,10 @@
       "relation_type": "co_referenced",
       "weight": 0.8,
       "co_activation_count": 4,
-      "agent_a": "paperclip-lattice",
+      "agent_a": "task-tracker-lattice",
       "conf_a": 0.9987106596638656,
-      "content_a": "Compressed 15 memories in scope project:costclock-ai:invoice",
-      "agent_b": "paperclip-recall",
+      "content_a": "Compressed 15 memories in scope project:example-app:feature",
+      "agent_b": "task-tracker-recall",
       "conf_b": 0.9979047956674473,
       "content_b": "COS-269 done: implemented brainctl reason (L1+L2) and brainc"
     },
@@ -224,7 +224,7 @@
       "agent_a": "hermes",
       "conf_a": 1.0,
       "content_a": "Kernel (COS-207) integrated brainctl as Hermes tools: brain_",
-      "agent_b": "paperclip-recall",
+      "agent_b": "task-tracker-recall",
       "conf_b": 0.9979047956674473,
       "content_b": "COS-269 done: implemented brainctl reason (L1+L2) and brainc"
     },
@@ -233,10 +233,10 @@
       "relation_type": "co_referenced",
       "weight": 0.8,
       "co_activation_count": 4,
-      "agent_a": "openclaw",
+      "agent_a": "agent-1",
       "conf_a": 0.9999999291280148,
       "content_a": "brainctl push gate threshold: originally 50 active memories,",
-      "agent_b": "paperclip-recall",
+      "agent_b": "task-tracker-recall",
       "conf_b": 0.9979047956674473,
       "content_b": "COS-269 done: implemented brainctl reason (L1+L2) and brainc"
     },
@@ -247,8 +247,8 @@
       "co_activation_count": 4,
       "agent_a": "hermes",
       "conf_a": 1.0,
-      "content_a": "CostClock AI: Next.js SaaS for financial ops \u2014 time tracking",
-      "agent_b": "paperclip-recall",
+      "content_a": ""example data"",
+      "agent_b": "task-tracker-recall",
       "conf_b": 0.9979047956674473,
       "content_b": "COS-269 done: implemented brainctl reason (L1+L2) and brainc"
     },
@@ -260,7 +260,7 @@
       "agent_a": "hermes",
       "conf_a": 0.9979906188389923,
       "content_a": "brain_tool.py integration complete for COS-207",
-      "agent_b": "paperclip-recall",
+      "agent_b": "task-tracker-recall",
       "conf_b": 0.9979047956674473,
       "content_b": "COS-269 done: implemented brainctl reason (L1+L2) and brainc"
     },
@@ -269,9 +269,9 @@
       "relation_type": "co_referenced",
       "weight": 0.8,
       "co_activation_count": 4,
-      "agent_a": "paperclip-lattice",
+      "agent_a": "task-tracker-lattice",
       "conf_a": 0.9987106596638656,
-      "content_a": "Compressed 15 memories in scope project:costclock-ai:invoice",
+      "content_a": "Compressed 15 memories in scope project:example-app:feature",
       "agent_b": "hermes",
       "conf_b": 0.9998140151874703,
       "content_b": "Implemented COS-221 causal event graph: auto-detection pipel"
@@ -281,7 +281,7 @@
       "relation_type": "co_referenced",
       "weight": 0.8,
       "co_activation_count": 4,
-      "agent_a": "openclaw",
+      "agent_a": "agent-1",
       "conf_a": 0.9999999291280148,
       "content_a": "brainctl push gate threshold: originally 50 active memories,",
       "agent_b": "hermes",
@@ -293,7 +293,7 @@
       "relation_type": "co_referenced",
       "weight": 0.8,
       "co_activation_count": 4,
-      "agent_a": "paperclip-recall",
+      "agent_a": "task-tracker-recall",
       "conf_a": 0.9979047956674473,
       "content_a": "COS-269 done: implemented brainctl reason (L1+L2) and brainc",
       "agent_b": "hermes",
@@ -305,9 +305,9 @@
       "relation_type": "co_referenced",
       "weight": 0.6000000000000001,
       "co_activation_count": 3,
-      "agent_a": "paperclip-lattice",
+      "agent_a": "task-tracker-lattice",
       "conf_a": 0.981671,
-      "content_a": "CostClock invoice subsystem note 1: invoice lifecycle includ",
+      "content_a": ""example data"",
       "agent_b": "hermes",
       "conf_b": 0.9979906188389923,
       "content_b": "brain_tool.py integration complete for COS-207"
@@ -317,10 +317,10 @@
       "relation_type": "co_referenced",
       "weight": 0.6000000000000001,
       "co_activation_count": 3,
-      "agent_a": "paperclip-lattice",
+      "agent_a": "task-tracker-lattice",
       "conf_a": 0.981671,
-      "content_a": "CostClock invoice subsystem note 1: invoice lifecycle includ",
-      "agent_b": "paperclip-recall",
+      "content_a": ""example data"",
+      "agent_b": "task-tracker-recall",
       "conf_b": 0.9979047956674473,
       "content_b": "COS-269 done: implemented brainctl reason (L1+L2) and brainc"
     },
@@ -332,7 +332,7 @@
       "agent_a": "hermes",
       "conf_a": 0.999835,
       "content_a": "NEXT SESSION: Chief is delivering a master prompt that will ",
-      "agent_b": "paperclip-recall",
+      "agent_b": "task-tracker-recall",
       "conf_b": 0.9979047956674473,
       "content_b": "COS-269 done: implemented brainctl reason (L1+L2) and brainc"
     },
@@ -341,9 +341,9 @@
       "relation_type": "co_referenced",
       "weight": 0.6000000000000001,
       "co_activation_count": 3,
-      "agent_a": "paperclip-lattice",
+      "agent_a": "task-tracker-lattice",
       "conf_a": 0.981671,
-      "content_a": "CostClock invoice subsystem note 1: invoice lifecycle includ",
+      "content_a": ""example data"",
       "agent_b": "hermes",
       "conf_b": 0.9998140151874703,
       "content_b": "Implemented COS-221 causal event graph: auto-detection pipel"
@@ -361,7 +361,7 @@
     },
     {
       "id": 127,
-      "agent_id": "openclaw",
+      "agent_id": "agent-1",
       "category": "decision",
       "content": "brainctl push gate threshold: originally 50 active memories, lowered to 40 by Chief on 2026-03-28 af",
       "confidence": 0.9999999291280148,
@@ -372,7 +372,7 @@
       "id": 130,
       "agent_id": "hermes",
       "category": "environment",
-      "content": "CostClock AI: Next.js SaaS for financial ops \u2014 time tracking, invoicing, collections automation. Rep",
+      "content": ""example data"",
       "confidence": 1.0,
       "recalled_count": 119,
       "ewc_importance": 0.8002
@@ -397,7 +397,7 @@
     },
     {
       "id": 383,
-      "agent_id": "paperclip-recall",
+      "agent_id": "task-tracker-recall",
       "category": "decision",
       "content": "COS-269 done: implemented brainctl reason (L1+L2) and brainctl infer (L1+L2+L3) \u2014 neuro-symbolic rea",
       "confidence": 0.9979047956674473,
@@ -406,9 +406,9 @@
     },
     {
       "id": 106,
-      "agent_id": "paperclip-lattice",
+      "agent_id": "task-tracker-lattice",
       "category": "environment",
-      "content": "Compressed 15 memories in scope project:costclock-ai:invoice-compression-test-1774662366 into 5 memo",
+      "content": "Compressed 15 memories in scope project:example-app:feature-compression-test-1774662366 into 5 memo",
       "confidence": 0.9987106596638656,
       "recalled_count": 77,
       "ewc_importance": 0.6162
@@ -433,7 +433,7 @@
     },
     {
       "id": 410,
-      "agent_id": "paperclip-engram",
+      "agent_id": "task-tracker-engram",
       "category": "environment",
       "content": "COS-319 filed: hippocampus compression discards source_event_id links \u2192 distillation ratio drops to ",
       "confidence": 0.9983312883435582,
@@ -460,7 +460,7 @@
     },
     {
       "id": 532,
-      "agent_id": "paperclip-engram",
+      "agent_id": "task-tracker-engram",
       "category": "lesson",
       "content": "LESSON: never run brainctl distill below threshold 0.7. Low-threshold distillation floods store with",
       "confidence": 0.989009,
@@ -469,7 +469,7 @@
     },
     {
       "id": 558,
-      "agent_id": "openclaw",
+      "agent_id": "agent-1",
       "category": "decision",
       "content": "COS-323 executed: memory health rescue. Retired 50 operational noise memories (hippocampus reclassif",
       "confidence": 0.993188,
@@ -478,9 +478,9 @@
     },
     {
       "id": 78,
-      "agent_id": "paperclip-lattice",
+      "agent_id": "task-tracker-lattice",
       "category": "project",
-      "content": "CostClock invoice subsystem note 1: invoice lifecycle includes draft, sent, paid, overdue state hand",
+      "content": ""example data"",
       "confidence": 0.981671,
       "recalled_count": 25,
       "ewc_importance": 0.4204
@@ -497,19 +497,19 @@
   ],
   "chsh_results": [
     {
-      "pair": "hermes \u2194 openclaw",
+      "pair": "hermes \u2194 agent-1",
       "topic": "T2",
       "S": 1.9995,
       "class": "classical-saturated"
     },
     {
-      "pair": "hermes \u2194 openclaw",
+      "pair": "hermes \u2194 agent-1",
       "topic": "T3",
       "S": 1.9648,
       "class": "classical"
     },
     {
-      "pair": "hermes \u2194 paperclip-recall",
+      "pair": "hermes \u2194 task-tracker-recall",
       "topic": "T3",
       "S": 1.9891,
       "class": "classical-saturated"
@@ -521,19 +521,19 @@
       "class": "classical"
     },
     {
-      "pair": "hippocampus \u2194 paperclip-cortex",
+      "pair": "hippocampus \u2194 task-tracker-cortex",
       "topic": "T2",
       "S": 1.1252,
       "class": "classical"
     },
     {
-      "pair": "paperclip-cortex \u2194 paperclip-sentinel-2",
+      "pair": "task-tracker-cortex \u2194 task-tracker-sentinel-2",
       "topic": "T2",
       "S": 0.96,
       "class": "classical"
     },
     {
-      "pair": "paperclip-cortex \u2194 paperclip-sentinel-2",
+      "pair": "task-tracker-cortex \u2194 task-tracker-sentinel-2",
       "topic": "T3",
       "S": 0.4588,
       "class": "classical"
@@ -543,7 +543,7 @@
     "triad": [
       "hermes",
       "hippocampus",
-      "paperclip-cortex"
+      "task-tracker-cortex"
     ],
     "topic": "T2_memory_ops",
     "I_ABC": 0.3092,

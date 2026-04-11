@@ -9,10 +9,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 COMPANY_ID = "f8ddce23-092d-4d25-bc45-2f272d7dfc01"
-API_URL = "http://127.0.0.1:3100"
+API_URL = "http://127.0.0.1:8080"
 STATE_FILE = Path.home() / "agentmemory" / "config" / "quiet-hours-state.json"
 BRAINCTL = Path.home() / "bin" / "brainctl"
-API_KEY_FILE = Path.home() / ".openclaw" / "workspace" / "task-tracker-claimed-api-key.json"
+API_KEY_FILE = Path.home() / ".agent-1" / "workspace" / "task-tracker-claimed-api-key.json"
 
 
 def get_token():

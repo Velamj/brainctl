@@ -23,7 +23,7 @@ SQLite WAL mode prevents byte-level corruption, but provides **no protection aga
 | memories | 88 | 9 active | 20 writes/hr |
 | access_log | 158 | — | mixed read+write |
 
-**Top event writers:** hermes (21), openclaw (14), task-tracker-codex (13). At 178 agents with proportional growth, projected peak write rate: ~230 event writes/hr, ~160 memory writes/hr.
+**Top event writers:** hermes (21), agent-1 (14), task-tracker-codex (13). At 178 agents with proportional growth, projected peak write rate: ~230 event writes/hr, ~160 memory writes/hr.
 
 ### 1.2 Hotspot Categories
 

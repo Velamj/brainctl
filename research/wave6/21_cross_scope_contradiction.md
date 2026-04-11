@@ -69,7 +69,7 @@ ENTITY_PATTERNS = [
     # Named agents: "hermes", "sentinel-2", "hippocampus" etc.
     r'\b(hermes|sentinel-2|hippocampus|engram|prune|recall|cortex|weaver|scribe|'
     r'legion|axiom|kernel|cipher|armor|probe|nexus|codex|tempo|lattice|aegis|'
-    r'nara|openclaw|task-tracker-\w+)\b',
+    r'nara|agent-1|task-tracker-\w+)\b',
 
     # Issue identifiers: internal-ref, PAP-224, etc.
     r'\b([A-Z]{2,5}-\d+)\b',

@@ -29,7 +29,7 @@ with conn() as db:
     db.row_factory = sqlite3.Row
 
     # --- 1. Get all active memories for key agents ---
-    agents = ['hermes', 'openclaw', 'hippocampus', 'task-tracker-cortex',
+    agents = ['hermes', 'agent-1', 'hippocampus', 'task-tracker-cortex',
               'task-tracker-recall', 'task-tracker-sentinel-2', 'task-tracker-engram']
     
     memories_by_agent = {}
@@ -228,9 +228,9 @@ def agent_measurements(agent_id, keywords):
     
     return basis1, basis2_recall_weighted
 
-# Test pairs: (hermes, openclaw), (hermes, hippocampus), (hippocampus, task-tracker-cortex)
+# Test pairs: (hermes, agent-1), (hermes, hippocampus), (hippocampus, task-tracker-cortex)
 test_pairs = [
-    ('hermes', 'openclaw'),
+    ('hermes', 'agent-1'),
     ('hermes', 'hippocampus'),
     ('hippocampus', 'task-tracker-cortex'),
     ('hermes', 'task-tracker-recall'),

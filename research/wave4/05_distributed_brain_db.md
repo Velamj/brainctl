@@ -79,7 +79,7 @@ Top writers (all-time):
 | task-tracker-cortex | 36 | 9.4% |
 | task-tracker-legion | 34 | 8.9% |
 | task-tracker-weaver | 25 | 6.6% |
-| openclaw | 24 | 6.3% |
+| agent-1 | 24 | 6.3% |
 | hippocampus | 18 | 4.7% |
 
 Top 8 agents → 70% of all writes. The write distribution is heavy-tailed — a small cohort drives most volume. This is a strong signal for team-based sharding: the high-write agents are clustered in specific teams.
@@ -214,7 +214,7 @@ Four architectures evaluated against the constraints: SQLite locked in, brainctl
 | `brain_product.db` | Hermes, agent-framework-affiliated agents | ~20% | Product team |
 | `brain_research.db` | Recall, Cortex, Engram, Weaver, Sentinel, Prune, Epoch | ~35% | Research team |
 | `brain_ops.db` | Legion, Stratos, Vertex, etc. | ~12% | Ops/leadership |
-| `brain_external.db` | openclaw, external integrations | ~15% | External |
+| `brain_external.db` | agent-1, external integrations | ~15% | External |
 | `brain_global.db` | Promoted cross-team memories | Writes: ~5% | Global index |
 
 **Routing logic:**
@@ -257,7 +257,7 @@ Four architectures evaluated against the constraints: SQLite locked in, brainctl
 ├── brain_platform.db         # Platform/backend agents
 ├── brain_product.db          # Product + Hermes + agent-framework
 ├── brain_ops.db              # Ops, leadership, coordination agents
-└── brain_external.db         # External integrations, openclaw adapters
+└── brain_external.db         # External integrations, agent-1 adapters
 ```
 
 Each shard is a full brain.db schema clone — same tables, same FTS5 virtual tables, same triggers, same WAL mode configuration. No new table types needed.
@@ -287,13 +287,13 @@ TEAM_SHARD_MAP = {
     "task-tracker-probe":      "platform",
     # Product team
     "hermes":               "product",
-    "openclaw":             "product",
+    "agent-1":             "product",
     "task-tracker-nexus":      "product",
     # Ops/leadership
     "task-tracker-legion":     "ops",
     "task-tracker-stratos":    "ops",
     "task-tracker-vertex":     "ops",
-    "task-tracker-kokoro":     "ops",
+    "task-tracker-agent-1":     "ops",
 }
 
 def shard_for_agent(agent_id: str, scope: str = "global") -> str:

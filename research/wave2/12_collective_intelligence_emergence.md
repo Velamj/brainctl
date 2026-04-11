@@ -187,7 +187,7 @@ Information propagates fast in small-world networks because there are both dense
 
 ### 4.2 Scale-Free Networks and Knowledge Hubs
 
-Scale-free networks (Barabási 1999) have a few highly-connected hubs and many low-connectivity nodes. In agent memory systems, knowledge hubs naturally emerge: Hermes, openclaw, and kernel have proportionally more memories and more cross-agent references than specialist agents.
+Scale-free networks (Barabási 1999) have a few highly-connected hubs and many low-connectivity nodes. In agent memory systems, knowledge hubs naturally emerge: Hermes, agent-1, and kernel have proportionally more memories and more cross-agent references than specialist agents.
 
 **Implication for retrieval:** The existing BFS expansion over knowledge_edges already exploits hub structure. The risk is **hub failure cascade**: if Hermes' memories are stale or wrong, all downstream agents who trust them fail together. Hub confidence should be penalized relative to specialist confidence for within-domain queries (a security specialist should be trusted more than the CKO on security topics, even if the CKO has more total memories).
 

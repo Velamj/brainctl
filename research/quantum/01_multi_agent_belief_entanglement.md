@@ -19,7 +19,7 @@ The central claim: when two agents read the same memory, they acquire **correlat
 
 ### 1.1 What Classical Statistics Misses
 
-The current agent_beliefs table (26 rows, one per agent) models beliefs as independent. Cortex's capability scores — `openclaw:capability = 0.8888`, `hermes:capability = 0.7071` — are assigned to agents individually. There is no representation of **belief correlation**: the fact that if hermes's confidence in X rises, task-tracker-recall's confidence in X should also rise (because they both read the same high-confidence memory about X).
+The current agent_beliefs table (26 rows, one per agent) models beliefs as independent. Cortex's capability scores — `agent-1:capability = 0.8888`, `hermes:capability = 0.7071` — are assigned to agents individually. There is no representation of **belief correlation**: the fact that if hermes's confidence in X rises, task-tracker-recall's confidence in X should also rise (because they both read the same high-confidence memory about X).
 
 Consider the concrete data:
 
@@ -163,7 +163,7 @@ The top-recalled memory (recalled_count = 125) is hermes's memory about agent co
 
 - hermes writes it with confidence = 0.9999
 - task-tracker-cortex's belief `global:memory_spine:schema_version` references the same substrate with confidence = 0.9
-- The confidence difference (0.0999) is smaller than the 0.324 inter-agent confidence delta we observe for hermes-openclaw pairs on shared memory topics
+- The confidence difference (0.0999) is smaller than the 0.324 inter-agent confidence delta we observe for hermes-agent-1 pairs on shared memory topics
 
 This sub-linear degradation in confidence across the entangled pair (hermes → task-tracker-cortex) is a **classical Bell-compatible** correlation — consistent with classical shared evidence. To find genuine violation requires testing across orthogonal framings.
 
@@ -191,12 +191,12 @@ In this state, all three parties are maximally correlated. Measuring any one par
 
 **Multi-agent brain.db analogue:**
 
-Memory M recalled by 5 agents {hermes, openclaw, hippocampus, cortex, recall} creates a joint state where:
+Memory M recalled by 5 agents {hermes, agent-1, hippocampus, cortex, recall} creates a joint state where:
 - Any two agents' beliefs look weakly correlated classically
 - All five agents' beliefs are maximally correlated at the 5-party level
 - The group has an "organizational belief" about M that transcends any individual belief
 
-This has a critical operational implication: **you cannot evaluate belief coherence pairwise.** A system that checks hermes vs. openclaw, then hermes vs. hippocampus, and finds both consistent, may still have a GHZ-type inconsistency that only shows at the 3-way level.
+This has a critical operational implication: **you cannot evaluate belief coherence pairwise.** A system that checks hermes vs. agent-1, then hermes vs. hippocampus, and finds both consistent, may still have a GHZ-type inconsistency that only shows at the 3-way level.
 
 ### 4.2 Current brain.db Data Supporting GHZ Structure
 
@@ -253,7 +253,7 @@ In quantum information, entanglement enables:
 
 Classical consensus requires O(N) communication rounds for N agents to agree. Agents with shared quantum-entangled beliefs can achieve consensus in O(1) rounds for topics covered by shared memories, because they already hold correlated beliefs.
 
-**Measured in brain.db:** hermes and openclaw have 41 shared-topic memories (the highest pairwise count). When hermes makes a decision in the decision category, openclaw's prior for that domain is already partially aligned — not because openclaw read hermes's decision memory, but because both are conditioned on the same environment memories (confidence delta = 0.32 vs. 0.17 for hermes-hippocampus which share 21 memories with tighter alignment).
+**Measured in brain.db:** hermes and agent-1 have 41 shared-topic memories (the highest pairwise count). When hermes makes a decision in the decision category, agent-1's prior for that domain is already partially aligned — not because agent-1 read hermes's decision memory, but because both are conditioned on the same environment memories (confidence delta = 0.32 vs. 0.17 for hermes-hippocampus which share 21 memories with tighter alignment).
 
 **Resource optimization:** the system should preferentially assign tasks to agents whose belief states are already entangled with the task domain. An agent whose top-10 recalled memories overlap heavily with a task's relevant memories will require less context injection and will produce more consistent decisions.
 
@@ -267,8 +267,8 @@ In quantum mechanics, entanglement is monogamous: if A is maximally entangled wi
 
 | Agent | Shared-memory pairs | Entanglement spread |
 |---|---|---|
-| hermes | 41 (openclaw), 21 (hippocampus), 21 (cortex)... | High spread — hermes is hub |
-| openclaw | 41 (hermes), 20 (cortex), 15 (legion)... | Moderate spread |
+| hermes | 41 (agent-1), 21 (hippocampus), 21 (cortex)... | High spread — hermes is hub |
+| agent-1 | 41 (hermes), 20 (cortex), 15 (legion)... | Moderate spread |
 | hippocampus | 21 (hermes), 14 (codex), 14 (sentinel-2)... | Low spread — specialized |
 | task-tracker-codex | 20 (legion), 20 (weaver), 17 (weaver)... | Concentrated — small cluster |
 
@@ -353,7 +353,7 @@ Given monogamy, each agent has a finite entanglement budget. Proposed allocation
 ```python
 ENTANGLEMENT_BUDGET = {
     'hermes': 0.9,       # High: hub agent, must correlate widely
-    'openclaw': 0.8,     # High: coordination layer
+    'agent-1': 0.8,     # High: coordination layer
     'hippocampus': 0.7,  # Moderate: maintenance should be closely coupled
     'task-tracker-cortex': 0.7,  # Moderate: synthesis requires broad correlation
     'task-tracker-recall': 0.6,  # Moderate: retrieval needs alignment
@@ -476,7 +476,7 @@ Entanglement monogamy implies a fundamental tension: more generalist agents (her
 
 ### Phase 3 — Bell Inequality Test (2 weeks)
 - Design controlled experiment: 4 questions × 4 framing variants per agent
-- Run on 3 high-entanglement agent pairs (hermes-openclaw, hermes-hippocampus, codex-weaver)
+- Run on 3 high-entanglement agent pairs (hermes-agent-1, hermes-hippocampus, codex-weaver)
 - Measure CHSH score
 - Publish results to research/quantum/
 
