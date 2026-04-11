@@ -1,7 +1,7 @@
 # Memory-Driven Agent Specialization
 ## Routing Queries by Memory Activation Patterns
 
-**Research Task:** [COS-182](/COS/issues/COS-182)
+**Research Task:** 
 **Researcher:** Oracle (Research Analyst)
 **Wave:** 4 — Frontier Capabilities
 **Date:** 2026-03-28
@@ -16,7 +16,7 @@ The question is: **can memory usage patterns reveal which agents are de facto sp
 Examining `brain.db` directly, four usable signal sources exist today: the `access_log` table (755 records), the `agent_expertise` table (1131 rows, partially working), `memories` per agent (27 agents with domain-typed content), and `knowledge_edges` (5,359 structural edges). Search queries in `access_log` alone produce clear, non-overlapping domain clusters for 10+ agents. The `agent_expertise` table already exists as the right abstraction, but its `strength` values are uniformly initialized at 0.7071 (√0.5 = single-evidence artifact) rather than derived from retrieval history.
 
 **Three-step implementation path:**
-1. Fix `recalled_count` tracking (already identified in COS-229 — the field exists but is never incremented)
+1. Fix `recalled_count` tracking (already identified in internal-ref — the field exists but is never incremented)
 2. Backfill `agent_expertise.strength` from `access_log` query term frequency
 3. Build a routing shim that resolves incoming query → domain → top-strength agent
 
@@ -51,14 +51,14 @@ The goal: build an automatic expertise map from memory access patterns and use i
 
 | Agent | Total Ops | Searches | VSearches |
 |---|---|---|---|
-| paperclip-cortex | 122 | 26 | 54 |
+| task-tracker-cortex | 122 | 26 | 54 |
 | unknown | 117 | 89 | 21 |
-| paperclip-recall | 72 | 18 | — |
+| task-tracker-recall | 72 | 18 | — |
 | hermes | 62 | 8 | — |
-| paperclip-weaver | 62 | 13 | — |
-| paperclip-sentinel-2 | 55 | 19 | — |
-| paperclip-legion | 45 | 9 | — |
-| paperclip-engram | 27 | 10 | — |
+| task-tracker-weaver | 62 | 13 | — |
+| task-tracker-sentinel-2 | 55 | 19 | — |
+| task-tracker-legion | 45 | 9 | — |
+| task-tracker-engram | 27 | 10 | — |
 
 The `query` column contains the raw search strings. These are the richest available signal for domain inference.
 
@@ -72,7 +72,7 @@ Notable entries:
 - `openclaw | task_update | 0.8888 | 5` — highest strength in the table
 - `openclaw | result | 0.849 | 6`
 - `hermes | memory | 0.7071 | 22` — high evidence, should be stronger
-- `paperclip-codex | costclock-ai | 0.7071 | 13`
+- `task-tracker-codex | example-app | 0.7071 | 13`
 
 The table is the right abstraction. It just needs its strength computation fixed.
 
@@ -83,13 +83,13 @@ The table is the right abstraction. It just needs its strength computation fixed
 | Agent | Memory Count | Total Recalls | Primary Category |
 |---|---|---|---|
 | hermes | 26 | 51 | lesson, project, decision |
-| paperclip-legion | 14 | 0 | lesson |
-| paperclip-cortex | 14 | 0 | lesson, project |
-| paperclip-recall | 21 | 5 | lesson, project, environment |
-| paperclip-sentinel-2 | 9 | 0 | lesson |
-| paperclip-weaver | 8 | 6 | lesson, project, decision |
+| task-tracker-legion | 14 | 0 | lesson |
+| task-tracker-cortex | 14 | 0 | lesson, project |
+| task-tracker-recall | 21 | 5 | lesson, project, environment |
+| task-tracker-sentinel-2 | 9 | 0 | lesson |
+| task-tracker-weaver | 8 | 6 | lesson, project, decision |
 
-**Critical finding:** 19 of 27 agents have `recalled_count = 0` for all their memories. This is the bug identified in COS-229: `brainctl search` never increments `recalled_count`. Without this, the memory-activation signal is completely dark for IC agents.
+**Critical finding:** 19 of 27 agents have `recalled_count = 0` for all their memories. This is the bug identified in internal-ref: `brainctl search` never increments `recalled_count`. Without this, the memory-activation signal is completely dark for IC agents.
 
 ### Signal 4 — `knowledge_edges` (Structural, Indirect)
 
@@ -105,15 +105,15 @@ Analyzing search queries from `access_log` per agent, clear non-overlapping doma
 
 | Agent | Domain Cluster | Representative Queries |
 |---|---|---|
-| **paperclip-cortex** | Metacognition, Intelligence Synthesis, Policy | "cortex intelligence brief synthesis", "global workspace broadcasting salience", "reconsolidation confidence recall experiment", "metacognition gap detection" |
-| **paperclip-sentinel-2** | Validation, Trust, Integrity, Security | "trust score memory calibration", "RBAC access control memory scope", "WAL checkpoint backup", "schema migration provenance trust columns" |
-| **paperclip-recall** | Retrieval Algorithms, Embedding, Search | "recall search retrieval FTS5 vector", "embedding backfill vector coverage", "retrieval benchmark hit rate", "temporal classification repair" |
-| **paperclip-weaver** | Context Routing, Proactive Push, Agent Modeling | "context routing agent profiles relevance", "proactive memory push predictive", "theory of mind agent beliefs BDI", "memory event bus propagation" |
-| **paperclip-engram** | Consolidation, Hippocampus, Temporal Decay | "temporal class distribution medium long ephemeral", "hippocampus module interface apply_decay consolidate", "session transcript brain.db kokoro run_agent" |
-| **paperclip-prune** | Memory Hygiene, Health SLOs | "memory hygiene prune salience contradiction", "memory health SLO coverage freshness" |
-| **paperclip-epoch** | Temporal Reasoning, Causal Events | "epoch temporal", "COS-184 causal event graph", "brainctl memories confidence temporal_class" |
-| **paperclip-legion** | Task Management, Orchestration | "legion task assignment", "pending tasks", "recent tasks" |
-| **hermes** | Architecture, Routing Strategy, Executive | "memory architecture agent routing decisions constraints", "CostClock product routing agent strategy", "stalled blocked contradiction anomaly" |
+| **task-tracker-cortex** | Metacognition, Intelligence Synthesis, Policy | "cortex intelligence brief synthesis", "global workspace broadcasting salience", "reconsolidation confidence recall experiment", "metacognition gap detection" |
+| **task-tracker-sentinel-2** | Validation, Trust, Integrity, Security | "trust score memory calibration", "RBAC access control memory scope", "WAL checkpoint backup", "schema migration provenance trust columns" |
+| **task-tracker-recall** | Retrieval Algorithms, Embedding, Search | "recall search retrieval FTS5 vector", "embedding backfill vector coverage", "retrieval benchmark hit rate", "temporal classification repair" |
+| **task-tracker-weaver** | Context Routing, Proactive Push, Agent Modeling | "context routing agent profiles relevance", "proactive memory push predictive", "theory of mind agent beliefs BDI", "memory event bus propagation" |
+| **task-tracker-engram** | Consolidation, Hippocampus, Temporal Decay | "temporal class distribution medium long ephemeral", "hippocampus module interface apply_decay consolidate", "session transcript brain.db kokoro run_agent" |
+| **task-tracker-prune** | Memory Hygiene, Health SLOs | "memory hygiene prune salience contradiction", "memory health SLO coverage freshness" |
+| **task-tracker-epoch** | Temporal Reasoning, Causal Events | "epoch temporal", "internal-ref causal event graph", "brainctl memories confidence temporal_class" |
+| **task-tracker-legion** | Task Management, Orchestration | "legion task assignment", "pending tasks", "recent tasks" |
+| **hermes** | Architecture, Routing Strategy, Executive | "memory architecture agent routing decisions constraints", "example-app product routing agent strategy", "stalled blocked contradiction anomaly" |
 
 **Finding:** Domain clusters are already emergent in the data. No unsupervised ML required for the first pass — a keyword-match taxonomy against query strings is sufficient to populate a useful specialization map.
 
@@ -153,7 +153,7 @@ Based on observed query clusters, a bootstrap taxonomy of 12 domains:
 | `security` | security, hardening, rate limiting, auth, RBAC, access control |
 | `agent_modeling` | theory of mind, BDI, belief, agent profile, mental model |
 | `knowledge_graph` | knowledge_edges, graph, PageRank, BFS, topology |
-| `costclock` | CostClock, invoicing, billing, invoice, SaaS |
+| `example-app` | example-app, invoicing, billing, invoice, SaaS |
 
 ### Strength Computation
 
@@ -214,12 +214,12 @@ Using access_log data from today's heartbeat cycle, test whether the specializat
 
 | Query | Expected Agent | Predicted Domain | Top Candidate |
 |---|---|---|---|
-| "global workspace broadcasting salience" | cortex | metacognition | paperclip-cortex ✓ |
-| "trust score memory calibration" | sentinel-2 | validation | paperclip-sentinel-2 ✓ |
-| "recall search retrieval FTS5 vector" | recall | retrieval | paperclip-recall ✓ |
-| "theory of mind agent beliefs BDI" | weaver | agent_modeling | paperclip-weaver ✓ |
-| "temporal class distribution hippocampus" | engram | consolidation | paperclip-engram ✓ |
-| "memory health SLO coverage freshness" | prune | hygiene | paperclip-prune ✓ |
+| "global workspace broadcasting salience" | cortex | metacognition | task-tracker-cortex ✓ |
+| "trust score memory calibration" | sentinel-2 | validation | task-tracker-sentinel-2 ✓ |
+| "recall search retrieval FTS5 vector" | recall | retrieval | task-tracker-recall ✓ |
+| "theory of mind agent beliefs BDI" | weaver | agent_modeling | task-tracker-weaver ✓ |
+| "temporal class distribution hippocampus" | engram | consolidation | task-tracker-engram ✓ |
+| "memory health SLO coverage freshness" | prune | hygiene | task-tracker-prune ✓ |
 
 **6/6 retrospective matches** using today's data. This validates that the domain cluster signal is real and actionable.
 
@@ -237,7 +237,7 @@ As the system runs, evidence accumulates and confidence improves automatically.
 ## Implementation Plan
 
 ### Phase 1 — Fix Recalled_Count (Prerequisite, ~1 day)
-- Depends on COS-229 fix (add `recalled_count` increment to `brainctl search`/`vsearch`)
+- Depends on internal-ref fix (add `recalled_count` increment to `brainctl search`/`vsearch`)
 - Until this is fixed, `memories.recalled_count = 0` for all IC agents and Phase 1 is the only input signal
 
 ### Phase 2 — Backfill & Live Expertise Scoring (~2 days)
@@ -268,7 +268,7 @@ As the system runs, evidence accumulates and confidence improves automatically.
 | **Domain taxonomy drift** | Low | Taxonomy stored in a config file, updated by Scribe-2 during FRONTIER cycles |
 | **Single-writer SQLite under load** | Low | `agent_expertise` writes happen at consolidation time (nightly), not per-heartbeat |
 | **Gaming via query stuffing** | Low | Not a realistic threat in a trusted multi-agent env; no mitigation needed |
-| **recalled_count fix regression** | Medium | Write `recallCount > 0` tests before merging COS-229 fix |
+| **recalled_count fix regression** | Medium | Write `recallCount > 0` tests before merging internal-ref fix |
 
 ---
 
@@ -276,10 +276,10 @@ As the system runs, evidence accumulates and confidence improves automatically.
 
 | Prior Work | Integration Point |
 |---|---|
-| [COS-177](/COS/issues/COS-177) Memory Event Bus | MEB can propagate `agent_expertise` updates cross-agent in real time |
-| [COS-179](/COS/issues/COS-179) Belief Reconciliation | When two agents have overlapping domain expertise, reconciliation logic applies |
-| [COS-180](/COS/issues/COS-180) Memory-to-Goal Feedback | Routing success/failure feeds back into expertise strength (Phase 4) |
-| [COS-117](/COS/issues/COS-117) Advanced Retrieval | Graph-augmented reranking can use `agent_expertise` as a routing signal |
+|  Memory Event Bus | MEB can propagate `agent_expertise` updates cross-agent in real time |
+|  Belief Reconciliation | When two agents have overlapping domain expertise, reconciliation logic applies |
+|  Memory-to-Goal Feedback | Routing success/failure feeds back into expertise strength (Phase 4) |
+|  Advanced Retrieval | Graph-augmented reranking can use `agent_expertise` as a routing signal |
 
 ---
 
@@ -287,7 +287,7 @@ As the system runs, evidence accumulates and confidence improves automatically.
 
 1. **Accept the `agent_expertise` table as the canonical specialization store.** It exists, has the right schema, and only needs its strength formula fixed.
 
-2. **Prioritize COS-229 (`recalled_count` fix) as a prerequisite** before any expertise-from-memory work. Without it, all IC agents appear to have zero memory activation history.
+2. **Prioritize internal-ref (`recalled_count` fix) as a prerequisite** before any expertise-from-memory work. Without it, all IC agents appear to have zero memory activation history.
 
 3. **Implement Phase 2 (backfill from access_log) immediately** — it requires no schema changes and will produce a working specialization map from today's data in ~2 days of engineering.
 
@@ -299,7 +299,7 @@ As the system runs, evidence accumulates and confidence improves automatically.
 
 ## Conclusion
 
-The root question — "can we build an automatic expertise map from memory access patterns?" — is answered **yes**, with this precision: *search query patterns in `access_log` are the richest available signal today; `recalled_count` on `memories` will become the best signal once COS-229 is fixed; and `agent_expertise` is the right accumulation store once its strength formula is recalibrated.*
+The root question — "can we build an automatic expertise map from memory access patterns?" — is answered **yes**, with this precision: *search query patterns in `access_log` are the richest available signal today; `recalled_count` on `memories` will become the best signal once internal-ref is fixed; and `agent_expertise` is the right accumulation store once its strength formula is recalibrated.*
 
 The empirical retrospective test (6/6 correct routing predictions) demonstrates that the domain clusters are real and extractable without unsupervised ML. A keyword-taxonomy + exponential-strength accumulation is sufficient for a first production routing system. The more sophisticated approaches (LDA topic modeling, embedding-based domain inference) are viable Wave 5/6 enhancements but not required for value delivery.
 
@@ -307,4 +307,4 @@ The empirical retrospective test (6/6 correct routing predictions) demonstrates 
 
 ---
 
-*Deliverable for [COS-182](/COS/issues/COS-182). References: FRONTIER.md Wave 4 candidate #6. Data sources: brain.db tables `access_log` (755 rows), `agent_expertise` (1131 rows), `memories` (123 rows active), `knowledge_edges` (5,359 edges). Analysis date: 2026-03-28.*
+*Deliverable for . References: FRONTIER.md Wave 4 candidate #6. Data sources: brain.db tables `access_log` (755 rows), `agent_expertise` (1131 rows), `memories` (123 rows active), `knowledge_edges` (5,359 edges). Analysis date: 2026-03-28.*

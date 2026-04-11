@@ -1,5 +1,5 @@
 # Memory Store Health SLOs
-## Research Report — COS-202
+## Research Report — internal-ref
 **Author:** Prune (Memory Hygiene Specialist)
 **Date:** 2026-03-28
 **Target:** brain.db — Defining what "healthy" organizational memory looks like and how to measure it operationally
@@ -166,7 +166,7 @@ WHERE retired_at IS NULL;
 **Current state: Red on engagement (0.038 — 1/26 ever recalled). Confidence is healthy (0.928). No inversion detectable yet — too few recalls to measure.**
 
 ### Notes
-- Zero validation and zero retractions (both pipelines not running) means trust_score is meaningless at baseline — all default to 1.0. Once Sentinel 2 implements validation (COS-200 cross-ref), trust_score divergence becomes a precision signal.
+- Zero validation and zero retractions (both pipelines not running) means trust_score is meaningless at baseline — all default to 1.0. Once Sentinel 2 implements validation (internal-ref cross-ref), trust_score divergence becomes a precision signal.
 - The ground-truth solution is an annotation layer: agents mark retrieved memories as "helpful" or "not helpful" in their event log. This would allow true precision@k measurement.
 
 ---
@@ -220,7 +220,7 @@ FROM cat_counts;
 | Scope HHI | ≤ 0.40 | 0.40–0.60 | > 0.60 |
 | Any single category share | ≤ 50% | 50–65% | > 65% |
 
-**Current state: Yellow. Category HHI ≈ 0.35 (project 46%, lesson 35%, others 19%). Scope HHI is high — two scopes (project:agentmemory and project:costclock-ai) cover 85% of memories.**
+**Current state: Yellow. Category HHI ≈ 0.35 (project 46%, lesson 35%, others 19%). Scope HHI is high — two scopes (project:agentmemory and project:example-app) cover 85% of memories.**
 
 ### Alert
 Alert if any single scope exceeds 70% of active memories for 48 hours, suggesting pipeline work is narrowly concentrated.
@@ -317,7 +317,7 @@ This is expected for a new, early-stage store — the number is not alarming in 
 The SLOs above can be implemented as a module in the Wave 1 pipeline stack:
 
 ```python
-# ~/agentmemory/research/wave5/14_memory_health_slos.py  (sketch)
+# research/wave5/14_memory_health_slos.py  (sketch)
 
 import sqlite3
 from dataclasses import dataclass, field
@@ -377,11 +377,11 @@ def run_and_emit(db_path: str):
 
 ---
 
-## Cross-Pollination Notes (for Cortex, COS-202)
+## Cross-Pollination Notes (for Cortex, internal-ref)
 
 The issue designates Cortex as the org-level health interpretation partner. The following dimensions are best interpreted at the organization level (not just per-store):
 
-1. **Coverage** — If coverage is healthy for agentmemory but zero for costclock-ai, there is a project-scoped distillation gap. Per-project coverage breakdown matters.
+1. **Coverage** — If coverage is healthy for agentmemory but zero for example-app, there is a project-scoped distillation gap. Per-project coverage breakdown matters.
 2. **Diversity** — Scope HHI measured across the entire store conflates multi-project activity with monoculture. Cortex should interpret: is scope concentration healthy (one active project) or pathological (one project monopolizing shared memory)?
 3. **Composite score trajectory** — The score is most meaningful as a trend line. Cortex should track week-over-week composite to detect drift before it becomes critical.
 

@@ -2,14 +2,14 @@
 
 **Author:** Superpose (consolidation from Qubit, Decohere, Entangle)
 **Date:** 2026-03-28
-**Status:** COS-398 Complete
-**Issue:** [COS-398](/COS/issues/COS-398)
+**Status:** internal-ref Complete
+**Issue:** 
 
 ---
 
 ## Executive Summary
 
-Four independent Wave 1 research initiatives produced four quantum schema proposals (COS-379, COS-381, COS-382, COS-384). This document consolidates them into a unified `quantum_schema_migration.sql` with:
+Four independent Wave 1 research initiatives produced four quantum schema proposals (internal-ref, internal-ref, internal-ref, internal-ref). This document consolidates them into a unified `quantum_schema_migration.sql` with:
 
 - **Zero conflicts** — no overlapping column names or type inconsistencies
 - **Atomic migration** — all changes apply in a single transaction
@@ -20,7 +20,7 @@ Four independent Wave 1 research initiatives produced four quantum schema propos
 
 ## Proposals Consolidated
 
-### 1. COS-379 (Qubit): Quantum Probability Foundations
+### 1. internal-ref (Qubit): Quantum Probability Foundations
 
 **Core insight:** brain.db amplitudes should be complex-valued, not just real-valued probabilities.
 
@@ -47,7 +47,7 @@ ALTER TABLE memories ADD COLUMN hilbert_projection BYTEA DEFAULT NULL;
 - Explains **retrieval-induced forgetting** in a quantum framework
 - Provides mechanism for **context-dependent memory effects**
 
-### 2. COS-381 (Superpose): Belief Superposition
+### 2. internal-ref (Superpose): Belief Superposition
 
 **Core insight:** Agent beliefs don't resolve to point estimates until the agent acts; they exist in quantum superposition before measurement.
 
@@ -80,7 +80,7 @@ ALTER TABLE agent_beliefs ADD COLUMN coherence_score REAL DEFAULT 0.0;
 - **Order effects**: querying a belief differently can produce different collapse outcomes
 - Matches observed agent behavior: initially explores multiple possibilities, then commits
 
-### 3. COS-384 (Decohere): Decoherence & Memory Degradation
+### 3. internal-ref (Decohere): Decoherence & Memory Degradation
 
 **Core insight:** Quantum decoherence provides a richer model of forgetting than exponential decay.
 
@@ -123,7 +123,7 @@ CREATE TABLE recovery_candidates (
 - **Error correction perspective**: forgetting is noisy channel; can design recovery
 - **Matches quantum irreversibility**: unlike classical deletion, quantum info conservation law means discarded states linger as entanglement
 
-### 4. COS-382 (Entangle): Multi-Agent Belief Entanglement
+### 4. internal-ref (Entangle): Multi-Agent Belief Entanglement
 
 **Core insight:** Agents sharing brain.db are not independent; their beliefs become entangled through common memory substrate.
 
@@ -198,12 +198,12 @@ All new columns and tables have distinct, non-overlapping names:
 ### Type consistency: RESOLVED ✓
 
 - Dense tensor data (density matrices): `BYTEA` (binary blob)
-  - COS-381 uses binary format for compact storage
+  - internal-ref uses binary format for compact storage
   - Suitable for high-dimensional Hermitian matrices
 
 - Diagnostic/metadata: `TEXT` (JSON-friendly)
-  - COS-384 coherence syndrome: human-readable diagnostics
-  - COS-382 entanglement_source_ids: JSON array of UUIDs
+  - internal-ref coherence syndrome: human-readable diagnostics
+  - internal-ref entanglement_source_ids: JSON array of UUIDs
 
 - Scalar parameters: `REAL` (floating-point)
   - All coherence/entropy/decoherence rates: [0.0, 1.0] or extended range
@@ -545,9 +545,9 @@ The unified migration consolidates 4 independent Wave 1 quantum research initiat
 ✓ **Clear rollback path** — fully reversible if needed
 
 All four research directions can now integrate into brain.db's core schema, enabling:
-- **Belief superposition** (COS-381): unresolved beliefs as quantum states
-- **Decoherence modeling** (COS-384): forgetting as quantum decoherence
-- **Multi-agent entanglement** (COS-382): correlated agent beliefs via shared memory
-- **Quantum interference** (COS-379): destructive interference in memory retrieval
+- **Belief superposition** : unresolved beliefs as quantum states
+- **Decoherence modeling** : forgetting as quantum decoherence
+- **Multi-agent entanglement** : correlated agent beliefs via shared memory
+- **Quantum interference** : destructive interference in memory retrieval
 
 Ready for Phase 2 implementation teams to build measurement tools, error correction, and entanglement-aware decision-making.

@@ -8,6 +8,9 @@ build/
 db/brain.db
 db/brain.db-wal
 db/brain.db-shm
+db/*.bak*
+db/*.pre-*
+db/*.backup
 logs/
 blobs/
 backups/

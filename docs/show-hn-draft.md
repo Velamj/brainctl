@@ -31,12 +31,3 @@ Key technical decisions:
 
 Python 3.11+, MIT licensed, zero dependencies for core.
 
----
-
-## Posting notes
-
-- Post weekday morning US time (9-10am ET, Tuesday-Thursday is best)
-- Don't post on weekends or holidays
-- Reply to comments within the first 2 hours — HN rewards engaged authors
-- If someone asks "how is this different from X" — direct comparison, don't be defensive
-- If someone points out a flaw — acknowledge it honestly, that builds credibility on HN

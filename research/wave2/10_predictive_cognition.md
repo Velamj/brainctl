@@ -1,6 +1,6 @@
 # Predictive Cognition — Anticipating What Agents Will Need Before They Ask
 
-**Research Task:** [COS-112](/COS/issues/COS-112)
+**Research Task:** 
 **Researcher:** Weaver (Context Integration Engineer)
 **Wave:** 2 — Conceptual/Theoretical
 **Date:** 2026-03-28
@@ -78,7 +78,7 @@ Anticipatory computing predicts user needs from **contextual features** rather t
 | Role-based | CTO needs compliance docs after any legal event | Yes (agent role/title) |
 | Transition | Post-checkout = high need window | Yes (checkout events) |
 
-**The Post-Checkout Window:** This is the single highest-value prediction moment. Within 2 minutes of checkout, an agent is orienting: reading the issue, scanning for context. This is when predictive push delivers maximum value. The `brainctl push` command in [COS-194](/COS/issues/COS-194) targets exactly this window.
+**The Post-Checkout Window:** This is the single highest-value prediction moment. Within 2 minutes of checkout, an agent is orienting: reading the issue, scanning for context. This is when predictive push delivers maximum value. The `brainctl push` command in  targets exactly this window.
 
 **Sequential patterns that emerged from Wave 1 analysis:** Context from the consolidation cycle shows agents often need:
 - Memory type `insight` → followed by `decision` records on same topic
@@ -178,7 +178,7 @@ This is essentially DPR (Dense Passage Retrieval) applied to organizational memo
 ┌─────────────────────────────────────────────────────────────────┐
 │                    PREDICTIVE ROUTING ENGINE                     │
 │                                                                  │
-│  Trigger: Paperclip checkout event                               │
+│  Trigger: task-tracker checkout event                               │
 │                                                                  │
 │  ┌──────────────────┐    ┌──────────────────────────────────┐   │
 │  │  SURROGATE QUERY  │    │         SCORING PIPELINE         │   │
@@ -248,7 +248,7 @@ CREATE TABLE IF NOT EXISTS push_log (
 
 ### Implementation Sketch for brainctl
 
-The `brainctl push` command (from [COS-194](/COS/issues/COS-194)) implements the proactive push. The predictive engine feeds it:
+The `brainctl push` command (from ) implements the proactive push. The predictive engine feeds it:
 
 ```python
 def predict_push(agent_id: str, task_description: str, task_type: str, k: int = 5) -> list[Memory]:
@@ -301,10 +301,10 @@ def predict_push(agent_id: str, task_description: str, task_type: str, k: int = 
 The push buffer must be read by agents at checkout time without explicit `brainctl search`. Three delivery mechanisms:
 
 ### Option A: Hook injection (Recommended)
-The Paperclip post-checkout hook runs `brainctl push --task-id $TASK_ID --agent-id $AGENT_ID` and writes results to a temp file read by the next heartbeat's system context. **Zero agent behavior change required.**
+The task-tracker post-checkout hook runs `brainctl push --task-id $TASK_ID --agent-id $AGENT_ID` and writes results to a temp file read by the next heartbeat's system context. **Zero agent behavior change required.**
 
 ### Option B: Inline heartbeat context enrichment
-Paperclip's `GET /api/issues/:id/heartbeat-context` response includes a `suggestedMemories` array. Agents must read and use it. **Requires all agents to be updated.**
+task-tracker's `GET /api/issues/:id/heartbeat-context` response includes a `suggestedMemories` array. Agents must read and use it. **Requires all agents to be updated.**
 
 ### Option C: Pre-populated system prompt injection
 Results are injected into the agent's system prompt via the harness before heartbeat starts. **Highest impact, most invasive.**

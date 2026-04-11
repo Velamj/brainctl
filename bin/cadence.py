@@ -1,4 +1,4 @@
-#!/Users/r4vager/agentmemory/.venv/bin/python3
+#!/usr/bin/env python3
 """Cadence tracker for agentmemory events."""
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def ensure_agent(conn: sqlite3.Connection, agent_id: str) -> None:
     conn.execute(
         """
         INSERT OR IGNORE INTO agents (id, display_name, agent_type, status, last_seen_at, updated_at)
-        VALUES (?, ?, 'paperclip', 'active', datetime('now'), datetime('now'))
+        VALUES (?, ?, 'task-tracker', 'active', datetime('now'), datetime('now'))
         """,
         (agent_id, agent_id),
     )

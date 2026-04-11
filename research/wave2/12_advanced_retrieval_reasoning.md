@@ -1,9 +1,9 @@
 # Advanced Retrieval & Reasoning — Beyond Keyword and Vector Search
-## Research Report — COS-117
+## Research Report — internal-ref
 **Researcher:** Recall (Memory Retrieval Engineer)
 **Date:** 2026-03-28
-**Issue:** [COS-117](/COS/issues/COS-117)
-**Baseline:** Current system: FTS5 (BM25) + cosine similarity hybrid; P@5=0.22, R@5=0.925 (Cortex benchmark, COS-86)
+**Issue:** 
+**Baseline:** Current system: FTS5 (BM25) + cosine similarity hybrid; P@5=0.22, R@5=0.925 (Cortex benchmark, internal-ref)
 
 ---
 
@@ -16,7 +16,7 @@ The current FTS5+vec hybrid retrieves broadly (R@5=0.925) but imprecisely (P@5=0
 **Secondary finding:** The P@5=0.22 problem is partly structural: brain.db has 9 active memories from ~123 events. Low precision reflects retrieval over an under-populated store, not a fundamentally broken algorithm. Distillation (event-to-memory promotion) is a prerequisite to seeing meaningful precision gains from architectural improvements.
 
 **Recommended implementation sequence:**
-1. Fix retired vec contamination ← done (COS-186, this heartbeat)
+1. Fix retired vec contamination ← done (internal-ref, this heartbeat)
 2. Graph-augmented re-ranking via `knowledge_edges` ← 1-2 days, no schema change
 3. IRCoT-style iterative retrieval for complex queries ← 3-4 days, `brainctl search --iterative`
 4. Adaptive retrieval (FLARE-style) ← 2-3 days, confidence-gated trigger
@@ -39,7 +39,7 @@ Query
 
 Tables searched: `memories`, `events`, `context`, `knowledge_edges` (graph-only, not searched directly).
 
-### 1.2 Performance Characteristics (COS-86 benchmark, 20 queries)
+### 1.2 Performance Characteristics (internal-ref benchmark, 20 queries)
 
 | Metric | Value | Notes |
 |---|---|---|
@@ -50,7 +50,7 @@ Tables searched: `memories`, `events`, `context`, `knowledge_edges` (graph-only,
 **Interpretation:** The system casts a wide net (high recall) but fills it with noise (low precision). For a 178-agent system with a sparse memory store (9 active memories), this is the expected characteristic of BM25+cosine with no filtering beyond the raw score.
 
 **Known bugs (pre-this-heartbeat):**
-- Retired vec contamination: fixed in COS-186
+- Retired vec contamination: fixed in internal-ref
 - FTS5 special-char crash: open (OWASP-equivalent: input not sanitized → query injection into FTS5 MATCH)
 - Embedding gap: many memories have no vector embedding
 
@@ -74,8 +74,8 @@ IRCoT dramatically outperforms single-shot retrieval on multi-hop QA (HotpotQA: 
 
 **Applied to brain.db:**
 
-A question like "why is COS-83 complete?" requires:
-- Hop 1: retrieve events matching "COS-83" → get event summaries
+A question like "why is internal-ref complete?" requires:
+- Hop 1: retrieve events matching "internal-ref" → get event summaries
 - Hop 2: reason → next query "Weaver route-context phase" → retrieve memories about Weaver's work
 - Hop 3: synthesize → get context about what phases 3+4 accomplished
 
@@ -121,7 +121,7 @@ The `synthesize_next_query` step requires an LLM call — this is the cost of mu
 
 ### 3.1 Theory: Knowledge Graph Enhancement
 
-**Key insight:** The `knowledge_edges` table already encodes semantic relationships between memories, events, and context records (2,675 edges as of COS-84). These edges are currently unused in retrieval — the vsearch pipeline never reads them.
+**Key insight:** The `knowledge_edges` table already encodes semantic relationships between memories, events, and context records (2,675 edges as of internal-ref). These edges are currently unused in retrieval — the vsearch pipeline never reads them.
 
 **KGRAG pattern (Knowledge Graph Retrieval-Augmented Generation):**
 ```
@@ -229,14 +229,14 @@ Agent asks a question.
 **Mechanism:** Interleave Reasoning steps (chain-of-thought) with Action steps (retrieval, tool calls). Each reasoning step can trigger an action; each action result informs the next reasoning step.
 
 ```
-Thought: I need to understand why COS-83 is complete.
-Action: search("COS-83 completion reason")
+Thought: I need to understand why internal-ref is complete.
+Action: search("internal-ref completion reason")
 Observation: [memory: "Weaver shipped route-context phases 3+4"]
 Thought: I should check what phases 3 and 4 are.
 Action: search("Weaver route-context phase 3 phase 4")
 Observation: [event: "auto-route-events + route-pull, 14 events routed"]
 Thought: I have enough context to answer.
-Answer: COS-83 is complete because Weaver delivered the timeliness sweep (phase 3) and pull interface (phase 4).
+Answer: internal-ref is complete because Weaver delivered the timeliness sweep (phase 3) and pull interface (phase 4).
 ```
 
 **Applied to brain.db:** This is the most powerful retrieval pattern for Hermes's use case — specifically for answering agent questions that require synthesizing across multiple memories and events. It is also the most expensive (multiple LLM calls).
@@ -334,7 +334,7 @@ Query
   │
   ├─ Standard path (current, fixed)
   │   ├─ FTS5 BM25 (retired_at filter: SQL-level, now fixed)
-  │   └─ vec cosine (retired vec: now cleaned via COS-186)
+  │   └─ vec cosine (retired vec: now cleaned via internal-ref)
   │       └─ Hybrid rerank (alpha=0.5)
   │
   ├─ [--graph-expand] Graph augmentation (NEW, Phase 1)
@@ -354,9 +354,9 @@ Query
 | Phase | Feature | Effort | Schema Change | Prerequisite |
 |---|---|---|---|---|
 | P0 (done) | Fix retired vec contamination | Done | None | None |
-| P1 | Graph-augmented reranking | 1-2 days | None | COS-186 done |
+| P1 | Graph-augmented reranking | 1-2 days | None | internal-ref done |
 | P1 | Fix FTS5 special-char crash | 1 day | None | None |
-| P2 | Cross-modal late fusion | 1-2 days | None | COS-186 done |
+| P2 | Cross-modal late fusion | 1-2 days | None | internal-ref done |
 | P3 | Confidence-gated caching | 1 day | None | Distillation populated store |
 | P4 | IRCoT iterative retrieval | 3-4 days | None | Distillation populated store |
 | P5 | Query decomposition | 3-4 days | None | Distillation + IRCoT |
@@ -380,12 +380,12 @@ Query
 
 ### 10.1 What We Can Measure Now
 
-The Cortex benchmark (COS-86) established baseline metrics. For the improved system, I propose extending that benchmark suite with:
+The Cortex benchmark  established baseline metrics. For the improved system, I propose extending that benchmark suite with:
 
 **Benchmark categories:**
 1. **Single-hop lookup** (current benchmark): "What is the spaced repetition algorithm?"
 2. **Multi-hop reasoning** (new): "Why was the auth middleware rewritten?" (requires chaining legal requirement → compliance → auth change)
-3. **Cross-modal** (new): "What is the current state of COS-83?" (requires event + memory + context)
+3. **Cross-modal** (new): "What is the current state of internal-ref?" (requires event + memory + context)
 4. **Graph-augmented** (new): "What other systems are related to the consolidation pipeline?"
 5. **Negative control** (new): Queries for which no relevant memory exists — test for precision degradation
 
@@ -398,7 +398,7 @@ The Cortex benchmark (COS-86) established baseline metrics. For the improved sys
 ### 10.2 Implementation Path for Benchmarks
 
 ```bash
-# Extend COS-86 benchmark suite
+# Extend internal-ref benchmark suite
 ~/agentmemory/benchmarks/retrieval_eval.py \
     --suite extended_v2 \
     --include single_hop multi_hop cross_modal graph_augmented \
@@ -433,7 +433,7 @@ The Cortex benchmark (COS-86) established baseline metrics. For the improved sys
 
 ### 3. Experiments to Run Next
 
-1. **Baseline with retired vec fix:** Re-run the COS-86 benchmark suite now that retired vec contamination is fixed. Expected: P@5 increases by 0.05-0.10. This establishes the new baseline.
+1. **Baseline with retired vec fix:** Re-run the internal-ref benchmark suite now that retired vec contamination is fixed. Expected: P@5 increases by 0.05-0.10. This establishes the new baseline.
 
 2. **Graph-augmented reranking A/B:** For a set of 20 queries, compare vsearch output vs vsearch+knowledge_edges expansion. Measure P@5, MRR, and whether the graph-expanded results are "more contextually appropriate" (human judgment on a 5-point scale).
 
@@ -441,7 +441,7 @@ The Cortex benchmark (COS-86) established baseline metrics. For the improved sys
 
 4. **IRCoT viability test:** For 10 multi-hop questions manually curated from real agent queries, measure: (a) does IRCoT find the answer, (b) how many hops were required, (c) what was the latency overhead. Gate the P3/P4 implementation on this test showing meaningful improvement.
 
-5. **FTS5 special-char crash reproduction + fix:** The COS-86 benchmark found FTS5 crashes on special chars. Reproduce with `brainctl search "query (with parens)"` and fix `_sanitize_fts_query` to handle all FTS5 special characters. This is a correctness bug, not a performance issue.
+5. **FTS5 special-char crash reproduction + fix:** The internal-ref benchmark found FTS5 crashes on special chars. Reproduce with `brainctl search "query (with parens)"` and fix `_sanitize_fts_query` to handle all FTS5 special characters. This is a correctness bug, not a performance issue.
 
 ---
 
@@ -453,7 +453,7 @@ The Cortex benchmark (COS-86) established baseline metrics. For the improved sys
 - Zhou et al. (2022). Least-to-Most Prompting Enables Complex Reasoning in LLMs.
 - Khattab & Zaharia (2020). ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT.
 - Collins & Loftus (1975). A spreading-activation theory of semantic processing.
-- COS-84: Knowledge graph layer, 2,675 edges (Scribe 2)
-- COS-86: Retrieval benchmark v1, P@5=0.22, R@5=0.925 (Cortex)
-- COS-120: Episodic/semantic bifurcation (Engram)
-- COS-186: Retired vec contamination fix (Recall, this heartbeat)
+- internal-ref: Knowledge graph layer, 2,675 edges (Scribe 2)
+- internal-ref: Retrieval benchmark v1, P@5=0.22, R@5=0.925 (Cortex)
+- internal-ref: Episodic/semantic bifurcation (Engram)
+- internal-ref: Retired vec contamination fix (Recall, this heartbeat)

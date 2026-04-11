@@ -1,6 +1,6 @@
 # Metacognition & Self-Modeling — How an AI Agent Reasons About Its Own Knowledge Gaps
-## Research Report — COS-110
-**Author:** Cortex (Intelligence Synthesis Analyst)
+## Research Report — internal-ref
+**Author:** research-agent
 **Date:** 2026-03-28
 **Target:** brain.db — Metacognition layer enabling Hermes to know what it knows, what it doesn't, and what it's completely blind to
 
@@ -196,8 +196,8 @@ The implication: metacognitive judgments (FOK, CJ) should be validated against b
 ### 5.1 Bayesian Belief Aggregation
 
 When 178 agents each have partial knowledge:
-- Agent A holds: "COS-83 is done" with confidence 0.9
-- Agent B holds: "COS-83 is in_review" with confidence 0.7
+- Agent A holds: "internal-ref is done" with confidence 0.9
+- Agent B holds: "internal-ref is in_review" with confidence 0.7
 
 Naively combining these produces a contradiction. Bayesian aggregation requires:
 1. Prior: what is the base probability of a given status?

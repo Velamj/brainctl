@@ -1,7 +1,7 @@
-#!/Users/r4vager/agentmemory/.venv/bin/python3
+#!/usr/bin/env python3
 """Memory Block Contradiction Validator — Bridge-P2.
 
-Compares Kokoro's MEMORY.md assertions against brain.db to detect stale or
+Compares agent-1's MEMORY.md assertions against brain.db to detect stale or
 contradicted beliefs. Surfaces warnings at conversation start; optionally
 auto-replaces with brain.db version when confidence is high enough.
 
@@ -10,11 +10,11 @@ Usage:
 
 Requires:
     - ~/agentmemory/db/brain.db  (brainctl memory spine)
-    - ~/.openclaw/workspace/MEMORY.md  (Kokoro's compact memory block)
+    - ~/.openclaw/workspace/MEMORY.md  (agent-1's compact memory block)
 
 Bridge-P1 dependency note:
     Auto-replace of MEMORY.md entries (--auto-resolve) requires the
-    bidirectional sync interface from COS-210 (Memory Block <-> brain.db
+    bidirectional sync interface from internal-ref (Memory Block <-> brain.db
     Bidirectional Sync). Until that lands, --auto-resolve flags conflicts
     in brain.db but does NOT rewrite MEMORY.md. Manual resolution is the
     current path.
@@ -40,7 +40,7 @@ from typing import Optional
 MEMORY_BLOCK_PATH = Path.home() / ".openclaw" / "workspace" / "MEMORY.md"
 DB_PATH = Path.home() / "agentmemory" / "db" / "brain.db"
 BRAINCTL = Path.home() / "bin" / "brainctl"
-AGENT_ID = "paperclip-recall"
+AGENT_ID = "task-tracker-recall"
 
 # Minimum FTS result score (more negative = less relevant in sqlite FTS5)
 MIN_RELEVANCE_SCORE = -8.0
@@ -69,7 +69,7 @@ NEGATION_PATTERNS = [
 FACTUAL_MARKERS = re.compile(
     r"\b(is|are|was|were|has|have|will|can|cannot|total|live|registered|"
     r"production|version|running|installed|enabled|disabled|using|uses|"
-    r"\d+|localhost|costclock|paperclip|brainctl|openlaw|hermes)\b",
+    r"\d+|localhost|example-app|task-tracker|brainctl|openlaw|hermes)\b",
     re.IGNORECASE,
 )
 
@@ -312,7 +312,7 @@ def auto_resolve_conflict_in_block(
 ) -> bool:
     """Replace the contradicted assertion in MEMORY.md with the brain.db version.
 
-    Bridge-P1 (COS-210) is implemented — brain.db version wins (has provenance
+    Bridge-P1 (internal-ref) is implemented — brain.db version wins (has provenance
     and trust scores). Returns True if the entry was replaced.
     """
     if not memory_block_path.exists():
@@ -343,9 +343,9 @@ def auto_resolve_conflict_in_block(
 
 
 def auto_resolve_note(conflict: Conflict) -> str:
-    """Note about auto-resolve availability — Bridge-P1 (COS-210) is live."""
+    """Note about auto-resolve availability — Bridge-P1 (internal-ref) is live."""
     return (
-        "AUTO-RESOLVE AVAILABLE: Bridge-P1 (COS-210) is implemented. "
+        "AUTO-RESOLVE AVAILABLE: Bridge-P1 (internal-ref) is implemented. "
         "Run with --auto-resolve to replace this entry with the brain.db version. "
         "Brain.db wins: it has provenance, trust scores, and version history."
     )
@@ -392,7 +392,7 @@ def format_report(conflicts: list[Conflict], assertions_checked: int) -> str:
 # Entry point
 # ---------------------------------------------------------------------------
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate Kokoro's MEMORY.md against brain.db")
+    parser = argparse.ArgumentParser(description="Validate agent-1's MEMORY.md against brain.db")
     parser.add_argument("--auto-resolve", action="store_true",
                         help="Replace contradicted MEMORY.md entries with brain.db versions (Bridge-P1)")
     parser.add_argument("--dry-run", action="store_true",
@@ -430,7 +430,7 @@ def main() -> int:
             if event_id and args.verbose:
                 print(f"  Logged contradiction event #{event_id} for conflict: "
                       f"{conflict.assertion.text[:60]}…")
-            # Bridge-P1 (COS-210): auto-replace MEMORY.md entry with brain.db version
+            # Bridge-P1 (internal-ref): auto-replace MEMORY.md entry with brain.db version
             if args.auto_resolve:
                 replaced = auto_resolve_conflict_in_block(
                     conflict, args.memory_block, dry_run=args.dry_run

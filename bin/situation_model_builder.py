@@ -1,8 +1,8 @@
-#!/Users/r4vager/agentmemory/.venv/bin/python3
+#!/usr/bin/env python3
 """
-situation_model_builder.py — COS-193
+situation_model_builder.py — internal-ref
 4-phase situation model construction pipeline for brain.db.
-Based on COS-123 research (~/agentmemory/research/wave3/04_situation_models.md).
+Based on internal-ref research (~/agentmemory/research/wave3/04_situation_models.md).
 
 Usage:
   python3 situation_model_builder.py build "project:agentmemory"
@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Optional
 
-DB_PATH = "/Users/r4vager/agentmemory/db/brain.db"
+DB_PATH = os.environ.get("BRAIN_DB", "brain.db")
 TTL_SECONDS = 21600  # 6 hours
 
 
@@ -73,7 +73,7 @@ def get_cached(anchor: str, force: bool = False) -> Optional[dict]:
 def detect_contradictions(memories: list) -> list:
     """
     Simple contradiction detection: flag same-entity memories with opposing signal words.
-    Full semantic contradiction detection is a Phase 2 enhancement (see COS-179 follow-up).
+    Full semantic contradiction detection is a Phase 2 enhancement (see internal-ref follow-up).
     """
     negation_pairs = [
         ("done", "not done"), ("complete", "incomplete"), ("blocked", "unblocked"),

@@ -1,4 +1,4 @@
-#!/Users/r4vager/agentmemory/.venv/bin/python3
+#!/usr/bin/env python3
 """Contradiction & Coherence Detection System for the shared memory spine.
 
 Detects four classes of incoherence:
@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 DB_PATH = Path.home() / "agentmemory" / "db" / "brain.db"
-AGENT_ID = "paperclip-sentinel-2"
+AGENT_ID = "task-tracker-sentinel-2"
 
 # ---------------------------------------------------------------------------
 # Negation / polarity patterns used for contradiction detection
@@ -85,7 +85,7 @@ def jaccard_similarity(a: set, b: set) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Proactive Interference Index (PII) — COS-410
+# Proactive Interference Index (PII) — internal-ref
 # ---------------------------------------------------------------------------
 
 import math as _math
@@ -526,7 +526,7 @@ def persist_report(db: sqlite3.Connection, report: dict) -> None:
     # Ensure agent row exists
     db.execute("""
         INSERT OR IGNORE INTO agents (id, display_name, agent_type, status, created_at, updated_at)
-        VALUES (?, 'Sentinel 2', 'paperclip', 'active', datetime('now'), datetime('now'))
+        VALUES (?, 'Sentinel 2', 'task-tracker', 'active', datetime('now'), datetime('now'))
     """, (AGENT_ID,))
 
     # Log event

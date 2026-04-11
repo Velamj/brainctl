@@ -3,7 +3,7 @@
 
 **Author:** Phase (Quantum Interference Engineer)
 **Date:** 2026-03-28
-**Task:** [COS-380](/COS/issues/COS-380) (re-filed from COS-370)
+**Task:**  (re-filed from internal-ref)
 **Status:** Complete — Delivered
 
 ---
@@ -160,7 +160,7 @@ In brain.db retrieval:
 
 **Setup:**
 - Query `q` that has high similarity to **two distinct semantic clusters** (e.g., "consolidation cycle" sits at the intersection of `project` and `environment` categories)
-- Cluster A: `project:costclock-ai` memories
+- Cluster A: `project:example-app` memories
 - Cluster B: `environment:system` memories
 
 **Classical prediction:** Top-k by cosine similarity returns mixed bag from both clusters based on independent scores.
@@ -184,7 +184,7 @@ results_cluster_b = classical_search(q, filter=cluster_b_ids)
 
 Given brain.db's 150 active memories with 742 semantic_similar edges and 1,686 causes edges, we expect:
 1. **15-25 memories** that bridge multiple clusters (cross-category, high edge degree) to receive measurable constructive interference boosts
-2. **Memory #130** (the 3-topic permanent memory with embedded costclock+neuro+paperclip content, recalled 116×) should receive the largest constructive interference correction of any memory in the store — its embedding similarity with queries spans 3 clusters simultaneously
+2. **Memory #130** (the 3-topic permanent memory with embedded example-app+neuro+task-tracker content, recalled 116×) should receive the largest constructive interference correction of any memory in the store — its embedding similarity with queries spans 3 clusters simultaneously
 3. Memories with `contradicts` edges to high-salience memories should show measurable destructive interference suppression
 
 ---
@@ -309,5 +309,5 @@ The Python prototype in `quantum_interference_retrieval.py` covers Phases 2-3 co
 - Sordoni, A., et al. (2013). Modeling latent topic interactions using quantum interference for information retrieval. *CIKM 2013*.
 - Uprety, S., et al. (2020). A survey of quantum theory inspired approaches to information retrieval. *ACM Computing Surveys*, 53(5).
 - Anderson, M.C., Bjork, R.A., & Bjork, E.L. (1994). Remembering can cause forgetting: retrieval dynamics in long-term memory. *Journal of Experimental Psychology: Learning, Memory, and Cognition*, 20(5), 1063–1087.
-- Wave 1 COS-370 (original filing) — full spec
+- Wave 1 internal-ref (original filing) — full spec
 - Brain.db at heartbeat: 150 active memories, 825 total, 4,718 knowledge edges

@@ -1,6 +1,6 @@
 # Wave 6 Research: Neuromodulation & Dynamic Learning Rates
 
-**COS-244 — Dopamine, urgency, and knowing when to learn fast vs slow**
+**internal-ref — Dopamine, urgency, and knowing when to learn fast vs slow**
 Author: Epoch (Temporal Cognition Engineer)
 Date: 2026-03-28
 
@@ -67,7 +67,7 @@ WHERE scope = :task_scope
 ```
 
 **Implementation path:** `brainctl neuro signal --dopamine <value> --scope <scope>`.
-Called by the task completion hook in Paperclip heartbeats. Dopamine magnitude
+Called by the task completion hook in task-tracker heartbeats. Dopamine magnitude
 attenuates at 1/3 per day (short-lived signal, consistent with biological reuptake).
 
 ---
@@ -229,7 +229,7 @@ on each auto-detect pass. Manual overrides set `detection_method = 'manual'` and
 **Migration 012** — single-row config table (upsert on id=1):
 
 ```sql
--- Migration 012: Neuromodulation State (COS-244)
+-- Migration 012: Neuromodulation State 
 -- Stores the current runtime neuromodulation context for brain.db operations.
 
 CREATE TABLE IF NOT EXISTS neuromodulation_state (
@@ -288,7 +288,7 @@ CREATE TABLE IF NOT EXISTS neuromodulation_transitions (
 );
 
 INSERT INTO schema_version (version, description)
-VALUES (12, 'Neuromodulation state table — dynamic learning rate context (COS-244)');
+VALUES (12, 'Neuromodulation state table — dynamic learning rate context ');
 ```
 
 **Preset parameter packs** (applied atomically by `brainctl neuro set`):
@@ -388,7 +388,7 @@ brainctl neuro set --state normal
 # Inject a dopamine signal (called by task completion hooks)
 brainctl neuro signal \
   --dopamine 0.8 \
-  --scope project:costclock \
+  --scope project:example-app \
   --since "2026-03-28T09:00:00"
 # Boosts confidence on memories in that scope accessed since the given time.
 
@@ -498,10 +498,10 @@ for review (tagged `low_confidence`). Below `0.05` they are candidates for retir
 ## 6. Dopamine Hook — Task Completion Integration
 
 The dopamine signal requires an integration point with task completion events. Proposed
-hook in the Paperclip heartbeat skill (`brainctl neuro signal` call after task PATCH):
+hook in the task-tracker heartbeat skill (`brainctl neuro signal` call after task PATCH):
 
 ```python
-# In Paperclip heartbeat, after patching task to 'done':
+# In task-tracker heartbeat, after patching task to 'done':
 def fire_dopamine_on_completion(task, outcome_quality: float, started_at: str):
     """
     outcome_quality: +1.0 = excellent, +0.5 = normal, 0.0 = revision, -0.5 = blocked/escalated
@@ -595,8 +595,8 @@ if current_state == "incident" and not incident_detected:
 
 The dopamine hook needs `outcome_quality` — a measure of how well the task went.
 brain.db doesn't currently track this. Interim proxy: use task metadata from
-Paperclip (priority delta, time-to-completion vs estimate, presence of revision
-comments). A richer signal requires Paperclip to emit task-quality events. Filed
+task-tracker (priority delta, time-to-completion vs estimate, presence of revision
+comments). A richer signal requires task-tracker to emit task-quality events. Filed
 as a follow-up dependency.
 
 ---
@@ -612,12 +612,12 @@ as a follow-up dependency.
 | 5    | Temporal lambda weighting in search results   | —         | Medium     |
 | 6    | Confidence decay job in consolidation cycle   | —         | Low        |
 | 7    | `brainctl neuro signal --dopamine`            | —         | Medium     |
-| 8    | Dopamine hook in Paperclip heartbeat skill    | —         | Medium     |
+| 8    | Dopamine hook in task-tracker heartbeat skill    | —         | Medium     |
 | 9    | Epoch-name-based state detection              | —         | Low        |
 | 10   | Hysteresis / state debounce                   | —         | Low        |
 
 Steps 1–6 can be implemented by Cortex or any IC in a single session. Steps 7–8
-require coordination with the Paperclip skill layer (Hermes or manager approval).
+require coordination with the task-tracker skill layer (Hermes or manager approval).
 
 ---
 
@@ -640,8 +640,8 @@ require coordination with the Paperclip skill layer (Hermes or manager approval)
 - Yu, A.J. & Dayan, P. (2005). Uncertainty, neuromodulation, and attention. *Neuron*, 46(4).
 - Hasselmo, M.E. (2006). The role of acetylcholine in learning and memory. *Current Opinion in Neurobiology*, 16(6).
 - TEMPORAL_DESIGN.md — brain.db temporal cognition architecture (Epoch, 2026-03-28)
-- Wave 6 Report 22: Trust Score Calibration (COS-233)
-- Wave 6 Report 23: Policy Memory Schema (COS-235)
+- Wave 6 Report 22: Trust Score Calibration 
+- Wave 6 Report 23: Policy Memory Schema 
 
 ---
 

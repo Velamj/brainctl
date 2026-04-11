@@ -1,7 +1,7 @@
 # Active Inference & Free Energy — Friston's Framework for Agent Decision-Making
 
-**Author:** Cortex (Intelligence Synthesis Analyst)
-**Task:** [COS-341](/COS/issues/COS-341)
+**Author:** research-agent
+**Task:** 
 **Date:** 2026-03-28
 **DB State:** 22 active agents · 9 active memories · brain.db @ ~/agentmemory/db/brain.db
 
@@ -29,7 +29,7 @@ An intelligent system minimizes **variational free energy** — a mathematical b
 
 When an agent receives a task, it currently retrieves whatever memories surface from a keyword search. If the search misses a critical piece of knowledge — because the agent didn't know to look for it — the agent proceeds into the task with unacknowledged uncertainty. Failures follow.
 
-Example: Kokoro assigns a PR merge task. The agent searches "PR merge" and finds recent patterns. But it misses the memory that the relevant branch has an active merge freeze (COS-322-era finding). The agent proceeds, the merge fails, Hermes has to intervene.
+Example: agent-1 assigns a PR merge task. The agent searches "PR merge" and finds recent patterns. But it misses the memory that the relevant branch has an active merge freeze (internal-ref-era finding). The agent proceeds, the merge fails, Hermes has to intervene.
 
 Active Inference says: *before executing, the agent should estimate what it doesn't know and actively seek to fill those gaps.*
 
@@ -95,7 +95,7 @@ def get_retrieval_strategy(domain_confidence: float) -> RetrievalConfig:
 
 **Domain confidence** is estimated from:
 1. Mean `confidence` of top-N retrieved memories for the task keywords
-2. Agent's own `agent_beliefs` entry for the relevant domain (already live from COS-318)
+2. Agent's own `agent_beliefs` entry for the relevant domain (already live from internal-ref)
 
 **Epistemic foraging in practice:**
 - A new agent on a domain it hasn't encountered → explore mode → 10 memories + peer query to Hermes/domain expert
@@ -147,7 +147,7 @@ def simulate_task_free_energy(task: str, agent_id: str) -> SimulationResult:
     )
 ```
 
-**World model integration:** COS-321 delivered a `world_model` table with `brainctl world predict`. This is the natural substrate for expected free energy simulation. `brainctl world predict --what "merge PR for COS-341"` should surface predicted blockers from the org simulation layer.
+**World model integration:** internal-ref delivered a `world_model` table with `brainctl world predict`. This is the natural substrate for expected free energy simulation. `brainctl world predict --what "merge PR for internal-ref"` should surface predicted blockers from the org simulation layer.
 
 **New `brainctl` command:** `brainctl infer gap-fill "<task>"` — runs simulation, identifies top-3 highest-risk steps, and queries memories to pre-fill those gaps. Output: a compact pre-task briefing (~200 tokens).
 
@@ -161,7 +161,7 @@ Not all sensory signals are equally reliable. Friston's framework includes **pre
 
 ### Mapping to Our System
 
-We already have `trust_score` on memories. It is *not* currently used as a retrieval weight — it's stored but only referenced in provenance chains (COS-121). This is a missed precision weighting opportunity.
+We already have `trust_score` on memories. It is *not* currently used as a retrieval weight — it's stored but only referenced in provenance chains . This is a missed precision weighting opportunity.
 
 **Proposed schema change:** Add precision-weighted scoring to `brainctl search`.
 
@@ -198,7 +198,7 @@ In multi-agent settings, active inference extends to *active sensing* — agents
 Currently, information sharing is:
 - **Pull:** Agents query brain.db on demand
 - **Push:** Hermes manually pushes critical memories
-- **Broadcast:** Global workspace (COS-314) for salience-threshold events
+- **Broadcast:** Global workspace  for salience-threshold events
 
 Missing: **targeted epistemic push** — if Agent A resolves a knowledge gap that Agent B is likely to encounter, A should proactively push that knowledge to B's relevant scope.
 
@@ -229,7 +229,7 @@ def should_push_collective(memory: Memory, resolving_agent: str) -> list[str]:
 
 **At 178 agents**, this becomes essential. Without collective uncertainty reduction, each agent independently rediscovers the same gaps. With it, one agent's resolution propagates to all agents likely to face the same uncertainty.
 
-**Integration with reflexion propagation (COS-320):** The `propagated_to` column from COS-320's migration (`019_reflexion_propagation.sql`) is the right substrate. Reflexion lessons are exactly the resolved-knowledge-gap case: "I made this mistake; here's the corrective memory." Precision-weighted, epistemic-flagged reflexion propagation = Active Inference for the fleet.
+**Integration with reflexion propagation :** The `propagated_to` column from internal-ref's migration (`019_reflexion_propagation.sql`) is the right substrate. Reflexion lessons are exactly the resolved-knowledge-gap case: "I made this mistake; here's the corrective memory." Precision-weighted, epistemic-flagged reflexion propagation = Active Inference for the fleet.
 
 ---
 
@@ -300,7 +300,7 @@ This table gives us empirical data on what agents actually don't know — the gr
 | Pre-task scan adds latency to every heartbeat | Medium | Run async in background; cap at 300ms; skip if context budget > 80% used |
 | Collective uncertainty reduction causes write contention | Medium | Write-gate: only push if agent_uncertainty_log shows > 2 other agents hit same gap |
 | `agent_uncertainty_log` grows unbounded | Low | Add to hippocampus decay scope; ephemeral temporal class; 30-day TTL |
-| Domain confidence estimation is noisy | Low | Bootstrap from `agent_beliefs` (COS-318); improve with empirical log data |
+| Domain confidence estimation is noisy | Low | Bootstrap from `agent_beliefs` ; improve with empirical log data |
 | Explore mode retrieves 10 memories + 2 graph hops → 5-8K tokens | Medium | Hard cap: explore mode max 12K tokens; fallback to balanced if context tight |
 
 ---
@@ -310,14 +310,14 @@ This table gives us empirical data on what agents actually don't know — the gr
 | Prior Work | Connection |
 |---|---|
 | Wave 1: Attention/salience routing | Foundation for precision-weighted scoring |
-| Wave 1: Knowledge graph (COS-84) | Substrate for epistemic foraging graph hops |
-| Wave 2: Predictive Cognition (COS-112) | Overlapping; predictive cognition is expected free energy estimation |
-| Wave 3: Proactive Memory Push (COS-124) | Direct predecessor; AIL makes push criteria principled |
-| Wave 3: Situation Model (COS-123) | Situation model = agent's current generative model; active inference updates it |
-| Wave 8: Agent Beliefs (COS-318) | Domain confidence source for explore/exploit switch |
-| Wave 8: Global Workspace (COS-314) | Broadcast channel for high-salience resolved gaps |
-| Wave 9: Cross-agent Reflexion (COS-320) | Collective uncertainty reduction substrate |
-| Wave 9: World Model (COS-321) | Expected free energy simulation substrate |
+| Wave 1: Knowledge graph  | Substrate for epistemic foraging graph hops |
+| Wave 2: Predictive Cognition  | Overlapping; predictive cognition is expected free energy estimation |
+| Wave 3: Proactive Memory Push  | Direct predecessor; AIL makes push criteria principled |
+| Wave 3: Situation Model  | Situation model = agent's current generative model; active inference updates it |
+| Wave 8: Agent Beliefs  | Domain confidence source for explore/exploit switch |
+| Wave 8: Global Workspace  | Broadcast channel for high-salience resolved gaps |
+| Wave 9: Cross-agent Reflexion  | Collective uncertainty reduction substrate |
+| Wave 9: World Model  | Expected free energy simulation substrate |
 
 ---
 

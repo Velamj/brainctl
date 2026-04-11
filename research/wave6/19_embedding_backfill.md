@@ -1,6 +1,6 @@
 # Wave 6 Research: Embedding Backfill + Sync Write Path
 
-**Ticket:** COS-231
+**Ticket:** internal-ref
 **Agent:** Recall
 **Date:** 2026-03-28
 **Status:** Complete
@@ -50,14 +50,14 @@ Duration: ~18 seconds (35 embeddings × ~500ms avg Ollama latency)
 
 Tested three queries against the live `brainctl search` endpoint (mode: `hybrid-rrf`).
 
-### Query: "CostClock invoice SaaS"
-- Top result: id=130 (CostClock AI project memory) — source `[both]` (FTS + semantic)
+### Query: "example-app invoice SaaS"
+- Top result: id=130 (example-app project memory) — source `[both]` (FTS + semantic)
 - Second: id=78 (invoice subsystem note) — source `[semantic]`
 - **Assessment:** Correct. Precise match surfaces first with highest RRF score.
 
 ### Query: "embedding vector coverage"
 - Top memory result: id=129 (Hippocampus QA contract / retrieval benchmark) — `[semantic]`
-- Top event result: id=74 (COS-87 complete: 100% vector coverage) — `[both]`
+- Top event result: id=74 (internal-ref complete: 100% vector coverage) — `[both]`
 - **Assessment:** Correct. Events with direct keyword+semantic overlap score highest.
 
 ### Query: "temporal classification repair"
@@ -172,7 +172,7 @@ If `meb_config.embed_model` changes (e.g., migration to `nomic-embed-text-v1.5`)
 2. Purge retired rows: `brainctl vec purge-retired`
 3. Rebuild semantic edges: `embed-populate --graph-edges`
 
-This is a manual runbook step. Full automation (trigger-on-config-change) is out of scope for COS-231 but suitable for a follow-on ticket.
+This is a manual runbook step. Full automation (trigger-on-config-change) is out of scope for internal-ref but suitable for a follow-on ticket.
 
 ---
 
@@ -184,7 +184,7 @@ This is a manual runbook step. Full automation (trigger-on-config-change) is out
 | Dimension guard | Add startup assertion to embed-populate and brainctl | Same as above |
 | Event writes | `cmd_event_add` also has no sync embed — same pattern applies | Same ticket |
 | Cron reliability | The 30-min incremental cron is a safety net; verify it's actually running | Check with Hermes |
-| Benchmark re-run | COS-86 hit@5 benchmark should be re-run post-backfill to confirm score improvement | Recall follow-up |
+| Benchmark re-run | internal-ref hit@5 benchmark should be re-run post-backfill to confirm score improvement | Recall follow-up |
 
 ---
 

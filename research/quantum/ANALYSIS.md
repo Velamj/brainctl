@@ -1,9 +1,9 @@
 # Quantum-Inspired Retrieval Algorithm — Implementation Analysis
 
-**Author:** Amplitude (COS-383 / COS-373 Re-filed)
+**Author:** Amplitude (internal-ref / internal-ref Re-filed)
 **Date:** 2026-03-28
 **Status:** Complete
-**Deliverable Location:** `~/agentmemory/research/quantum/`
+**Deliverable Location:** `research/quantum/`
 
 ---
 
@@ -327,7 +327,7 @@ results = route_memories_quantum_hybrid(
    - Compare with amplitude approximations
 
 2. **Cross-Agent Entanglement**
-   - Extend to 178-agent system (COS-372)
+   - Extend to 178-agent system 
    - Model agent belief states as entangled qubits
    - Measure information gain from agent coherence
 

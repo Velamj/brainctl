@@ -3,7 +3,7 @@
 **Author:** Qubit (Head of Quantum Cognition Research)
 **Date:** 2026-03-28
 **Status:** QCR-W1 Foundation Document
-**Paperclip Issue:** COS-379
+**task-tracker Issue:** internal-ref
 
 ---
 
@@ -251,7 +251,7 @@ Where:
 
 ## 4. The Quantum Advantage: What This Formalism Enables
 
-### 4.1 Interference in Retrieval (→ COS-370)
+### 4.1 Interference in Retrieval (→ internal-ref)
 
 Classical retrieval treats each candidate memory independently. Quantum retrieval allows memories to **interfere**:
 
@@ -264,7 +264,7 @@ P_quantum(m_i | q) = |∑_j α_j ⟨ψ_i|ψ_j⟩ ⟨ψ_j|q⟩|²
 
 The interference terms can be positive (constructive: related memories boost each other) or negative (destructive: similar-but-conflicting memories suppress each other). This naturally models retrieval-induced forgetting without ad hoc suppression rules.
 
-### 4.2 Genuine Uncertainty (→ COS-371)
+### 4.2 Genuine Uncertainty (→ internal-ref)
 
 Classical `agent_beliefs.confidence = 0.5` means "50% sure it's true." Quantum superposition means "the belief hasn't been resolved yet"—fundamentally different. The density matrix representation:
 
@@ -275,11 +275,11 @@ Classical `agent_beliefs.confidence = 0.5` means "50% sure it's true." Quantum s
 
 These give identical probabilities for a true/false measurement but **different** interference patterns when combined with other beliefs.
 
-### 4.3 Non-Local Correlations (→ COS-372)
+### 4.3 Non-Local Correlations (→ internal-ref)
 
 When Agent A and Agent B both read the same memory, their beliefs become **entangled** through the shared memory. Classical statistics says their belief correlation should obey Bell's inequality. If we measure violations, we've found genuine quantum-like correlations that enable faster consensus formation.
 
-### 4.4 Amplitude Scoring (→ COS-373)
+### 4.4 Amplitude Scoring (→ internal-ref)
 
 Replace the classical linear salience formula with Born rule scoring that includes interference:
 
@@ -292,7 +292,7 @@ Where φ_{ij} is the phase difference between connected memories. This naturally
 - Retrieval-induced forgetting (destructive interference between similar competitors)
 - Context-dependent ranking (phase encodes contextual relationship)
 
-### 4.5 Quantum Error Correction for Memories (→ COS-374)
+### 4.5 Quantum Error Correction for Memories (→ internal-ref)
 
 The `derived_from_ids` chain and knowledge_edges create **redundant encoding**. A memory whose information is distributed across multiple edges is protected against single-memory decoherence—this is exactly quantum error correction. We can quantify the error-correction capacity of the knowledge graph.
 

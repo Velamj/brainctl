@@ -1,6 +1,6 @@
-#!/Users/r4vager/agentmemory/.venv/bin/python3
+#!brain.db
 """
-qcr_ab_test_cos418.py — COS-418 Empirical A/B Test: QCR Scoring vs Baseline Retrieval
+qcr_ab_test.py — internal-ref Empirical A/B Test: QCR Scoring vs Baseline Retrieval
 
 Design:
   - Baseline: salience_routing.route_memories_hybrid (FTS5 + cosine + RRF + recency)
@@ -10,7 +10,7 @@ Design:
   - Metrics: P@5, R@5, MRR, latency per query (ms), result overlap rate
   - Secondary: scoring stability (std-dev of salience), memory overhead
 
-Author: Epoch (COS-418)
+Author: Epoch 
 Date: 2026-04-02
 """
 
@@ -35,14 +35,14 @@ import quantum_routing_integration
 
 
 DB_PATH = Path.home() / "agentmemory" / "db" / "brain.db"
-RESULTS_PATH = Path.home() / "agentmemory" / "research" / "quantum" / "qcr_ab_results_cos418.json"
+RESULTS_PATH = Path.home() / "agentmemory" / "research" / "quantum" / "qcr_ab_results.json"
 
 # ---------------------------------------------------------------------------
 # Ground-truth query set (50 queries)
 # expected_ids: any of these in top-5 = hit
 # Notes on ID selection:
-#   - 130: large consolidated permanent memory containing CostClock, hippocampus,
-#           brainctl, epoch, Paperclip facts. Valid answer for many queries.
+#   - 130: large consolidated permanent memory containing example-app, hippocampus,
+#           brainctl, epoch, task-tracker facts. Valid answer for many queries.
 #   - 93: agent memory spine state, brainctl/sentinel infrastructure
 #   - 127: push gate threshold, distillation policy
 #   - 407: causal event graph, knowledge edges
@@ -50,12 +50,12 @@ RESULTS_PATH = Path.home() / "agentmemory" / "research" / "quantum" / "qcr_ab_re
 #   - 383: brainctl reason/infer, neuro-symbolic
 #   - 78: invoice lifecycle specific
 #   - 86: Hermes identity
-#   - 406: COS-81 epoch analysis
+#   - 406: internal-ref epoch analysis
 #   - 743: epoch analyze_access_patterns
 #   - 532: distill threshold lesson
 #   - 558: memory health rescue
 #   - 802: distill cron upgrade
-#   - 804: Paperclip temporal cognition project
+#   - 804: task-tracker temporal cognition project
 # ---------------------------------------------------------------------------
 
 BENCHMARK_QUERIES: List[Dict] = [
@@ -68,9 +68,9 @@ BENCHMARK_QUERIES: List[Dict] = [
     },
     {
         "id": "Q02", "group": "canonical",
-        "query": "CostClock time tracking invoicing SaaS Next.js",
+        "query": "example-app time tracking invoicing SaaS Next.js",
         "expected_ids": [130, 78, 106],
-        "description": "CostClock project overview"
+        "description": "example-app project overview"
     },
     {
         "id": "Q03", "group": "canonical",
@@ -80,7 +80,7 @@ BENCHMARK_QUERIES: List[Dict] = [
     },
     {
         "id": "Q04", "group": "canonical",
-        "query": "PAPERCLIP_AGENT_ID identity mismatch auth guardrail",
+        "query": "TASK_TRACKER_AGENT_ID identity mismatch auth guardrail",
         "expected_ids": [130, 93],
         "description": "Auth identity mismatch pattern"
     },
@@ -92,15 +92,15 @@ BENCHMARK_QUERIES: List[Dict] = [
     },
     {
         "id": "Q06", "group": "canonical",
-        "query": "CostClock security hardening test coverage production readiness",
+        "query": "example-app security hardening test coverage production readiness",
         "expected_ids": [130, 78],
-        "description": "CostClock production readiness issues"
+        "description": "example-app production readiness issues"
     },
     {
         "id": "Q07", "group": "canonical",
-        "query": "Nexus heartbeat Kokoro token checkout authentication fails",
+        "query": "Nexus heartbeat agent-1 token checkout authentication fails",
         "expected_ids": [130, 93],
-        "description": "Nexus auth / Kokoro binding"
+        "description": "Nexus auth / agent-1 binding"
     },
     {
         "id": "Q08", "group": "canonical",
@@ -134,9 +134,9 @@ BENCHMARK_QUERIES: List[Dict] = [
     },
     {
         "id": "Q13", "group": "canonical",
-        "query": "CostClock cron endpoint daily cleanup authorization bearer secret",
+        "query": "example-app cron endpoint daily cleanup authorization bearer secret",
         "expected_ids": [130, 78],
-        "description": "CostClock cron auth pattern"
+        "description": "example-app cron auth pattern"
     },
     {
         "id": "Q14", "group": "canonical",
@@ -158,21 +158,21 @@ BENCHMARK_QUERIES: List[Dict] = [
     },
     {
         "id": "Q17", "group": "canonical",
-        "query": "OpenClaw AI agent framework local execution deployment",
+        "query": "agent-framework AI agent framework local execution deployment",
         "expected_ids": [93, 376, 125],
-        "description": "OpenClaw agent system"
+        "description": "agent-framework agent system"
     },
     {
         "id": "Q18", "group": "canonical",
-        "query": "Paperclip task heartbeat assignment checkout workflow status",
+        "query": "task-tracker task heartbeat assignment checkout workflow status",
         "expected_ids": [93, 130, 804],
-        "description": "Paperclip task execution"
+        "description": "task-tracker task execution"
     },
     {
         "id": "Q19", "group": "canonical",
-        "query": "Nara external data integration REST API polling synchronization",
+        "query": "agent-2 external data integration REST API polling synchronization",
         "expected_ids": [93, 376],
-        "description": "Nara integration system"
+        "description": "agent-2 integration system"
     },
     {
         "id": "Q20", "group": "canonical",
@@ -208,9 +208,9 @@ BENCHMARK_QUERIES: List[Dict] = [
     },
     {
         "id": "Q25", "group": "access_log",
-        "query": "costclock pentest security api vulnerability",
+        "query": "example-app pentest security api vulnerability",
         "expected_ids": [130, 78],
-        "description": "CostClock security assessment"
+        "description": "example-app security assessment"
     },
     {
         "id": "Q26", "group": "access_log",
@@ -322,13 +322,13 @@ BENCHMARK_QUERIES: List[Dict] = [
     },
     {
         "id": "Q44", "group": "access_log",
-        "query": "CostClock invoice compression test memories scope",
+        "query": "example-app invoice compression test memories scope",
         "expected_ids": [106, 78, 130],
         "description": "Invoice memory compression"
     },
     {
         "id": "Q45", "group": "access_log",
-        "query": "Paperclip temporal cognition epoch filed issues COG BRN",
+        "query": "task-tracker temporal cognition epoch filed issues COG BRN",
         "expected_ids": [804, 376, 743],
         "description": "Temporal cognition project"
     },
@@ -354,7 +354,7 @@ BENCHMARK_QUERIES: List[Dict] = [
         "id": "Q49", "group": "access_log",
         "query": "hippocampus compression source_event_id distillation ratio",
         "expected_ids": [410, 130],
-        "description": "Hippocampus compression issue COS-319"
+        "description": "Hippocampus compression issue internal-ref"
     },
     {
         "id": "Q50", "group": "access_log",
@@ -412,7 +412,7 @@ def score_stability(scores: List[float]) -> float:
 def run_ab_test(conn: sqlite3.Connection) -> Dict:
     n = len(BENCHMARK_QUERIES)
     print(f"\n{'='*80}")
-    print("COS-418: QCR A/B TEST — Baseline vs Quantum Amplitude Scoring")
+    print("internal-ref: QCR A/B TEST — Baseline vs Quantum Amplitude Scoring")
     print(f"{'='*80}")
     print(f"Date:      {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Database:  {DB_PATH}")
@@ -613,7 +613,7 @@ def run_ab_test(conn: sqlite3.Connection) -> Dict:
     print(f"[{'PASS' if sc3 else 'FAIL'}] No regression on baseline hits: {regressions} regression(s)")
 
     if not sc1 and p5_delta_07 < 0.05:
-        verdict = "FAIL — QCR improvement < 5%. Recommendation: merge schema only (COS-401), shelve amplitude scoring."
+        verdict = "FAIL — QCR improvement < 5%. Recommendation: merge schema only , shelve amplitude scoring."
     elif not sc1:
         verdict = "BORDERLINE — improvement exists but below 10% threshold. Consider extended testing."
     else:

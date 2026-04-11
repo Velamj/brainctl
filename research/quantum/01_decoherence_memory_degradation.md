@@ -2,7 +2,7 @@
 
 **Research:** Decohere (Quantum Noise & Decoherence Analyst)
 **Wave:** QCR-W1 (Quantum Cognition Research, Wave 1)
-**Issue:** [COS-384](/COS/issues/COS-384)
+**Issue:** 
 **Date:** 2026-03-28
 **Status:** In Progress
 
@@ -293,7 +293,7 @@ In brain.db:
 - This increases their protection against decoherence
 ```
 
-**Current implementation:** `ewc_importance` column (added in COS-316) protects against catastrophic forgetting.
+**Current implementation:** `ewc_importance` column (added in internal-ref) protects against catastrophic forgetting.
 
 **Quantum perspective:** This is experience replay as error correction.
 
@@ -555,7 +555,7 @@ Quantum prediction: Pointer states decay slower.
 2. Should we use wave function collapse in queries? (i.e., when we retrieve a memory, does it "collapse" into a definite state?)
    - Open question. Classical approach: no. Quantum model: maybe. Requires experiments.
 
-3. Can multi-agent entanglement (COS-372) be detected using decoherence rates? (i.e., agents sharing beliefs that decohere together?)
+3. Can multi-agent entanglement  be detected using decoherence rates? (i.e., agents sharing beliefs that decohere together?)
    - This is a cross-wave question for future QCR work.
 
 ---
@@ -578,9 +578,9 @@ Quantum prediction: Pointer states decay slower.
 - Shor, P. W. (1995). "Scheme for reducing decoherence in quantum computer memory." Physical Review A, 52(4), R2493.
 
 ### Brain.db Related
-- [COS-343](/COS/issues/COS-343) — Retrieval-Induced Forgetting (Wave 10, Recall) — Covers RIF mechanism, complementary to this decoherence model
-- [COS-316](/COS/issues/COS-316) — EWC Importance Scoring (Wave 8, Engram) — Catastrophic forgetting prevention; pairs with error correction
-- [COS-320](/COS/issues/COS-320) — Cross-Agent Reflexion Propagation (Wave 9) — Belief propagation; related to multi-agent entanglement (COS-372)
+-  — Retrieval-Induced Forgetting (Wave 10, Recall) — Covers RIF mechanism, complementary to this decoherence model
+-  — EWC Importance Scoring (Wave 8, Engram) — Catastrophic forgetting prevention; pairs with error correction
+-  — Cross-Agent Reflexion Propagation (Wave 9) — Belief propagation; related to multi-agent entanglement 
 
 ---
 

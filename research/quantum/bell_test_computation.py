@@ -1,5 +1,5 @@
 """
-Bell Test for Agent Beliefs — COS-393
+Bell Test for Agent Beliefs — internal-ref
 Empirical detection of quantum-like entanglement in brain.db
 """
 
@@ -8,7 +8,7 @@ import json
 import math
 from collections import defaultdict
 
-DB = "/Users/r4vager/agentmemory/db/brain.db"
+DB = os.environ.get("BRAIN_DB", "brain.db")
 
 def conn():
     return sqlite3.connect(DB)
@@ -29,8 +29,8 @@ with conn() as db:
     db.row_factory = sqlite3.Row
 
     # --- 1. Get all active memories for key agents ---
-    agents = ['hermes', 'openclaw', 'hippocampus', 'paperclip-cortex',
-              'paperclip-recall', 'paperclip-sentinel-2', 'paperclip-engram']
+    agents = ['hermes', 'openclaw', 'hippocampus', 'task-tracker-cortex',
+              'task-tracker-recall', 'task-tracker-sentinel-2', 'task-tracker-engram']
     
     memories_by_agent = {}
     for agent in agents:
@@ -154,7 +154,7 @@ print("="*70)
 topic_keywords = {
     'T1_memory_spine': ['memory spine', 'schema_version', 'brain.db', 'active agents', 'agent count'],
     'T2_memory_ops':   ['distill', 'consolidat', 'compression', 'brainctl push', 'retire', 'recalled'],
-    'T3_capability':   ['capability', 'COS-', 'heartbeat', 'result', 'costclock'],
+    'T3_capability':   ['capability', 'COS-', 'heartbeat', 'result', 'example-app'],
 }
 
 def get_agent_topic_memories(agent_id, keywords):
@@ -228,13 +228,13 @@ def agent_measurements(agent_id, keywords):
     
     return basis1, basis2_recall_weighted
 
-# Test pairs: (hermes, openclaw), (hermes, hippocampus), (hippocampus, paperclip-cortex)
+# Test pairs: (hermes, openclaw), (hermes, hippocampus), (hippocampus, task-tracker-cortex)
 test_pairs = [
     ('hermes', 'openclaw'),
     ('hermes', 'hippocampus'),
-    ('hippocampus', 'paperclip-cortex'),
-    ('hermes', 'paperclip-recall'),
-    ('paperclip-cortex', 'paperclip-sentinel-2'),
+    ('hippocampus', 'task-tracker-cortex'),
+    ('hermes', 'task-tracker-recall'),
+    ('task-tracker-cortex', 'task-tracker-sentinel-2'),
 ]
 
 results = {}
@@ -281,13 +281,13 @@ for agent_a, agent_b in test_pairs:
 
 
 # =========================================================
-# PHASE 4: GHZ ANALYSIS — hermes × hippocampus × paperclip-cortex
+# PHASE 4: GHZ ANALYSIS — hermes × hippocampus × task-tracker-cortex
 # =========================================================
 
 print("\n" + "="*70)
 print("PHASE 4: GHZ THREE-WAY MUTUAL INFORMATION ANALYSIS")
 print("="*70)
-print("Triad: hermes × hippocampus × paperclip-cortex")
+print("Triad: hermes × hippocampus × task-tracker-cortex")
 print()
 
 """
@@ -323,7 +323,7 @@ def joint_entropy_correlated(p_list):
     joint_conf = joint_conf ** (1.0 / len(p_list))  # geometric mean
     return entropy(joint_conf)
 
-triad = ['hermes', 'hippocampus', 'paperclip-cortex']
+triad = ['hermes', 'hippocampus', 'task-tracker-cortex']
 triad_short = ['hermes', 'hippo', 'cortex']
 
 print("Per-topic GHZ analysis:")
@@ -332,7 +332,7 @@ ghz_topics = []
 for topic_name, keywords in topic_keywords.items():
     mems_a = get_agent_topic_memories('hermes', keywords)
     mems_b = get_agent_topic_memories('hippocampus', keywords)
-    mems_c = get_agent_topic_memories('paperclip-cortex', keywords)
+    mems_c = get_agent_topic_memories('task-tracker-cortex', keywords)
     
     if not (mems_a and mems_b and mems_c):
         print(f"\nTopic {topic_name}: insufficient data for all 3 agents")

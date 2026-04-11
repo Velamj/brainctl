@@ -1,9 +1,9 @@
 # World Models & Internal Simulation — Can Hermes Simulate the Organization?
 
-**Task:** COS-249
-**Author:** Cortex (Intelligence Synthesis Analyst)
+**Task:** internal-ref
+**Author:** research-agent
 **Date:** 2026-03-28
-**References:** COS-204 (Memory as Policy Engine), COS-177 (Memory Event Bus), COS-243 (Global Workspace Theory)
+**References:** internal-ref (Memory as Policy Engine), internal-ref (Memory Event Bus), internal-ref (Global Workspace Theory)
 
 ---
 
@@ -11,7 +11,7 @@
 
 A world model is a compressed, queryable internal representation of an environment
 that enables mental simulation: "if we do X, what happens?" This research designs
-a **World Model Layer** for CostClock AI — a living model of org structure, agent
+a **World Model Layer** for example-app — a living model of org structure, agent
 capabilities, project dependencies, and causal dynamics that Hermes can query to
 predict outcomes before committing resources.
 
@@ -48,7 +48,7 @@ error signal). Every moment, the brain predicts what's coming and updates only w
 wrong.
 
 **Mapping to Hermes:**
-- Hermes continuously maintains a predicted state: "agent X is on track for COS-249
+- Hermes continuously maintains a predicted state: "agent X is on track for internal-ref
   by EOD"
 - When the actual event deviates (X posts a blocked comment), the error is logged
 - Over time, Hermes accumulates calibrated models of each agent's behavior
@@ -69,7 +69,7 @@ what changes downstream?"
 ### The Organizational World Model (OWM)
 
 The OWM is a set of compressed tables in brain.db that together represent the
-current state and dynamics of CostClock AI.
+current state and dynamics of example-app.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -140,10 +140,10 @@ CREATE TABLE world_model_snapshots (
 
 ```bash
 # Query: what is the predicted outcome for a task assignment?
-brainctl sim predict-task --task COS-250 --assignee paperclip-cto
+brainctl sim predict-task --task internal-ref --assignee task-tracker-cto
 
 # Query: what if we reassign an agent?
-brainctl sim what-if --reassign paperclip-recall --to project agentmemory
+brainctl sim what-if --reassign task-tracker-recall --to project agentmemory
 
 # Query: which agent is best suited for a given capability?
 brainctl sim best-agent --capability "sql_migration"
@@ -179,12 +179,12 @@ priors about each agent, projects them forward, and updates on prediction errors
 
 ## Digital Twin Concept
 
-A **digital twin** is an always-synchronized simulation of a real system. For CostClock AI:
+A **digital twin** is an always-synchronized simulation of a real system. For example-app:
 
 - brain.db IS the digital twin of the organization
 - Every agent event writes to it
 - Hermes queries it to simulate futures
-- The twin stays current via the Memory Event Bus (see COS-232)
+- The twin stays current via the Memory Event Bus (see internal-ref)
 
 The key missing piece is the **dynamics layer**: not just what the org looks like
 now, but how it moves. That's what `agent_capabilities` and `project_dependency_graph`
@@ -194,7 +194,7 @@ provide.
 
 ## Causal Reasoning — Avoiding the Correlation Trap
 
-A pure correlation model might learn: "tasks assigned to paperclip-sentinel-2 complete
+A pure correlation model might learn: "tasks assigned to task-tracker-sentinel-2 complete
 faster." But the cause might be "sentinel-2 is only assigned easy tasks." A causal
 model must control for confounders.
 
@@ -239,20 +239,20 @@ model must control for confounders.
 
 ## Connections to Other Wave 6 Work
 
-- **COS-243 (Global Workspace Theory):** GWT determines which predictions get
+- **internal-ref (Global Workspace Theory):** GWT determines which predictions get
   broadcast. High-error predictions (surprises) should trigger ignition and broadcast.
-- **COS-235 (Policy Memory):** Policy memories encode "if we've seen X before, do Y."
+- **internal-ref (Policy Memory):** Policy memories encode "if we've seen X before, do Y."
   World models encode "if we're about to do X, Y is the likely outcome." Complementary.
-- **COS-232 (Memory Event Bus):** All world model updates flow through MEB events.
+- **internal-ref (Memory Event Bus):** All world model updates flow through MEB events.
   Actual vs. predicted outcome logging is a natural MEB event type.
-- **COS-231 (Embedding Backfill):** Semantic search over task history is how we
+- **internal-ref (Embedding Backfill):** Semantic search over task history is how we
   extract "similar past tasks" for capability estimation.
 
 ---
 
 ## Summary
 
-A world model for CostClock AI is achievable with four additions to brain.db:
+A world model for example-app is achievable with four additions to brain.db:
 `agent_capabilities`, `project_dependency_graph`, `world_model_snapshots`, and
 a prediction-error feedback loop. This transforms Hermes from a reactive coordinator
 into a **predictive director** — one that simulates before committing, and learns

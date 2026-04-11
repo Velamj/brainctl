@@ -1,7 +1,7 @@
 # Prospective Memory — Conditional Recall Triggers and Future-Oriented Cognition
 
 **Author:** Weaver (Context Integration Engineer)
-**Task:** [COS-364](/COS/issues/COS-364)
+**Task:** 
 **Date:** 2026-03-28
 **DB State:** 26 agents · 151 active memories · brain.db @ ~/agentmemory/db/brain.db
 **Migration target:** `025_memory_triggers.sql`
@@ -13,11 +13,11 @@
 Every memory in `brain.db` is **retrospective** — it records what happened. Biological agents also possess *prospective memory*: the ability to remember to surface information when a future condition is met. Our agent fleet has no equivalent.
 
 The gap is concrete and costly:
-- Governance rules in `brain.db` are passive. A rule saying "never push to main without Kokoro approval" only helps if an agent happens to recall it. It cannot self-surface when an agent is about to run `git push`.
+- Governance rules in `brain.db` are passive. A rule saying "never push to main without agent-1 approval" only helps if an agent happens to recall it. It cannot self-surface when an agent is about to run `git push`.
 - Time-sensitive memories (merge freeze by 2026-03-31) have no expiry-surfacing mechanism. They decay silently.
-- Reflexion lessons from COS-320 require explicit recall. High-stakes lessons are never *pushed* to the agents who most need them.
+- Reflexion lessons from internal-ref require explicit recall. High-stakes lessons are never *pushed* to the agents who most need them.
 
-This report designs a `memory_triggers` system: a table of conditional surfacing rules linked to existing memories, with three trigger modalities (temporal, contextual, event), integration with MEB (COS-232) and the World Model (COS-321), a `brainctl trigger` command family, and a priority-based fan-out protocol for simultaneous trigger fires.
+This report designs a `memory_triggers` system: a table of conditional surfacing rules linked to existing memories, with three trigger modalities (temporal, contextual, event), integration with MEB  and the World Model , a `brainctl trigger` command family, and a priority-based fan-out protocol for simultaneous trigger fires.
 
 **Core claim:** Prospective memory is not a new data store. It is a *routing layer* over existing memories — a set of conditions that say "when X happens, surface memory Y to agents Z." The right implementation is a trigger table + a polling daemon hook + two injection points (heartbeat pre-task scan, MEB subscriber).
 
@@ -83,7 +83,7 @@ The PRAM framework argues execution failure is the least common in healthy agent
 -- Migration 025: Prospective Memory — memory_triggers table
 -- Author: Weaver (Context Integration Engineer)
 -- Date: 2026-03-28
--- COS-364
+-- internal-ref
 
 CREATE TABLE memory_triggers (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -235,7 +235,7 @@ brainctl trigger set \
   --predicate '{"type":"contextual","match":"keyword","keywords":["git push","main"],"match_threshold":1}' \
   --priority critical \
   --fire-mode recurring \
-  -a paperclip-weaver
+  -a task-tracker-weaver
 ```
 
 Output:
@@ -312,7 +312,7 @@ Returns fired triggers whose memories should be injected into the context window
     {
       "trigger_id": 7,
       "memory_id": 42,
-      "content": "CRITICAL: Never push to main without Kokoro approval. See COS-237.",
+      "content": "CRITICAL: Never push to main without agent-1 approval. See internal-ref.",
       "confidence": 1.0,
       "priority": "critical",
       "fire_reason": "keyword_match: 'git push'"
@@ -326,7 +326,7 @@ The `trigger check` output is rendered as a warning block at the top of any `bra
 
 ---
 
-## 4. Integration with World Model (COS-321)
+## 4. Integration with World Model 
 
 The World Model (`brainctl world predict`) logs forward-looking predictions about organizational state. These predictions are natural trigger sources: "if the predicted state X is about to become actual, surface memory Y."
 
@@ -345,7 +345,7 @@ When an agent calls `brainctl world predict`, it writes a row to `world_model_sn
 
 When `brainctl world resolve` is called (resolving the prediction), the MEB trigger fires. This surfaces the linked memory to target agents at the moment the predicted world state is confirmed — the optimal intervention point.
 
-### 4.2 Predicted State as Trigger Condition (Future: COS-321+)
+### 4.2 Predicted State as Trigger Condition (Future: internal-ref+)
 
 A deeper integration (beyond this wave) would allow the trigger condition itself to reference a world model prediction:
 
@@ -360,7 +360,7 @@ A deeper integration (beyond this wave) would allow the trigger condition itself
 
 This fires when the world model's confidence in "main branch freeze within 3 days" exceeds 0.8 — *before* the event occurs. This is the closest analog to biological prospective memory: proactive recall based on anticipated future state, not past events.
 
-**Dependency:** This requires the World Model to expose a query API (`brainctl world predict --query "..."` returning probability scores). Current `brainctl world` supports `predict` as a logging command, not a query command. The extension would be filed as a COS-321 subtask.
+**Dependency:** This requires the World Model to expose a query API (`brainctl world predict --query "..."` returning probability scores). Current `brainctl world` supports `predict` as a logging command, not a query command. The extension would be filed as a internal-ref subtask.
 
 ### 4.3 Recommended Immediate Integration
 
@@ -374,7 +374,7 @@ This covers the most common case: an agent making a prediction that should remin
 
 ---
 
-## 5. Integration with MEB (COS-232)
+## 5. Integration with MEB 
 
 The Memory Event Bus captures all memory writes as `memory_events` rows. The trigger system plugs into MEB as a *subscriber* — it reads the MEB stream and evaluates `event`-type triggers on each new event.
 
@@ -500,7 +500,7 @@ This ensures prospective memories are injected at the optimal PRAM phase-3 momen
 -- Migration 025: Prospective Memory — memory_triggers + trigger_fire_log
 -- Author: Weaver (Context Integration Engineer)
 -- Date: 2026-03-28
--- COS-364
+-- internal-ref
 -- Schema version: 24 -> 25
 
 CREATE TABLE IF NOT EXISTS memory_triggers (
@@ -554,7 +554,7 @@ WHERE active = 1
 
 INSERT OR REPLACE INTO schema_version (version, applied_at, description)
 VALUES (25, strftime('%Y-%m-%dT%H:%M:%S', 'now'),
-  'Prospective Memory: memory_triggers + trigger_fire_log — COS-364');
+  'Prospective Memory: memory_triggers + trigger_fire_log — internal-ref');
 
 PRAGMA user_version = 25;
 ```
@@ -591,7 +591,7 @@ PRAGMA user_version = 25;
 
 1. **Trigger authority**: Should any agent be able to create triggers on any memory, or only the memory's `agent_id` (creator)? Recommend: any agent can create triggers but only on memories they have read access to; triggers on `scope = 'private'` memories are owner-only.
 
-2. **World model deep integration**: COS-321 currently does not expose a probability query API. Is a `brainctl world predict --query` extension in scope for wave 12, or should the world model integration remain event-based for now?
+2. **World model deep integration**: internal-ref currently does not expose a probability query API. Is a `brainctl world predict --query` extension in scope for wave 12, or should the world model integration remain event-based for now?
 
 3. **MEB evaluator placement**: Running trigger evaluation in the hippocampus cycle (every 5h) means temporal triggers may be late by up to 5h. For critical temporal triggers (e.g., merge freeze T-minus 1h), a more frequent check is needed. Recommend: add a cron task for temporal trigger evaluation every 15 minutes, separate from hippocampus.
 
@@ -605,4 +605,4 @@ Prospective memory is the missing push layer in brain.db. Every current memory i
 
 ---
 
-*Research: Wave 12 · Cognitive Architecture & Enhancement · [COS-364](/COS/issues/COS-364)*
+*Research: Wave 12 · Cognitive Architecture & Enhancement · *

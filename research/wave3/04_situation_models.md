@@ -1,6 +1,6 @@
 # Situation Model Construction — Building Coherent Narratives from Fragmented Memories
-## Research Report — COS-123
-**Author:** Cortex (Intelligence Synthesis Analyst)
+## Research Report — internal-ref
+**Author:** research-agent
 **Date:** 2026-03-28
 **Target:** brain.db — Situation model layer enabling Hermes to answer "what is happening with X?" rather than just "what is X?"
 
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Hermes currently retrieves individual memories in response to queries. This works well for lookup tasks ("what is the API rate limit?") but fails on *situational* queries ("what is happening with project COS-83?", "why did the auth system break?", "what is the current state of the memory consolidation pipeline?").
+Hermes currently retrieves individual memories in response to queries. This works well for lookup tasks ("what is the API rate limit?") but fails on *situational* queries ("what is happening with project internal-ref?", "why did the auth system break?", "what is the current state of the memory consolidation pipeline?").
 
 Answering situational queries requires a **situation model**: a coherent, internally consistent narrative representation that integrates multiple memories across time, cause, and agent roles into a single structured understanding of a scenario.
 
@@ -24,7 +24,7 @@ This report defines the situation model construct for brain.db, proposes a const
 
 Kintsch's Construction-Integration model argues that language comprehension requires building a situation model that goes beyond the surface text. Applied to agent memory:
 
-- **Propositional level**: individual memories as atomic facts ("Weaver shipped route-context v2", "COS-83 status = done")
+- **Propositional level**: individual memories as atomic facts ("Weaver shipped route-context v2", "internal-ref status = done")
 - **Textbase level**: the coherent set of directly related memories, linked by reference (same entity, same project)
 - **Situation model level**: the full integration — including inferences, temporal ordering, causal chains, and agent intentions — that allows answering "what is happening?"
 
@@ -63,7 +63,7 @@ A **situation model** in the brain.db context is:
 ```sql
 CREATE TABLE situation_models (
     id              TEXT PRIMARY KEY,           -- UUID
-    name            TEXT NOT NULL,              -- e.g. "project:COS-83" or "incident:auth-mismatch-2026-03"
+    name            TEXT NOT NULL,              -- e.g. "project:internal-ref" or "incident:auth-mismatch-2026-03"
     query_anchor    TEXT NOT NULL,              -- the entity/topic this model is about
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -94,7 +94,7 @@ CREATE TABLE situation_model_contradictions (
 
 ```json
 {
-  "anchor": "project:COS-83",
+  "anchor": "project:internal-ref",
   "current_phase": "done",
   "phases": [
     {"name": "Phase 1 - auto-embed", "status": "done", "agent": "Weaver", "completed_at": "2026-03-28"},
@@ -105,7 +105,7 @@ CREATE TABLE situation_model_contradictions (
     "Hermes": {"role": "reviewer", "status": "accepted"}
   },
   "timeline": [
-    {"at": "2026-03-28T04:24:37", "event": "COS-83 shipped: route-context v2, 14 events routed"},
+    {"at": "2026-03-28T04:24:37", "event": "internal-ref shipped: route-context v2, 14 events routed"},
     {"at": "2026-03-28T04:24:37", "event": "HWM advanced to event #93"}
   ],
   "blocking_agents": [],
@@ -323,7 +323,7 @@ The choice of presentation format should depend on the consumer and query type.
 Best for: injecting situation context into an agent heartbeat's system context.
 
 ```
-Project COS-83 (Auto-Route Events) is complete. Weaver delivered all 4 phases:
+Project internal-ref (Auto-Route Events) is complete. Weaver delivered all 4 phases:
 (1) auto-embed on write, (2) timeliness sweep, (3) periodic route push, and
 (4) route-pull interface. The first sweep routed 14 events to 10+ agents.
 HWM is at event #93. No open blockers. The only known risk is the embedding
@@ -340,7 +340,7 @@ Best for: agents that need to inspect specific fields (e.g., "is this blocked?",
 
 ```json
 {
-  "anchor": "COS-83",
+  "anchor": "internal-ref",
   "status": "done",
   "current_owner": null,
   "blocking_agents": [],
@@ -358,15 +358,15 @@ Best for: agents that need to inspect specific fields (e.g., "is this blocked?",
 
 ### 6.3 Graph Fragment (For situation-to-situation navigation)
 
-Best for: "how does COS-83 relate to COS-86?" — cross-situation reasoning.
+Best for: "how does internal-ref relate to internal-ref?" — cross-situation reasoning.
 
 Present as a subgraph of the knowledge graph, showing entities and relationships:
 
 ```
-COS-83 ──[blocks]──> COS-86 (embedding gap)
-COS-83 ──[implements]──> brainctl.route-context
-COS-83 ──[delivered_by]──> Weaver
-COS-83 ──[depends_on]──> brain.db.events
+internal-ref ──[blocks]──> internal-ref (embedding gap)
+internal-ref ──[implements]──> brainctl.route-context
+internal-ref ──[delivered_by]──> Weaver
+internal-ref ──[depends_on]──> brain.db.events
 ```
 
 **Pros:** Enables multi-hop reasoning.
@@ -426,22 +426,22 @@ CREATE INDEX IF NOT EXISTS idx_sm_updated ON situation_models(updated_at);
 
 ```bash
 # Build or refresh a situation model
-brainctl situation build "project:COS-83"
+brainctl situation build "project:internal-ref"
 
 # Query a situation model (returns narrative by default)
-brainctl situation query "what is happening with COS-83"
+brainctl situation query "what is happening with internal-ref"
 
 # Force rebuild
-brainctl situation rebuild "project:COS-83"
+brainctl situation rebuild "project:internal-ref"
 
 # List all active situation models
 brainctl situation list
 
 # Get structured JSON
-brainctl situation get "project:COS-83" --format json
+brainctl situation get "project:internal-ref" --format json
 
 # Archive a model
-brainctl situation archive "project:COS-83"
+brainctl situation archive "project:internal-ref"
 ```
 
 ### 7.3 Python Construction Prototype
@@ -461,7 +461,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 import uuid
 
-DB_PATH = "/Users/r4vager/.config/brainctl/brain.db"
+DB_PATH = "brain.db"
 
 @dataclass
 class Memory:
@@ -632,7 +632,7 @@ def build_situation_model(anchor: str) -> SituationModel:
 
 if __name__ == "__main__":
     import sys
-    anchor = sys.argv[1] if len(sys.argv) > 1 else "COS-83"
+    anchor = sys.argv[1] if len(sys.argv) > 1 else "internal-ref"
     model = build_situation_model(anchor)
     print(f"Model: {model.name}")
     print(f"Coherence: {model.coherence_score:.2f}")
@@ -664,7 +664,7 @@ if __name__ == "__main__":
 | Who triggers situation model builds? | HIGH | Needs a designated agent or hook on write |
 | How to detect contradictions automatically? | HIGH | Requires semantic similarity + negation detection |
 | Memory vs. event granularity | MEDIUM | Events are fine-grained; memories are consolidated — both needed |
-| Cross-anchor situations | MEDIUM | "What connects COS-83 and the embedding gap?" requires multi-anchor models |
+| Cross-anchor situations | MEDIUM | "What connects internal-ref and the embedding gap?" requires multi-anchor models |
 | Performance at scale | LOW | 50 events + 20 memories per model = fast; 1000+ events could slow construction |
 | Situation model pollution | LOW | Risk of building too many models; need eviction policy |
 
@@ -682,7 +682,7 @@ if __name__ == "__main__":
 
 5. **Use situation models for distillation** — rather than synthesizing memories from raw events, synthesize them from the situation model's `structured` JSON. This yields richer, more coherent memories because the model has already done the integration work.
 
-6. **Start with 3 pilot anchors**: `project:agentmemory`, `incident:auth-mismatch-2026-03`, and `project:COS-83` — covering a completed project, an ongoing incident, and a cross-cutting system topic.
+6. **Start with 3 pilot anchors**: `project:agentmemory`, `incident:auth-mismatch-2026-03`, and `project:internal-ref` — covering a completed project, an ongoing incident, and a cross-cutting system topic.
 
 ---
 
@@ -694,5 +694,5 @@ if __name__ == "__main__":
 
 ---
 
-*Filed under: ~/agentmemory/research/wave3/04_situation_models.md*
-*Cortex — Intelligence Synthesis Analyst — COS-123*
+*Filed under: research/wave3/04_situation_models.md*
+*Cortex — Intelligence Synthesis Analyst — internal-ref*

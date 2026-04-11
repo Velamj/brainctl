@@ -1,5 +1,5 @@
 # Memory Provenance & Source Trust Chains
-## Research Report — COS-121
+## Research Report — internal-ref
 **Author:** Sentinel 2 (Memory Integrity Monitor)
 **Date:** 2026-03-28
 **Target:** brain.db — Provenance and trust model for memories written by 22+ agents
@@ -381,9 +381,9 @@ Agent Trust Report (as of 2026-03-28)
 agent_id              category      scope      score   samples  retracted
 -----------           ----------    --------   ------  -------  ---------
 hermes                identity      global      0.97     34       0
-paperclip-armor       project       global      0.84     12       1
-paperclip-codex       convention    global      0.91     8        0
-paperclip-sentinel-2  environment   global      0.88     5        0
+task-tracker-armor       project       global      0.84     12       1
+task-tracker-codex       convention    global      0.91     8        0
+task-tracker-sentinel-2  environment   global      0.88     5        0
 ```
 
 ### 4.4 `brainctl validate` Enhancement
@@ -510,7 +510,7 @@ def recompute_agent_category_trust(db, agent_id: str, category: str, scope: str 
 New agents have no history. Options:
 1. **Neutral prior (0.5):** Conservative — new agents get standard retrieval weight
 2. **Manager prior:** Inherit trust from their `chainOfCommand` manager's scores
-3. **Role prior:** Agent type defaults (hermes=0.85, paperclip=0.70, openclaw=0.75)
+3. **Role prior:** Agent type defaults (hermes=0.85, task-tracker=0.70, openclaw=0.75)
 
 **Recommendation:** Use role prior for new agents, transition to computed score after 10+ memories in a category. Prevents an agent with zero retraction history (but also zero history) from appearing perfectly trustworthy.
 
@@ -598,15 +598,15 @@ brainctl memory list --retracted                  # audit retracted memories
 brainctl memory list --suspect                    # review flagged memories
 ```
 
-### 7.4 Relationship to COS-115 (Adversarial Robustness)
+### 7.4 Relationship to internal-ref (Adversarial Robustness)
 
-[COS-115](/COS/issues/COS-115) addresses *external* attacks: embedding poisoning, hallucination injection, tamper detection via hash chains.
+ addresses *external* attacks: embedding poisoning, hallucination injection, tamper detection via hash chains.
 
-This report (COS-121) addresses *internal* trust: honest mistakes, agent drift, reliability variation by domain. Together:
-- COS-115 prevents bad data from entering the system
-- COS-121 tracks and propagates trust when bad data does enter (honest errors, drift, category-specific unreliability)
+This report  addresses *internal* trust: honest mistakes, agent drift, reliability variation by domain. Together:
+- internal-ref prevents bad data from entering the system
+- internal-ref tracks and propagates trust when bad data does enter (honest errors, drift, category-specific unreliability)
 
-The `memory_trust_scores` table can also receive signals from COS-115's integrity verification layer: if a Merkle-chain violation is detected on an agent's writes, set that agent's trust score to 0.0 in `memory_trust_scores`.
+The `memory_trust_scores` table can also receive signals from internal-ref's integrity verification layer: if a Merkle-chain violation is detected on an agent's writes, set that agent's trust score to 0.0 in `memory_trust_scores`.
 
 ---
 

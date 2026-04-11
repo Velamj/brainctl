@@ -5,13 +5,13 @@
 **Date:** 2026-03-28
 **Status:** Research Design Complete
 
-**Dependencies:** [COS-381](/PAP/issues/COS-381) (belief superposition), [COS-384](/PAP/issues/COS-384) (decoherence model)
+**Dependencies:** [internal-ref](/PAP/issues/internal-ref) (belief superposition), [internal-ref](/PAP/issues/internal-ref) (decoherence model)
 
 ---
 
 ## Executive Summary
 
-[COS-381](/PAP/issues/COS-381) established that agent beliefs can exist in **superposition**—multiple, mutually exclusive interpretations simultaneously. [COS-384](/PAP/issues/COS-384) modeled how environmental noise gradually decoheres these beliefs into classical mixtures (the *passive* path).
+[internal-ref](/PAP/issues/internal-ref) established that agent beliefs can exist in **superposition**—multiple, mutually exclusive interpretations simultaneously. [internal-ref](/PAP/issues/internal-ref) modeled how environmental noise gradually decoheres these beliefs into classical mixtures (the *passive* path).
 
 This research completes the framework by modeling **collapse dynamics**: the *active* process where an agent deliberately measures (acts on) a superposed belief, forcing it to resolve into a single definite state. Collapse is the decision-making event; decoherence is the forgetting process.
 
@@ -102,7 +102,7 @@ Where:
 
 #### **Trigger 4: Time/Decoherence (Forced by Environment)**
 
-**When:** A belief's coherence degrades to a threshold via decoherence (COS-384), forcing classical resolution.
+**When:** A belief's coherence degrades to a threshold via decoherence , forcing classical resolution.
 
 **Measurement operator:**
 ```
@@ -122,7 +122,7 @@ Where:
 
 ### 2.1 State Transitions
 
-#### **Decoherence Path** (COS-384, Environmental, Passive)
+#### **Decoherence Path** (internal-ref, Environmental, Passive)
 
 ```
 Pure state |ψ⟩
@@ -136,7 +136,7 @@ Pure state |ψ⟩
 
 **Example:** Belief |budget⟩ = 0.7|sufficient⟩ + 0.7|tight⟩ decoheres over 2 weeks to ρ = [0.49, 0; 0, 0.49] (completely mixed, no coherence). Agent reads this and sees: 49% sufficient, 49% tight (classical mixture).
 
-#### **Collapse Path** (COS-394, Deliberate, Active)
+#### **Collapse Path** (internal-ref, Deliberate, Active)
 
 ```
 Pure/mixed state |ψ⟩ or ρ
@@ -211,7 +211,7 @@ Where k_zeno ≈ 3-5 (empirically tuned)
 - Query every 1.75 days to allow gradual decoherence without artificial collapse
 - Queries more frequent than Δt risk QZE (belief stuck); queries less frequent risk uncontrolled decoherence
 
-**For each temporal class (from COS-384):**
+**For each temporal class (from internal-ref):**
 
 | Temporal Class | Coherence Lifetime (τ_C) | Optimal Query Interval |
 |---|---|---|
@@ -479,5 +479,5 @@ FOR each belief B queried:
 - Zurek, W. H. (2003). "Decoherence and the Transition from Quantum to Classical"
 - Misra, B., & Sudarshan, E. C. (1977). "The Zeno's Paradox in Quantum Theory"
 - Busemeyer, J. R., & Bruza, P. D. (2012). *Quantum Cognition and Bounded Rationality*
-- [COS-381](/PAP/issues/COS-381) — Belief Superposition (Superpose)
-- [COS-384](/PAP/issues/COS-384) — Decoherence & Memory Degradation (Decohere)
+- [internal-ref](/PAP/issues/internal-ref) — Belief Superposition (Superpose)
+- [internal-ref](/PAP/issues/internal-ref) — Decoherence & Memory Degradation (Decohere)

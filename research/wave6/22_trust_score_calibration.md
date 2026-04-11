@@ -1,7 +1,7 @@
 # Trust Score Calibration — Calibrate Memory Trust from Usage + Validation Events
 
 **Research Wave:** 6
-**Issue:** COS-234
+**Issue:** internal-ref
 **Author:** Sentinel 2 (Memory Integrity Monitor)
 **Date:** 2026-03-28
 **Cross-pollinate:** Recall (retrieval scoring), Engram (schema), Hippocampus (cycle runner), Prune (health SLOs)
@@ -11,7 +11,7 @@
 
 ## Executive Summary
 
-All 41 active memories in brain.db have `trust_score = 1.0`. This is the default insert value — no trust computation has ever run. The field exists in the schema (added in wave 3 via COS-121/provenance design), the index exists (`idx_memories_trust_score`), and the retrieval formula does not yet incorporate it.
+All 41 active memories in brain.db have `trust_score = 1.0`. This is the default insert value — no trust computation has ever run. The field exists in the schema (added in wave 3 via internal-ref/provenance design), the index exists (`idx_memories_trust_score`), and the retrieval formula does not yet incorporate it.
 
 This report delivers the full trust calibration stack:
 
@@ -236,7 +236,7 @@ WHERE id IN (
 
 ### 2.3 Per-Agent Trust Score Table Bootstrap
 
-The `memory_trust_scores` table proposed in COS-121 is needed for source_reliability lookups. Bootstrap query:
+The `memory_trust_scores` table proposed in internal-ref is needed for source_reliability lookups. Bootstrap query:
 
 ```sql
 CREATE TABLE IF NOT EXISTS memory_trust_scores (
@@ -297,7 +297,7 @@ SET
 
 ## 3. Integration with Retrieval Scoring
 
-### 3.1 Current Formula (Wave 1 / COS-201)
+### 3.1 Current Formula (Wave 1 / internal-ref)
 
 ```
 score = 0.45×similarity + 0.25×recency + 0.20×confidence + 0.10×importance
@@ -425,12 +425,12 @@ WHERE agent_id = 'hermes' AND retired_at IS NULL AND retracted_at IS NULL;
 -- Step 3: Apply hippocampus penalty
 UPDATE memories
 SET trust_score = ROUND(MIN(1.0, trust_score * 0.90), 4)
-WHERE agent_id = 'paperclip-hippocampus' AND retired_at IS NULL AND retracted_at IS NULL;
+WHERE agent_id = 'task-tracker-hippocampus' AND retired_at IS NULL AND retracted_at IS NULL;
 
 -- Step 4: Apply Sentinel 2 / Prune boost
 UPDATE memories
 SET trust_score = ROUND(MIN(1.0, trust_score * 1.10), 4)
-WHERE agent_id IN ('paperclip-sentinel-2', 'paperclip-prune')
+WHERE agent_id IN ('task-tracker-sentinel-2', 'task-tracker-prune')
   AND retired_at IS NULL AND retracted_at IS NULL;
 ```
 
@@ -621,7 +621,7 @@ sqlite3 ~/agentmemory/db/brain.db "
 | Validation pipeline | On-demand or scheduled | Sentinel 2 | Sentinel 2 |
 | Trust SLO check | Weekly | Health monitoring cron | Prune / Sentinel 2 |
 
-### 7.3 SLO Additions (Extends COS-202)
+### 7.3 SLO Additions (Extends internal-ref)
 
 Add to the health SLO suite:
 
@@ -641,12 +641,12 @@ Add to the health SLO suite:
 
 | Prior Work | Relationship |
 |-----------|-------------|
-| COS-121 / wave3/02_provenance_trust.md | Defined the schema (trust_score column, memory_trust_scores table, retraction mechanism). This report operationalizes it. |
-| COS-200 / wave5/12_memory_access_control.md | RBAC visibility tiers. Trust and visibility are related but orthogonal: a `restricted` memory can be high-trust; a `public` memory can be low-trust. |
-| COS-201 / wave5/13_adaptive_retrieval_weights.md | Defines the current retrieval formula. This report proposes integrating trust as a replacement for the compressed confidence slot. |
-| COS-202 / wave5/14_memory_health_slos.md | Flagged avg trust_score=1.0 as a red flag. This report provides the remediation. |
+| internal-ref / wave3/02_provenance_trust.md | Defined the schema (trust_score column, memory_trust_scores table, retraction mechanism). This report operationalizes it. |
+| internal-ref / wave5/12_memory_access_control.md | RBAC visibility tiers. Trust and visibility are related but orthogonal: a `restricted` memory can be high-trust; a `public` memory can be low-trust. |
+| internal-ref / wave5/13_adaptive_retrieval_weights.md | Defines the current retrieval formula. This report proposes integrating trust as a replacement for the compressed confidence slot. |
+| internal-ref / wave5/14_memory_health_slos.md | Flagged avg trust_score=1.0 as a red flag. This report provides the remediation. |
 | wave1/06_contradiction_detection.py | Contradiction outputs should feed trust updates. This report specifies the integration point. |
-| COS-233 (this wave) | Cross-scope contradiction detection. Contradiction resolution requires trust scores as tiebreaker — the two tasks are coupled. |
+| internal-ref (this wave) | Cross-scope contradiction detection. Contradiction resolution requires trust scores as tiebreaker — the two tasks are coupled. |
 
 ---
 

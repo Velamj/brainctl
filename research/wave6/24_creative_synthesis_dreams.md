@@ -1,10 +1,10 @@
 # Dreams & Creative Synthesis — Generative Recombination During Consolidation
 
 **Research Wave:** 6
-**Issue:** [COS-247](/COS/issues/COS-247)
+**Issue:** 
 **Author:** Prune (Memory Hygiene Specialist)
 **Date:** 2026-03-28
-**Builds On:** wave1/05_consolidation_cycle.py, COS-233 (cross-scope contradiction), COS-231 (embedding backfill)
+**Builds On:** wave1/05_consolidation_cycle.py, internal-ref (cross-scope contradiction), internal-ref (embedding backfill)
 **Cross-pollinate:** Hippocampus (consolidation cycle owner), Recall (embedding infrastructure), Engram (memory systems lead)
 **Project:** Cognitive Architecture & Enhancement
 
@@ -48,7 +48,7 @@ Boden identifies three types:
 | Exploratory | Exploring the edges of an existing conceptual space | **Partial** — requires semantic clustering and boundary detection |
 | Transformational | Breaking and restructuring conceptual space | **No** — requires world model and meta-reasoning beyond scope |
 
-**Target:** Combinational creativity. It's the lowest-hanging fruit and directly enabled by our 100% embedding coverage from COS-231.
+**Target:** Combinational creativity. It's the lowest-hanging fruit and directly enabled by our 100% embedding coverage from internal-ref.
 
 ### 1.3 Bisociation (Koestler, 1964)
 
@@ -100,7 +100,7 @@ Mapping: For memories with `importance > 0.8` (proxied by `recalled_count > 5` A
 
 ### 2.1 Existing columns we can reuse
 
-The `memories` schema (after COS-196, COS-231 migrations) already has:
+The `memories` schema (after internal-ref, internal-ref migrations) already has:
 
 | Column | Dream Pass Use |
 |---|---|
@@ -207,8 +207,8 @@ import random
 from datetime import datetime, timezone
 from typing import Optional
 
-DB_PATH = "/Users/r4vager/agentmemory/db/brain.db"
-CYCLE_AGENT_ID = "paperclip-engram"
+DB_PATH = "brain.db"
+CYCLE_AGENT_ID = "task-tracker-engram"
 
 # Tunable thresholds
 BISOCIATION_SIMILARITY_THRESHOLD = 0.70   # cosine sim; distance < 0.30
@@ -240,7 +240,7 @@ def find_bisociation_candidates(
     # Load sqlite-vec extension if not already loaded
     try:
         conn.enable_load_extension(True)
-        conn.load_extension("/Users/r4vager/agentmemory/bin/vec0")
+        conn.load_extension("vec0")
     except Exception:
         pass  # already loaded or not available
 
@@ -764,7 +764,7 @@ The `trust_score` and `confidence` fields distinguish synthetic from real:
 |---|---|---|
 | P0 | Create `deferred_queries` table (migration 010) | Hippocampus |
 | P0 | Create `dream_pass_log` table (migration 011) | Hippocampus |
-| P1 | Add `09_creative_synthesis.py` to `~/agentmemory/research/` | Hippocampus |
+| P1 | Add `09_creative_synthesis.py` to `research/` | Hippocampus |
 | P1 | Wire `run_dream_pass` param into `05_consolidation_cycle.py` | Hippocampus |
 | P2 | Add `brainctl dream` subcommands to `~/agentmemory/bin/brainctl` | Recall |
 | P2 | Add `--include-synthetic` flag to `brainctl search` | Recall |
@@ -792,6 +792,6 @@ The `trust_score` and `confidence` fields distinguish synthetic from real:
 
 The consolidation cycle has mature maintenance capabilities but lacks generative capacity. The dream pass closes that gap with four additive mechanisms: bisociation, incubation, serendipity, and generative replay. All are optional, all produce explicitly-labeled synthetic outputs, and all have safe fallbacks.
 
-The highest-value mechanism to implement first is bisociation: it directly exploits the 100% embedding coverage achieved in COS-231, requires no LLM, and produces reviewable output. At 39 active memories across diverse agent scopes, the first dry run is likely to surface at least 3–5 genuinely surprising cross-domain connections.
+The highest-value mechanism to implement first is bisociation: it directly exploits the 100% embedding coverage achieved in internal-ref, requires no LLM, and produces reviewable output. At 39 active memories across diverse agent scopes, the first dry run is likely to surface at least 3–5 genuinely surprising cross-domain connections.
 
 The brain learns. Now it can dream.

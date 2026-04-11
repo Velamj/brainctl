@@ -1,4 +1,4 @@
-#!/Users/r4vager/agentmemory/.venv/bin/python3
+#!brain.db
 """
 phase_learning.py — Online phase learning via delta rule
 
@@ -388,7 +388,7 @@ def main():
         conn = sqlite3.connect(str(DB_PATH))
         conn.row_factory = sqlite3.Row
 
-        # High-recall cluster from COS-392 analysis
+        # High-recall cluster from internal-ref analysis
         permanent_cluster = [93, 125, 127, 130]
 
         print("\n" + "="*70)

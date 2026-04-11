@@ -1,6 +1,6 @@
 # Query Intent Classification — Understand What Agents Need
 
-**COS-417 | Wave 13 | Author: Recall (paperclip-recall)**
+**internal-ref | Wave 13 | Author: Recall (task-tracker-recall)**
 **Status: IMPLEMENTED**
 
 ---
@@ -23,7 +23,7 @@ format results appropriately.
 
 ### Corpus
 
-341 unique queries from `access_log` spanning March–April 2026. Agents: `paperclip-recall`
+341 unique queries from `access_log` spanning March–April 2026. Agents: `task-tracker-recall`
 (370 total calls), `unknown` (128), `hermes` (17), `openclaw` (9), `Aegis` (4).
 
 ### Observed Query Taxonomy
@@ -33,10 +33,10 @@ format results appropriately.
 | `research_concept` | 109 | 32% | "Bayesian confidence memory brain", "active inference free energy friston" |
 | `factual_lookup` (unclassified) | 58 | 17% | "memory count active", "agent:weaver:current_task" |
 | `troubleshooting` | 63 | 18% | "checkout returned 409 conflict error", "scope filter bug" |
-| `task_status` | 46 | 13% | "pending work costclock", "heartbeat assignments" |
-| `entity_lookup` | 19 | 6% | "Kokoro", "M&I Division agents" |
-| `cross_reference` | 19 | 6% | "COS-354 Bayesian beta confidence", billing hotfix COS-288" |
-| `orientation` | 11 | 3% | "current priority goal", "project status costclock" |
+| `task_status` | 46 | 13% | "pending work example-app", "heartbeat assignments" |
+| `entity_lookup` | 19 | 6% | "agent-1", "M&I Division agents" |
+| `cross_reference` | 19 | 6% | "internal-ref Bayesian beta confidence", billing hotfix internal-ref" |
+| `orientation` | 11 | 3% | "current priority goal", "project status example-app" |
 | `historical_timeline` | 9 | 3% | "wave 7 weaver context ingestion", "recent heartbeat" |
 | `decision_rationale` | 6 | 2% | "deploy on friday", "branch policy feature branches" |
 | `how_to` | 1 | 0% | "how to deploy the app" |
@@ -145,8 +145,8 @@ clearly expected result types. Metric: does the top-1 result match the expected 
 | "wave 7 weaver context ingestion" | events | events (1st) ✓ | events (1st) ✓ |
 | "how to deploy the app" | memories | memories (1st) ✓ | memories (1st) ✓ |
 | "pending work tasks" | events | memories (1st) | events (1st) ✓ |
-| "COS-221 causal event graph" | events | events (1st) ✓ | events (1st) ✓ |
-| "Kokoro" | memories | memories (1st) ✓ | memories (1st) ✓ |
+| "internal-ref causal event graph" | events | events (1st) ✓ | events (1st) ✓ |
+| "agent-1" | memories | memories (1st) ✓ | memories (1st) ✓ |
 | "distillation and memory consolidation pipeline" | memories | memories (1st) ✓ | memories (1st) ✓ |
 | "sentinel validate integrity" | events | memories (1st) | events (1st) ✓ |
 | "heartbeat dispatch backlog" | events | memories (1st) | events (1st) ✓ |
@@ -228,7 +228,7 @@ Feed these into a correction dataset to tune rule thresholds or add new rules.
 
 ## Prior Art
 
-- [COS-229](/COS/issues/COS-229): Memory Retrieval Utility analysis — baseline retrieval quality
-- [COS-205](/COS/issues/COS-205): Embedding-First Writes — hybrid BM25+vector
-- [COS-201](/COS/issues/COS-201): Adaptive Retrieval Weights — salience-based reranking
-- [COS-416](/COS/issues/COS-416): Graph Algorithms — knowledge_edges for graph-augmented reranking
+- : Memory Retrieval Utility analysis — baseline retrieval quality
+- : Embedding-First Writes — hybrid BM25+vector
+- : Adaptive Retrieval Weights — salience-based reranking
+- : Graph Algorithms — knowledge_edges for graph-augmented reranking

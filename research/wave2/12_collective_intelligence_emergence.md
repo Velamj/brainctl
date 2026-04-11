@@ -1,6 +1,6 @@
 # Collective Intelligence Emergence — Making 178 Agents Smarter Than the Sum of Parts
-## Research Report — COS-113
-**Author:** Cortex (Intelligence Synthesis Analyst)
+## Research Report — internal-ref
+**Author:** research-agent
 **Date:** 2026-03-28
 **Target:** brain.db — Collective intelligence infrastructure enabling emergent insights across 178 agents
 
@@ -14,7 +14,7 @@ This report synthesizes six research frameworks — swarm intelligence, wisdom o
 
 **Central finding:** The highest-leverage intervention is not a complex consensus algorithm or multi-agent communication protocol. It is **transactive memory completion**: building an explicit map of which agent knows what, so that queries can be routed to the agent (or combination of agents) most likely to have the answer. Wegner's transactive memory research shows that groups outperform individuals not because they all know everything, but because they know *who knows what* and route accordingly. We have 178 specialists with no directory.
 
-**Highest-impact recommendation:** Implement an `agent_capability_index` in brain.db — a structured mapping of each agent's domain expertise derived from their event and memory history. Combine with the existing route-context routing (COS-83) to enable capability-aware query routing. This is primarily a data pipeline, not a new algorithm.
+**Highest-impact recommendation:** Implement an `agent_capability_index` in brain.db — a structured mapping of each agent's domain expertise derived from their event and memory history. Combine with the existing route-context routing  to enable capability-aware query routing. This is primarily a data pipeline, not a new algorithm.
 
 ---
 
@@ -54,7 +54,7 @@ def apply_collective_reinforcement(db, window_hours=24):
 
 Scout bees communicate food source quality through waggle dance duration: better sources get longer dances, attracting more foragers. The mechanism combines **quality weighting** with **redundant signaling** to amplify good discoveries.
 
-**Applied to Hermes:** When an agent completes a task and logs a `result` event, the quality of that result should determine how widely it is broadcast to other agents. High-quality, high-confidence results should trigger a "waggle dance" — pushing the key insights to related agents' context queues (the proactive push mechanism from COS-124).
+**Applied to Hermes:** When an agent completes a task and logs a `result` event, the quality of that result should determine how widely it is broadcast to other agents. High-quality, high-confidence results should trigger a "waggle dance" — pushing the key insights to related agents' context queues (the proactive push mechanism from internal-ref).
 
 Currently, all results are logged identically regardless of quality. Adding importance weighting to the push mechanism creates a waggle-dance equivalent: the best discoveries propagate most, the routine ones stay local.
 
@@ -135,7 +135,7 @@ Three components of a TMS:
 
 **This is exactly what 178 agents need and currently lack.**
 
-The `routing_profiles_v1` agent_state key (seen in the live system) is a nascent TMS directory. Weaver's route-context system (COS-83) is an allocation mechanism. What's missing is **retrieval coordination**: when agent A needs knowledge from agent B's domain, there is no mechanism to automatically retrieve it from B's memory records.
+The `routing_profiles_v1` agent_state key (seen in the live system) is a nascent TMS directory. Weaver's route-context system  is an allocation mechanism. What's missing is **retrieval coordination**: when agent A needs knowledge from agent B's domain, there is no mechanism to automatically retrieve it from B's memory records.
 
 **Proposed TMS for brain.db:**
 
@@ -434,7 +434,7 @@ brainctl meta emergence-scan     # run convergence + cascade detection
 
 Building the `agent_expertise` table requires a scoring model. The proposed model (memory density × result quality in domain) is a reasonable heuristic, but it conflates *quantity* of experience with *quality* of expertise. The single highest-value research question is: **what is the empirical correlation between our computed expertise scores and actual retrieval quality for domain-specific queries?**
 
-Without this validation, the TMS directory will route queries to the most prolific agents, not the most accurate ones. This is the same calibration problem identified in COS-110 (metacognition) — these two research streams should converge on a shared ground truth: a benchmark query set with known expert answers, run across the agent population to measure both metacognitive calibration and collective routing accuracy.
+Without this validation, the TMS directory will route queries to the most prolific agents, not the most accurate ones. This is the same calibration problem identified in internal-ref (metacognition) — these two research streams should converge on a shared ground truth: a benchmark query set with known expert answers, run across the agent population to measure both metacognitive calibration and collective routing accuracy.
 
 ---
 

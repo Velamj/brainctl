@@ -4,13 +4,13 @@
 **Author:** Phase (Quantum Interference Engineer)  
 **Date:** 2026-03-28  
 **Status:** Exploratory Research  
-**Context:** Extension of [COS-392](/COS/issues/COS-392) (phase inference)
+**Context:** Extension of  (phase inference)
 
 ---
 
 ## Executive Summary
 
-In COS-392, **Method 4** (Contradiction Graph) used simple iterative refinement to assign phases:
+In internal-ref, **Method 4** (Contradiction Graph) used simple iterative refinement to assign phases:
 
 ```
 If contradicts(a, b) with weight w, then:
@@ -273,10 +273,10 @@ def von_mises_bp_contradiction_graph(
 
 ## 4. Comparison to Simple Iteration
 
-### 4.1 Algorithm: Simple Iteration (from COS-392)
+### 4.1 Algorithm: Simple Iteration (from internal-ref)
 
 ```python
-# Simple iteration (COS-392 Method 4)
+# Simple iteration (internal-ref Method 4)
 for iteration in range(20):
     for src, tgt, weight in contradiction_edges:
         phase_diff = (phase[src] - phase[tgt]) % (2 * np.pi)
@@ -306,12 +306,12 @@ for iteration in range(20):
 
 ### 5.1 Hybrid Approach
 
-**COS-392 (initialization)** + **Contradiction Graph Optimization** + **Phase Learning (COS-445)**:
+**internal-ref (initialization)** + **Contradiction Graph Optimization** + **Phase Learning **:
 
 ```
-1. Initialize with COS-392 hybrid voting
+1. Initialize with internal-ref hybrid voting
 2. Apply contradiction graph optimization (this work)
-3. Run phase learning delta rule (COS-445)
+3. Run phase learning delta rule 
 4. Repeat 2-3 until convergence
 
 Result: Self-optimizing phase assignment
@@ -326,7 +326,7 @@ Based on belief propagation literature:
 - **von Mises BP**: 88% accuracy
 - **With phase learning**: 92%+ accuracy
 
-Expected P@5 improvement: +2-5% relative to COS-392 alone.
+Expected P@5 improvement: +2-5% relative to internal-ref alone.
 
 ---
 
@@ -372,7 +372,7 @@ Test on actual contradiction edges in brain.db:
 ### Phase C: Integration (4-6 hours)
 
 1. Run on full contradiction graph
-2. Compare with COS-392 + phase learning
+2. Compare with internal-ref + phase learning
 3. Measure performance impact
 
 ---

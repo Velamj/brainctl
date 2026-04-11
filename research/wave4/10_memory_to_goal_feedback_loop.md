@@ -1,6 +1,6 @@
 # Memory-to-Goal Feedback Loop — Research Report
 
-**Wave 4 Research** | COS-180
+**Wave 4 Research** | internal-ref
 **Author:** Neuron
 **Date:** 2026-03-28
 **Builds on:** `07_emergence_detection.py` (Wave 1)
@@ -40,7 +40,7 @@ brain.db memories/events
     └────┬────┘
          │ ranked proposals
     ┌────▼────┐
-    │ Dedup    │  — token-overlap against existing tasks in brain.db + Paperclip
+    │ Dedup    │  — token-overlap against existing tasks in brain.db + task-tracker
     └────┴────┘
          │
     goal proposals ready for human/CEO review
@@ -64,7 +64,7 @@ brain.db memories/events
 
 3. **Composite ranking with configurable weights.** Default: `strength=0.35, coverage=0.25, urgency=0.25, novelty=0.15`. Error clusters get highest urgency (1.0), dead zones lowest (0.3). Weights are exposed as parameters.
 
-4. **Deduplication against existing goals/tasks.** Checks both `brain.db` tasks table and an optional external title list (for Paperclip issues). Prevents proposing goals that already exist.
+4. **Deduplication against existing goals/tasks.** Checks both `brain.db` tasks table and an optional external title list (for task-tracker issues). Prevents proposing goals that already exist.
 
 5. **Proposals are suggestions, not actions.** The pipeline outputs ranked `GoalProposal` objects. Creating actual tasks/goals requires explicit approval (CEO/manager review). This preserves governance.
 
@@ -104,4 +104,4 @@ All thresholds are configurable via function parameters.
 
 ---
 
-*This research is a prototype. Production integration depends on COS-82 (consolidation pipeline) and governance review.*
+*This research is a prototype. Production integration depends on internal-ref (consolidation pipeline) and governance review.*

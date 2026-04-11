@@ -1,6 +1,6 @@
 # Wave 6 Research: Memory Retrieval Utility Analysis
-**COS-229 — Why is 96% of memory never accessed?**
-Author: Recall (paperclip-recall)
+**internal-ref — Why is 96% of memory never accessed?**
+Author: Recall (task-tracker-recall)
 Date: 2026-03-28
 
 ---
@@ -59,7 +59,7 @@ for r in results:
 | `brainctl vsearch` | ❌ No | 77 | 25.1% |
 | `brainctl memory search` | ✅ Yes | 10 | 3.3% |
 
-The single memory with recalled_count=1 (id=77, Hermes/project:costclock-ai/CostClock AI product description) was found by one of the 10 `memory search` calls. The other 297 searches were invisible to recall tracking.
+The single memory with recalled_count=1 (id=77, Hermes/project:example-app/example-app product description) was found by one of the 10 `memory search` calls. The other 297 searches were invisible to recall tracking.
 
 ---
 
@@ -71,13 +71,13 @@ The single memory with recalled_count=1 (id=77, Hermes/project:costclock-ai/Cost
 
 | Query | Agent |
 |-------|-------|
-| `recent tasks` | paperclip-legion |
-| `intelligence synthesis analysis pattern` | paperclip-cortex |
-| `legion task assignment` | paperclip-legion |
-| `weaver context ingestion` | paperclip-weaver |
-| `COS sentinel-2 brainctl validate integrity` | paperclip-sentinel-2 |
-| `sentinel brainctl validate` | paperclip-sentinel-2 |
-| `recall assigned tasks search retrieval` | paperclip-recall |
+| `recent tasks` | task-tracker-legion |
+| `intelligence synthesis analysis pattern` | task-tracker-cortex |
+| `legion task assignment` | task-tracker-legion |
+| `weaver context ingestion` | task-tracker-weaver |
+| `COS sentinel-2 brainctl validate integrity` | task-tracker-sentinel-2 |
+| `sentinel brainctl validate` | task-tracker-sentinel-2 |
+| `recall assigned tasks search retrieval` | task-tracker-recall |
 
 **Analysis:** These queries use agent-specific terminology that doesn't appear in stored content. "Recent tasks" has no keyword overlap with any memory. "Intelligence synthesis analysis pattern" uses abstract composite terms not present in memory content. FTS5 requires word-level overlap — if the query words don't exist in the indexed content, no results.
 
@@ -92,7 +92,7 @@ brainctl search "recall search retrieval FTS5 vector"
 → metacognition: tier=3, "No keyword matches; 10 semantic-only results"
 ```
 
-The stored memories contain terms like "hybrid-rrf", "benchmark", "COS-86", "19/20 hit@5" — these don't appear in the query "recall search retrieval FTS5 vector".
+The stored memories contain terms like "hybrid-rrf", "benchmark", "internal-ref", "19/20 hit@5" — these don't appear in the query "recall search retrieval FTS5 vector".
 
 **Structural cause:** Agents are trained to search by task concept ("what I'm doing"), but memories are written as outcome summaries ("what was accomplished"). These two vocabularies don't overlap at the keyword level.
 
@@ -101,16 +101,16 @@ The stored memories contain terms like "hybrid-rrf", "benchmark", "COS-86", "19/
 | Query Type | FTS5 Match Rate | Example |
 |------------|----------------|---------|
 | Concept-level task description | Low | "intelligence synthesis analysis pattern" |
-| Acronym/identifier queries | High | "COS-218", "brainctl" |
+| Acronym/identifier queries | High | "internal-ref", "brainctl" |
 | Outcome term queries | Medium | "retrieval benchmark hit rate" |
-| Full-sentence queries | Zero | "CostClock is an AI workspace..." |
+| Full-sentence queries | Zero | "example-app is an AI workspace..." |
 | Combined keyword phrases | Medium-High | "metacognition gap detection" |
 
 ---
 
 ## Root Cause 4: The "Unknown" Agent — 89 Searches, All Zero Results
 
-89 of 230 searches were logged from agent_id="unknown". These searches used full sentence strings as queries (Hermes's identity/belief statements like "CostClock is an AI workspace for financial operations..." and "The Operator is the unique differentiator. Everything feeds it.").
+89 of 230 searches were logged from agent_id="unknown". These searches used full sentence strings as queries (Hermes's identity/belief statements like "example-app is an AI workspace for financial operations..." and "The Operator is the unique differentiator. Everything feeds it.").
 
 These are almost certainly the para-memory-file system (PARA memory / Claude.md project memory) dumping stored belief/identity statements into brainctl as queries. Full sentences fail FTS5 completely because they contain stop words and FTS5 rejects queries where all terms are suppressed.
 
@@ -124,7 +124,7 @@ These are almost certainly the para-memory-file system (PARA memory / Claude.md 
 
 Agents satisfy their context need from events/context (which contain operational recaps, COS issue references, heartbeat summaries) and never surface memories. Memory becomes vestigial when events/context are more query-dense.
 
-Evidence: The memory that WAS recalled (id=77, CostClock product description) is global/product knowledge — exactly the type of information NOT covered by events. Agents do use memory for stable background knowledge.
+Evidence: The memory that WAS recalled (id=77, example-app product description) is global/product knowledge — exactly the type of information NOT covered by events. Agents do use memory for stable background knowledge.
 
 ---
 
@@ -231,7 +231,7 @@ Update AGENTS.md query guidance to favor identifier terms and concrete nouns:
 brainctl search "intelligence synthesis analysis pattern"
 
 # Good (COS identifiers, concrete nouns):
-brainctl search "COS-218 gap detection"
+brainctl search "internal-ref gap detection"
 
 # Good (outcome terms from memory content):
 brainctl search "hippocampus consolidation cycle"
@@ -254,7 +254,7 @@ Current behavior: result_count logs total across all tables. Agents can't tell i
 
 Agents currently search memory once at heartbeat start. High-value memories (architecture decisions, standing rules, project context) should be accessible throughout the task. Options:
 - Add memory poll to route-context so relevant memories surface at task checkout time
-- Implement `brainctl push --task <identifier>` auto-trigger on checkout (COS-124 foundation exists)
+- Implement `brainctl push --task <identifier>` auto-trigger on checkout (internal-ref foundation exists)
 
 ### P3: Memory Content Design Audit
 
@@ -289,6 +289,6 @@ Memory itself is sound. The architecture, scoring, and temporal weighting are wo
 
 ---
 
-*Research output: ~/agentmemory/research/wave6/17_retrieval_utility_analysis.md*
+*Research output: research/wave6/17_retrieval_utility_analysis.md*
 *Benchmark context: ~/agentmemory/benchmarks/retrieval_benchmark_v1.py*
-*Related: COS-201 (adaptive weights), COS-205 (embedding coverage), COS-218 (gap detection)*
+*Related: internal-ref (adaptive weights), internal-ref (embedding coverage), internal-ref (gap detection)*

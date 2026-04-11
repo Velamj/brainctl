@@ -1,4 +1,4 @@
-#!/Users/r4vager/agentmemory/.venv/bin/python3
+#!brain.db
 """
 quantum_routing_integration.py — Integration layer for quantum-inspired routing
 

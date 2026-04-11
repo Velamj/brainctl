@@ -2,7 +2,7 @@
 
 Governs automated promotion of high-signal events to durable memories.
 
-**Last revised:** 2026-03-28 — COS-323 architect decision (Kokoro). See changelog at bottom.
+**Last revised:** 2026-03-28 — internal-ref architect decision (agent). See changelog at bottom.
 
 ## Rules
 
@@ -40,7 +40,7 @@ Governs automated promotion of high-signal events to durable memories.
 ### Scope Derivation
 
 - If event has `project` field AND event type is `observation` or `handoff`: use `project:{event.project}` ONLY if a more specific agent/topic scope applies; otherwise fall back to `agent:{agent_id}` or `global`
-- If event has `project` field AND event type is `result`, `decision`, `session_end`: prefer `agent:{agent_id}` scope to avoid scope HHI concentration in `project:costclock-ai`
+- If event has `project` field AND event type is `result`, `decision`, `session_end`: prefer `agent:{agent_id}` scope to avoid scope HHI concentration in `project:example-app-ai`
 - Otherwise: `global`
 - **HHI guard rule:** No single scope should exceed 40% of active memories; if promoted memory would push top scope past 40%, assign `agent:{agent_id}` instead
 
@@ -91,11 +91,11 @@ Track after each distillation pass:
 | Date | Change | Reason | Authority |
 |------|--------|--------|-----------|
 | 2026-03-28 | Threshold lowered 0.7 → 0.6, event-type filter removed | Attempt to improve distillation ratio | Engram (auto) |
-| 2026-03-28 | **Threshold raised back to 0.8, event-type filter restored** (COS-323) | Low threshold produced avg confidence 0.51, scope HHI rose to 0.60 RED, 50 operational noise memories promoted | Kokoro (COS-323 architect decision) |
-| 2026-03-28 | **50 operational noise memories retired** (COS-323) | Hippocampus reclassification logs were promoted as `project` category memories, polluting scope diversity and dragging avg confidence below SLO | Kokoro (COS-323) |
-| 2026-03-28 | **Scope derivation rule updated** — prefer `agent:` scope over `project:` for result/decision/session_end events | Prevent single-project scope concentration | Kokoro (COS-323) |
-| 2026-03-28 | **SLO targets recalibrated** — distillation ratio lowered to ≥5%, engagement to ≥15%, category HHI relaxed to ≤0.45 | Align targets with realistic empirical baseline | Kokoro (COS-323) |
-| 2026-03-28 | **Two-tier distillation** (COS-333): threshold 0.7 for core types, 0.85 for observation/task_update/warning. Catch-up pass at 0.5 promoted 241 events. FK guard added to skip orphaned agent_ids. | Coverage was 0.012 (RED) with only 10 active linked memories; COS-323's 0.8 threshold left only 1 promotable event. Broadened types with strict whitelist (no operational noise). | Kernel (COS-333) |
+| 2026-03-28 | **Threshold raised back to 0.8, event-type filter restored** (internal-ref) | Low threshold produced avg confidence 0.51, scope HHI rose to 0.60 RED, 50 operational noise memories promoted | agent (internal-ref architect decision) |
+| 2026-03-28 | **50 operational noise memories retired** (internal-ref) | Hippocampus reclassification logs were promoted as `project` category memories, polluting scope diversity and dragging avg confidence below SLO | agent (internal-ref) |
+| 2026-03-28 | **Scope derivation rule updated** — prefer `agent:` scope over `project:` for result/decision/session_end events | Prevent single-project scope concentration | agent (internal-ref) |
+| 2026-03-28 | **SLO targets recalibrated** — distillation ratio lowered to ≥5%, engagement to ≥15%, category HHI relaxed to ≤0.45 | Align targets with realistic empirical baseline | agent (internal-ref) |
+| 2026-03-28 | **Two-tier distillation** (internal-ref): threshold 0.7 for core types, 0.85 for observation/task_update/warning. Catch-up pass at 0.5 promoted 241 events. FK guard added to skip orphaned agent_ids. | Coverage was 0.012 (RED) with only 10 active linked memories; internal-ref's 0.8 threshold left only 1 promotable event. Broadened types with strict whitelist (no operational noise). | agent (internal-ref) |
 
 ## Feature Gates
 
@@ -103,10 +103,10 @@ Gates that depend on active memory count being sufficient for low-noise operatio
 
 | Feature | Gate Threshold | Status | Notes |
 |---------|---------------|--------|-------|
-| `brainctl push` (Proactive Memory Push) | **40 active memories** | ✅ MET (40 as of 2026-03-28) | Original threshold was 50; lowered to 40 by Chief (local-board) on 2026-03-28 after pipeline confirmed healthy. Implementation tracked in COS-194. |
+| `brainctl push` (Proactive Memory Push) | **40 active memories** | ✅ MET (40 as of 2026-03-28) | Original threshold was 50; lowered to 40 by maintainer on 2026-03-28 after pipeline confirmed healthy. Implementation tracked in internal-ref. |
 
 ### Gate History
 
 - **2026-03-28**: `brainctl push` gate originally set at 50 active memories (conservative estimate before write rate was known).
-- **2026-03-28 09:53 UTC**: Chief (local-board) lowered gate to 40. Reasoning: distillation pipeline confirmed active, sqlite-vec installed, 40 memories is substantive enough to avoid noise risk, and research waves continue growing the base organically.
-- **2026-03-28**: Gate cleared at 40 active memories. Weaver cleared to begin COS-194 implementation.
+- **2026-03-28 09:53 UTC**: maintainer lowered gate to 40. Reasoning: distillation pipeline confirmed active, sqlite-vec installed, 40 memories is substantive enough to avoid noise risk, and research waves continue growing the base organically.
+- **2026-03-28**: Gate cleared at 40 active memories. agent cleared to begin internal-ref implementation.

@@ -1,7 +1,7 @@
 # Attention Economics — Cognitive Resource Allocation Across 178 Agents
 
 **Author:** Weaver (Context Integration Engineer)
-**Task:** [COS-345](/COS/issues/COS-345)
+**Task:** 
 **Date:** 2026-03-28
 **DB State:** 22MB brain.db · 122 active memories · 1,117 events · 4,718 edges · 178 agents
 **Project:** Cognitive Architecture & Enhancement
@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-With 178 agents, 122 active memories, and a proven protocol cost of ~42K tokens for a full orientation pass (wave9, [COS-322](/COS/issues/COS-322)), the brain.db system has outgrown flat-access patterns. Herbert Simon's foundational insight applies directly: *"a wealth of information creates a poverty of attention."* This document designs a **formal Attention Budget System (ABS)** — a compute-aware allocation layer that governs how brain.db distributes cognitive resources across agents, queries, and consolidation passes within fixed constraints.
+With 178 agents, 122 active memories, and a proven protocol cost of ~42K tokens for a full orientation pass (wave9, ), the brain.db system has outgrown flat-access patterns. Herbert Simon's foundational insight applies directly: *"a wealth of information creates a poverty of attention."* This document designs a **formal Attention Budget System (ABS)** — a compute-aware allocation layer that governs how brain.db distributes cognitive resources across agents, queries, and consolidation passes within fixed constraints.
 
 **Key findings:**
 - At 178 agents × 15 heartbeats/day, the system processes ~2,670 heartbeat orientations/day
@@ -128,7 +128,7 @@ Define four attention classes based on role criticality and activity level:
 | Class | Profile | Protocol Tier | Orientation Budget | Examples |
 |-------|---------|---------------|-------------------|----------|
 | **A — Executive** | CEO, Chief, high-urgency escalations | Full (pruned) | ~12K tokens | Hermes, CEO |
-| **B — Active IC** | In-progress tasks, assigned work | Standard | ~4K tokens | Weaver, Recall, Kokoro |
+| **B — Active IC** | In-progress tasks, assigned work | Standard | ~4K tokens | Weaver, Recall, agent-1 |
 | **C — Idle IC** | No active tasks, waiting | Minimal | ~1K tokens | Parked agents |
 | **D — Observational** | Monitoring, health checks only | Heartbeat-only | ~200 tokens | Hippocampus (maintenance runs) |
 
@@ -364,7 +364,7 @@ novelty_injection:
 
 ## 6. Connection to Wave9 Findings
 
-This research directly extends wave9 ([COS-322](/COS/issues/COS-322), `27_cognitive_protocol_overhead.md`):
+This research directly extends wave9 (, `27_cognitive_protocol_overhead.md`):
 
 - Wave9 measured *what existing commands cost* and identified the 2K fast tier
 - Wave10 designs *how to allocate* those costs across 178 agents systematically
@@ -374,5 +374,5 @@ Together they form a complete attention architecture: wave9 = pricing, wave10 = 
 
 ---
 
-*Deliver to: `~/agentmemory/research/wave10/28_attention_economics.md`*
-*Linked task: [COS-345](/COS/issues/COS-345)*
+*Deliver to: `research/wave10/28_attention_economics.md`*
+*Linked task: *

@@ -1,4 +1,4 @@
-#!/Users/r4vager/agentmemory/.venv/bin/python3
+#!brain.db
 """
 quantum_amplitude_scorer.py — Quantum-inspired memory retrieval algorithm
 
@@ -6,7 +6,7 @@ Replaces classical salience formula with quantum probability amplitude scoring.
 Enables constructive/destructive interference, density matrix ranking, and
 quantum walk-based graph search.
 
-Author: Amplitude (COS-383)
+Author: Amplitude 
 Research basis: Sordoni et al (2013), Uprety et al. Quantum Information Retrieval
 """
 

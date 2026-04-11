@@ -1,7 +1,7 @@
 # AGM Belief Revision — Principled Contradiction Resolution Framework
 
 **Research Wave:** 12
-**Ticket:** COS-363
+**Ticket:** internal-ref
 **Author:** Sentinel 2 (Memory Integrity Monitor)
 **Date:** 2026-03-28
 **Status:** Complete
@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-When `coherence-check` flags a contradiction between two memories, there is currently no algorithm for resolving it — the contradiction persists, agents may recall either belief depending on query phrasing, and the Bayesian Beta(α,β) confidence system (COS-354) will diverge if both memories keep accumulating evidence.
+When `coherence-check` flags a contradiction between two memories, there is currently no algorithm for resolving it — the contradiction persists, agents may recall either belief depending on query phrasing, and the Bayesian Beta(α,β) confidence system  will diverge if both memories keep accumulating evidence.
 
 This report maps the **AGM belief revision framework** (Alchourrón, Gärdenfors, Makinson 1985) to brain.db primitives, defines a concrete resolution algorithm, and specifies `brainctl resolve-conflict` as the implementation target.
 
@@ -60,7 +60,7 @@ Each memory row exposes multiple confidence/trust signals:
 | `retracted_at` | TEXT | Soft retraction timestamp |
 | `retraction_reason` | TEXT | Why retracted |
 
-### 1.3 agent_expertise (COS-357)
+### 1.3 agent_expertise 
 
 The `agent_expertise` table tracks per-agent domain expertise with Brier scores for calibration:
 
@@ -68,7 +68,7 @@ The `agent_expertise` table tracks per-agent domain expertise with Brier scores 
 agent_id | domain | strength | evidence_count | brier_score
 ```
 
-Example: `paperclip-sentinel-2 | integrity | 0.85 | 3 | 0.12`
+Example: `task-tracker-sentinel-2 | integrity | 0.85 | 3 | 0.12`
 
 Lower Brier score = better calibrated. This is the key signal for **provenance-weighted revision**.
 
@@ -312,7 +312,7 @@ This spec requires adding `supersedes` to the set of valid `knowledge_edges.rela
 
 ---
 
-## 5. Integration with COS-357 (agent_expertise)
+## 5. Integration with internal-ref (agent_expertise)
 
 ### 5.1 Domain Inference
 
@@ -338,7 +338,7 @@ calibrated_expertise = strength × (1 - brier_score)
 
 | Agent | Domain | strength | brier_score | calibrated |
 |---|---|---|---|---|
-| paperclip-sentinel-2 | integrity | 0.85 | 0.12 | 0.748 |
+| task-tracker-sentinel-2 | integrity | 0.85 | 0.12 | 0.748 |
 | hermes | memory | 0.71 | NULL → 0.50 | 0.354 |
 
 Sentinel 2 is more credible on integrity topics than Hermes, by this measure.
@@ -373,8 +373,8 @@ Two governance decisions (both `temporal_class = 'permanent'`) contradict each o
 - Memory 93: "Agent memory spine: 22 active agents, 9 active memories"
 
 These aren't contradictory (different facts), but imagine:
-- Memory A (permanent): "CostClock branch policy: agents push directly to main"
-- Memory B (permanent): "CostClock branch policy: agents work on feature branches only"
+- Memory A (permanent): "example-app branch policy: agents push directly to main"
+- Memory B (permanent): "example-app branch policy: agents work on feature branches only"
 
 These directly contradict and both are permanent.
 
@@ -409,7 +409,7 @@ The `conflicts_with` edge type (currently absent from the graph) serves as a **p
 If both permanent memories are valid in different contexts, the resolution is to **scope-constrain** one:
 
 ```sql
-UPDATE memories SET scope = 'project:costclock-ai:pre-jan-2026'
+UPDATE memories SET scope = 'project:example-app:pre-jan-2026'
 WHERE id = older_memory_id;
 ```
 
@@ -421,17 +421,17 @@ Then insert a new memory explaining the policy split. Neither memory is retired 
 
 Running the algorithm against the 3 current WARNING findings from `coherence-check`:
 
-### Finding #1: epoch ↔ paperclip-recall (15% topic overlap)
+### Finding #1: epoch ↔ task-tracker-recall (15% topic overlap)
 - Conflict type: likely `factual` or `staleness`
 - Auto-resolvable if `delta >= 0.05`
 - Expected: recency + evidence_mass should distinguish
 
-### Finding #2: epoch ↔ paperclip-weaver (15% topic overlap)
+### Finding #2: epoch ↔ task-tracker-weaver (15% topic overlap)
 - Same as above
 
-### Finding #3: openclaw ↔ paperclip-weaver (19% topic overlap)
+### Finding #3: openclaw ↔ task-tracker-weaver (19% topic overlap)
 - Higher overlap — more likely a real contradiction
-- openclaw has `strength=0.85` on task domains; paperclip-weaver is project-focused
+- openclaw has `strength=0.85` on task domains; task-tracker-weaver is project-focused
 - Domain-specific expertise should break the tie
 
 All three are in the auto-resolvable tier given their topic overlap scores (below the threshold for permanent conflicts), assuming neither memory involved is `temporal_class = 'permanent'`.
@@ -456,9 +456,9 @@ All three are in the auto-resolvable tier given their topic overlap scores (belo
 
 The weights `w1=0.30, w2=0.25, w3=0.20, w4=0.20, w5=0.05` are initial estimates. After 20+ resolutions, Sentinel 2 should run a Brier-score retrospective on its own resolution decisions to calibrate weights empirically.
 
-### Interaction with COS-354 (Bayesian Beta Confidence)
+### Interaction with internal-ref (Bayesian Beta Confidence)
 
-When COS-354's Beta accumulation is active, contradictory beliefs sharing the same topic key will both accumulate α evidence from corroborating agents. This divergence is detectable: if two memories with overlapping topics both have `alpha > 2` (more than 1 positive update) and no `supersedes_id` relationship, flag as priority resolution candidate. The `evidence_mass` component of the credibility score naturally handles this — the memory with more accumulated evidence wins.
+When internal-ref's Beta accumulation is active, contradictory beliefs sharing the same topic key will both accumulate α evidence from corroborating agents. This divergence is detectable: if two memories with overlapping topics both have `alpha > 2` (more than 1 positive update) and no `supersedes_id` relationship, flag as priority resolution candidate. The `evidence_mass` component of the credibility score naturally handles this — the memory with more accumulated evidence wins.
 
 ---
 
@@ -494,8 +494,8 @@ credibility(B) = 0.30×0.70 + 0.25×(1.1/2.0) + 0.20×exp(-0.30) + 0.20×0.354 +
 delta = 0.238  ← well above 0.05 threshold → auto-resolve, A wins
 ```
 
-B is retired with `retraction_reason = "resolved: contradiction with memory A (COS-363 algorithm, delta=0.238)"`.
+B is retired with `retraction_reason = "resolved: contradiction with memory A (internal-ref algorithm, delta=0.238)"`.
 
 ---
 
-*Sentinel 2 — COS-363 — 2026-03-28*
+*Sentinel 2 — internal-ref — 2026-03-28*

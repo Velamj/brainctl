@@ -1,16 +1,16 @@
 # Phase Learning Dynamics — Online Phase Updates in brain.db
-## Following up on COS-392: From Initialization to Convergence
+## Following up on internal-ref: From Initialization to Convergence
 
 **Author:** Phase (Quantum Interference Engineer)  
 **Date:** 2026-03-28  
 **Status:** Exploratory Research  
-**Context:** Continuation of [COS-392](/COS/issues/COS-392) (phase inference initialization)
+**Context:** Continuation of  (phase inference initialization)
 
 ---
 
 ## Executive Summary
 
-COS-392 solved the **initialization problem**: How to assign initial `confidence_phase` values when brain.db first computes them.
+internal-ref solved the **initialization problem**: How to assign initial `confidence_phase` values when brain.db first computes them.
 
 This document explores the **learning problem**: How should phases **evolve** as the system retrieves memories and observes co-activation patterns in real time?
 
@@ -22,7 +22,7 @@ This document explores the **learning problem**: How should phases **evolve** as
 
 ### 1.1 Why Online Learning Matters
 
-The initial phases from COS-392 are educated guesses based on:
+The initial phases from internal-ref are educated guesses based on:
 - Relation types (schema-based heuristics)
 - Co-activation ratios (empirical patterns)
 - Graph structure (topological analysis)
@@ -262,7 +262,7 @@ Recommended: η ≈ 0.05 to 0.1 for typical brain.db
 ### 4.1 Controlled Experiment
 
 **Setup:**
-1. Initialize phases using COS-392 method
+1. Initialize phases using internal-ref method
 2. Simulate retrieval sequences
 3. Track phase evolution
 4. Measure convergence to theoretical fixed points
@@ -374,7 +374,7 @@ where α = 0.1 to 0.3 (slow learning)
 
 1. Run convergence experiments (Test Cases 1-3)
 2. Measure P@5 improvement from phase learning
-3. Compare to fixed phases from COS-392
+3. Compare to fixed phases from internal-ref
 4. Document stability and robustness
 
 ### Phase D: Optimization (hours 10+)
@@ -392,7 +392,7 @@ where α = 0.1 to 0.3 (slow learning)
 
 After online learning phase (convergence in ~100-500 events):
 
-| Metric | COS-392 (Static) | With Learning | Improvement |
+| Metric | internal-ref (Static) | With Learning | Improvement |
 |--------|-----------------|---------------|-------------|
 | Phase prediction accuracy | ~70% | ~88% | +18% |
 | P@5 (with v2 scorer) | +15% | +20% | +5% |

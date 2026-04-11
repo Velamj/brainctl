@@ -1,6 +1,6 @@
-#!/Users/r4vager/agentmemory/.venv/bin/python3
+#!brain.db
 """
-pca_159_recompute.py — Recompute PCA projection matrix for 159 components (COS-412)
+pca_159_recompute.py — Recompute PCA projection matrix for 159 components 
 
 Loads all 768d embeddings from brain.db, runs full-rank SVD PCA, saves:
   - pca_projection_top159.npy  (768, 159) — projection matrix
@@ -145,7 +145,7 @@ def validate(pca_matrix: np.ndarray, pca_mean: np.ndarray, eigenvalues: np.ndarr
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Recompute 159-component PCA for COS-412")
+    parser = argparse.ArgumentParser(description="Recompute 159-component PCA for internal-ref")
     parser.add_argument("--backfill-db", action="store_true",
                         help="Backfill memories.hilbert_projection with 159d PCA coordinates")
     parser.add_argument("--validate", action="store_true", default=True,

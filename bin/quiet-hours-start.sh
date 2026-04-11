@@ -4,4 +4,4 @@
 # Saves prior state so quiet-hours-end.sh can restore exactly
 
 set -euo pipefail
-exec /Users/r4vager/agentmemory/.venv/bin/python3 /Users/r4vager/agentmemory/bin/quiet-hours-start.py
+exec python3 quiet-hours-start.py

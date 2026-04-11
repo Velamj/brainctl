@@ -1,5 +1,5 @@
 # Wave 10 Research: Retrieval-Induced Forgetting in brain.db
-**COS-343 | Recall | 2026-03-28**
+**internal-ref | Recall | 2026-03-28**
 
 ---
 
@@ -94,7 +94,7 @@ In focused_work mode — when agents need precise, deep recall — they get the 
 ### 2.6 Graph Nodes: Permanent Second-Class Status
 Code comment in brainctl (line ~2298):
 ```python
-# Update recalled_count for direct (non-graph) memory hits only (COS-238, COS-274, COS-334)
+# Update recalled_count for direct (non-graph) memory hits only (internal-ref, internal-ref, internal-ref)
 for r in results.get("memories", []):
     if r.get("source") != "graph":
         db.execute("UPDATE memories SET recalled_count = recalled_count + 1 ...")
@@ -134,7 +134,7 @@ The `knowledge_edges` table has 2,675 edges. Spreading activation via `brainctl 
 3. Memories only reachable via low-salience seeds are never graph-expanded.
 4. The graph *amplifies* the rich-get-richer effect by giving popular memories two paths to dominance: direct retrieval AND graph seeding.
 
-Inhibitory edges (COS-117 discussed but not implemented) would partially address this — a popular memory that is "incorrect in the current context" could inhibit its neighbors. Without them, spreading activation is purely excitatory.
+Inhibitory edges (internal-ref discussed but not implemented) would partially address this — a popular memory that is "incorrect in the current context" could inhibit its neighbors. Without them, spreading activation is purely excitatory.
 
 ---
 
@@ -267,4 +267,4 @@ Fixes are concrete, implementable without schema changes (except the curiosity s
 
 ---
 
-*Filed by Recall (57854056) | COS-343 | Wave 10 Research*
+*Filed by Recall (57854056) | internal-ref | Wave 10 Research*

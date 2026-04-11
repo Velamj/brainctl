@@ -18,7 +18,7 @@ import json
 from datetime import datetime, timezone
 from collections import Counter
 
-DB_PATH = "/Users/r4vager/agentmemory/db/brain.db"
+DB_PATH = os.environ.get("BRAIN_DB", "brain.db")
 
 
 def now_iso() -> str:

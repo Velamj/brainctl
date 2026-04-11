@@ -1,4 +1,4 @@
-#!/Users/r4vager/agentmemory/.venv/bin/python3
+#!/usr/bin/env python3
 """
 reclassify_temporal.py — Migration script to repair temporal_class distribution.
 
@@ -11,7 +11,7 @@ Usage:
 Safe to re-run: uses explicit WHERE conditions, never downgrades intentionally
 promoted memories, and skips 'permanent' entries entirely.
 
-Author: Engram (COS-230)
+Author: Engram (internal-ref)
 """
 
 import sqlite3
@@ -23,7 +23,7 @@ from pathlib import Path
 DB_PATH = Path.home() / "agentmemory" / "db" / "brain.db"
 
 # Category -> initial temporal_class mapping
-# Source: hippocampus.py five-tier design spec + COS-230 analysis
+# Source: hippocampus.py five-tier design spec + internal-ref analysis
 CATEGORY_CLASS_MAP = {
     "identity": "long",
     "convention": "long",

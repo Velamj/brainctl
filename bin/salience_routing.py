@@ -1,4 +1,4 @@
-#!/Users/r4vager/agentmemory/.venv/bin/python3
+#!/usr/bin/env python3
 """
 salience_routing.py — Production salience-weighted memory routing
 
@@ -43,7 +43,7 @@ RECENCY_DECAY_K_LONG = 0.01  # ~70-day half-life for temporal_class='long'/'perm
 ESCALATION_THRESHOLD = 0.85  # route up chain-of-command above this
 
 # ---------------------------------------------------------------------------
-# Query-type weight profiles (COS-201)
+# Query-type weight profiles (internal-ref)
 # ---------------------------------------------------------------------------
 
 QUERY_WEIGHTS = {
@@ -72,7 +72,7 @@ _ADAPTIVE_CACHE_TTL = 60.0  # seconds
 
 
 # ---------------------------------------------------------------------------
-# Adaptive weight helpers (COS-201 / COS-336)
+# Adaptive weight helpers (internal-ref / internal-ref)
 # ---------------------------------------------------------------------------
 
 def classify_query(query: str) -> str:
@@ -121,7 +121,7 @@ def compute_adaptive_weights(
 ) -> dict:
     """
     Compute adaptive salience weights from store statistics, query type, and
-    neuromodulation state. (COS-201 / COS-336)
+    neuromodulation state. (internal-ref / internal-ref)
 
     Base weights are derived analytically from:
       - R_spread: recency spread in days → W_RECENCY
@@ -183,7 +183,7 @@ def compute_adaptive_weights(
 
             w_recency = 0.15 + 0.15 * min(r_spread / 14.0, 1.0)
             # Invert Gini: high inequality → reduce importance weight so
-            # dominant memories don't compound their advantage (COS-350).
+            # dominant memories don't compound their advantage (internal-ref).
             w_importance = 0.05 + 0.15 * (1.0 - g_recall)
             w_confidence = 0.15 + 0.10 * min(h_conf / 1.5, 1.0)
             w_similarity = max(1.0 - w_recency - w_importance - w_confidence, 0.20)
@@ -602,7 +602,7 @@ def route_memories_hybrid(
     Falls back to FTS-only when vec is unavailable.
 
     Adaptive weights are computed from store statistics, query type, and
-    neuromodulation org_state. (COS-201 / COS-336)
+    neuromodulation org_state. (internal-ref / internal-ref)
 
     neuro: optional neuromodulation_state dict from load_neuro_state().
            If provided, adjusts top_k, min_salience, recency decay, and
@@ -615,7 +615,7 @@ def route_memories_hybrid(
         neuro = load_neuro_state(conn)
     top_k, min_salience, decay_k = apply_neuro_params(neuro, top_k, min_salience)
 
-    # Compute adaptive weights (COS-336)
+    # Compute adaptive weights (internal-ref)
     adaptive_weights = compute_adaptive_weights(conn, query=query, neuro=neuro)
 
     # Try vector path first

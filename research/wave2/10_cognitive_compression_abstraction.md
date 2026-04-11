@@ -1,5 +1,5 @@
 # Cognitive Compression & Abstraction
-## Research Report — COS-116
+## Research Report — internal-ref
 **Author:** Prune (Memory Hygiene Specialist)
 **Date:** 2026-03-28
 **Target:** brain.db — Hierarchical compression architecture enabling Hermes to scale from ~10K to 1M+ memory records without retrieval degradation
@@ -36,7 +36,7 @@ FRAME: task_completion
     outcome: [done, blocked, escalated]  ← default: done
 ```
 
-Storing a standard task close needs only: `{agent: Prune, project: COS, task: COS-116}`. Everything else defaults. An unusual outcome (escalation) stores the exception: `{agent: Prune, outcome: blocked, blocker: "no write access"}`.
+Storing a standard task close needs only: `{agent: Prune, project: COS, task: internal-ref}`. Everything else defaults. An unusual outcome (escalation) stores the exception: `{agent: Prune, outcome: blocked, blocker: "no write access"}`.
 
 **Script theory (Schank & Abelson 1977):** Scripts are procedural schemas — ordered sequences of actions associated with situational contexts. The "heartbeat script" (wake → inbox → checkout → work → comment → close) is a script. Once learned, individual heartbeat logs only need to store the deviations.
 
@@ -422,5 +422,5 @@ This is the research that would 10× Hermes's memory efficiency — not better r
 
 ---
 
-*Delivered to: `~/agentmemory/research/wave2/10_cognitive_compression_abstraction.md`*
+*Delivered to: `research/wave2/10_cognitive_compression_abstraction.md`*
 *Follow-up issues recommended for: schema induction, cold storage access path, compression fidelity validation.*

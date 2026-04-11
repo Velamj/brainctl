@@ -25,8 +25,8 @@ import json
 from datetime import datetime, timezone
 from typing import Optional
 
-DB_PATH = "/Users/r4vager/agentmemory/db/brain.db"
-CYCLE_AGENT_ID = "paperclip-engram"
+DB_PATH = os.environ.get("BRAIN_DB", "brain.db")
+CYCLE_AGENT_ID = "task-tracker-engram"
 
 
 def now_iso() -> str:
@@ -193,14 +193,14 @@ def find_near_duplicates_simple(conn: sqlite3.Connection) -> list[tuple[int, int
     return [(r["id_a"], r["id_b"]) for r in rows]
 
 
-# ── Step 6b: Trust score update pass (COS-302 / COS-234) ─────────────────────
+# ── Step 6b: Trust score update pass (internal-ref / internal-ref) ─────────────────────
 
 def trust_update_pass(
     conn: sqlite3.Connection,
     dry_run: bool = False,
 ) -> dict:
     """
-    Apply COS-234 trust delta rules to all active memories.
+    Apply internal-ref trust delta rules to all active memories.
 
     Decay events (lower trust):
       - Has 'contradicts' knowledge edge:              -0.20
@@ -379,12 +379,12 @@ def run_consolidation_cycle(
         If True, runs the cross-scope contradiction detection pass (step 7b).
         Off by default — the pass is O(N²) across related memory pairs and is
         better run explicitly (brainctl or --cross-scope flag) on larger stores.
-        See COS-233 / wave6/21_cross_scope_contradiction.md.
+        See internal-ref / wave6/21_cross_scope_contradiction.md.
     run_dream_pass : bool
         If True, runs the dream pass after standard maintenance (step 9).
         Finds cross-scope bisociation candidates and retries deferred queries.
         Requires sqlite-vec extension for bisociation; gracefully skips if unavailable.
-        See COS-247 / COS-303.
+        See internal-ref / internal-ref.
     """
     import importlib.util as _ilu, sys as _sys, os as _os
     _base = _os.path.dirname(_os.path.abspath(__file__))
@@ -453,7 +453,7 @@ def run_consolidation_cycle(
     contradictions = find_contradictions(conn, limit=50)
     report["contradictions"] = len(contradictions)
 
-    # 7b. Cross-scope contradiction detection (opt-in, COS-233)
+    # 7b. Cross-scope contradiction detection (opt-in, internal-ref)
     if run_cross_scope:
         cs_conflicts = find_cross_scope_contradictions(conn, limit=25)
         report["cross_scope_contradictions"] = len(cs_conflicts)
@@ -468,12 +468,12 @@ def run_consolidation_cycle(
                     )
             conn.commit()
 
-    # 7c. Trust score update pass (COS-302 / COS-234)
+    # 7c. Trust score update pass (internal-ref / internal-ref)
     trust_result = trust_update_pass(conn, dry_run=dry_run)
     report["trust_updated"] = trust_result.get("memories_updated", 0)
     report["trust_dry_run_would_update"] = trust_result.get("dry_run_would_update", 0)
 
-    # 9. Dream pass — bisociation + incubation queue (COS-247 / COS-303, opt-in)
+    # 9. Dream pass — bisociation + incubation queue (internal-ref / internal-ref, opt-in)
     if run_dream_pass:
         _dp = _load_mod("_creative_synthesis", "09_creative_synthesis.py")
         dream_result = _dp.run_dream_pass(db_path=db_path, dry_run=dry_run)

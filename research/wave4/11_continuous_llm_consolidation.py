@@ -1,7 +1,7 @@
 """
 Continuous LLM Consolidation — Reference Prototype
 ====================================================
-Wave 4 Research | COS-183
+Wave 4 Research | internal-ref
 Author: Tensor
 Builds on: 05_consolidation_cycle.py, 08_context_compression.py
 
@@ -25,8 +25,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional, Callable
 
-DB_PATH = "/Users/r4vager/agentmemory/db/brain.db"
-CYCLE_AGENT_ID = "paperclip-tensor"
+DB_PATH = os.environ.get("BRAIN_DB", "brain.db")
+CYCLE_AGENT_ID = "task-tracker-tensor"
 
 
 def now_iso() -> str:

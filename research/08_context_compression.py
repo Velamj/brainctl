@@ -18,7 +18,7 @@ import json
 import re
 from datetime import datetime, timezone
 
-DB_PATH = "/Users/r4vager/agentmemory/db/brain.db"
+DB_PATH = os.environ.get("BRAIN_DB", "brain.db")
 
 # Approximate token counts (rough: 1 token ≈ 4 chars for English)
 CHARS_PER_TOKEN = 4

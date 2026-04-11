@@ -11,7 +11,7 @@ facts. We detect them via:
      that were written by different agents or at different times — flag for review
   4. Supersession chains: if memory A supersedes B but B is still active, flag it
   5. Cross-scope conflicts: memories in DIFFERENT scopes that reference the same
-     real-world entity but make incompatible claims (COS-233 / wave6)
+     real-world entity but make incompatible claims (internal-ref / wave6)
 
 Output: A list of (memory_id_a, memory_id_b, conflict_type, confidence_delta)
 tuples written to events table with event_type='contradiction_detected'.
@@ -22,8 +22,8 @@ import json
 import re
 from datetime import datetime, timezone
 
-DB_PATH = "/Users/r4vager/agentmemory/db/brain.db"
-CYCLE_AGENT_ID = "paperclip-engram"
+DB_PATH = os.environ.get("BRAIN_DB", "brain.db")
+CYCLE_AGENT_ID = "task-tracker-engram"
 
 NEGATION_PATTERNS = [
     (r"\bis\b", r"\bis not\b|\bisn'?t\b"),
@@ -230,14 +230,14 @@ def auto_resolve_contradictions(
     return resolved
 
 
-# ── Cross-scope detection (COS-233 / Wave 6) ─────────────────────────────────
+# ── Cross-scope detection (internal-ref / Wave 6) ─────────────────────────────────
 
 # Entity patterns for cross-scope bridging
 ENTITY_PATTERNS = [
     # Named agents
     r'\b(hermes|sentinel-2|hippocampus|engram|prune|recall|cortex|weaver|scribe|'
     r'legion|axiom|kernel|cipher|armor|probe|nexus|codex|tempo|lattice|aegis|'
-    r'nara|openclaw|paperclip-\w+)\b',
+    r'nara|openclaw|task-tracker-\w+)\b',
     # Issue identifiers
     r'\b([A-Z]{2,5}-\d+)\b',
     # System components
@@ -361,7 +361,7 @@ def find_cross_scope_contradictions(
     min_confidence: float = 0.3,
 ) -> list:
     """
-    Detect contradictions between memories in DIFFERENT scopes (COS-233).
+    Detect contradictions between memories in DIFFERENT scopes .
 
     Only compares memories whose scopes are related (same project family or global),
     have at least one shared entity, and show a negation pattern anchored to that entity.
@@ -439,7 +439,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Contradiction detection for brain.db")
     parser.add_argument("--cross-scope", action="store_true",
-                        help="Run cross-scope contradiction scan (COS-233)")
+                        help="Run cross-scope contradiction scan ")
     parser.add_argument("--limit", type=int, default=100,
                         help="Max conflicts to return per scan type")
     args = parser.parse_args()

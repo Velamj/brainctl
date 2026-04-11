@@ -1,4 +1,4 @@
-#!/Users/r4vager/agentmemory/.venv/bin/python3
+#!brain.db
 """
 run_benchmark.py — Compare quantum vs classical retrieval on benchmark queries
 
@@ -32,9 +32,9 @@ BENCHMARK_QUERIES = [
     },
     {
         "id": "Q02",
-        "query": "CostClock time tracking invoicing SaaS Next.js",
+        "query": "example-app time tracking invoicing SaaS Next.js",
         "expected_ids": [77, 89],
-        "description": "CostClock project overview"
+        "description": "example-app project overview"
     },
     {
         "id": "Q03",
@@ -44,7 +44,7 @@ BENCHMARK_QUERIES = [
     },
     {
         "id": "Q04",
-        "query": "PAPERCLIP_AGENT_ID identity mismatch auth guardrail",
+        "query": "TASK_TRACKER_AGENT_ID identity mismatch auth guardrail",
         "expected_ids": [85, 91],
         "description": "Auth identity mismatch pattern"
     },
@@ -56,15 +56,15 @@ BENCHMARK_QUERIES = [
     },
     {
         "id": "Q06",
-        "query": "CostClock security hardening test coverage production readiness issues",
+        "query": "example-app security hardening test coverage production readiness issues",
         "expected_ids": [89],
-        "description": "CostClock open issues"
+        "description": "example-app open issues"
     },
     {
         "id": "Q07",
-        "query": "Nexus heartbeat Kokoro token checkout fails",
+        "query": "Nexus heartbeat agent-1 token checkout fails",
         "expected_ids": [91, 85],
-        "description": "Nexus auth / Kokoro binding bug"
+        "description": "Nexus auth / agent-1 binding bug"
     },
     {
         "id": "Q08",
@@ -98,9 +98,9 @@ BENCHMARK_QUERIES = [
     },
     {
         "id": "Q13",
-        "query": "CostClock cron endpoint daily cleanup authorization bearer secret",
+        "query": "example-app cron endpoint daily cleanup authorization bearer secret",
         "expected_ids": [77],
-        "description": "CostClock cron auth pattern"
+        "description": "example-app cron auth pattern"
     },
     {
         "id": "Q14",
@@ -122,21 +122,21 @@ BENCHMARK_QUERIES = [
     },
     {
         "id": "Q17",
-        "query": "OpenClaw AI agent framework local execution deployment pattern",
+        "query": "agent-framework AI agent framework local execution deployment pattern",
         "expected_ids": [92],
-        "description": "OpenClaw agent system"
+        "description": "agent-framework agent system"
     },
     {
         "id": "Q18",
-        "query": "Paperclip task heartbeat assignment checkout workflow status",
+        "query": "task-tracker task heartbeat assignment checkout workflow status",
         "expected_ids": [93],
-        "description": "Paperclip task execution"
+        "description": "task-tracker task execution"
     },
     {
         "id": "Q19",
-        "query": "Nara external data integration REST API polling synchronization",
+        "query": "agent-2 external data integration REST API polling synchronization",
         "expected_ids": [92, 93],
-        "description": "Nara integration system"
+        "description": "agent-2 integration system"
     },
     {
         "id": "Q20",

@@ -1,5 +1,5 @@
 # Associative Memory & Analogical Reasoning
-## Research Report — COS-111
+## Research Report — internal-ref
 **Author:** Engram (Memory Systems Lead)
 **Date:** 2026-03-28
 **Target:** brain.db — Associative memory layer enabling creative cross-domain connections for Hermes and 22+ agents
@@ -482,7 +482,7 @@ Priority order (impact/effort ratio):
 
 ## 9. Open Questions Raised by This Research
 
-*(Required per Hermes' standing order — COS-111 comment)*
+*(Required per Hermes' standing order — internal-ref comment)*
 
 **1. What NEW questions did this research raise?**
 
@@ -535,5 +535,5 @@ This research would directly inform which new edge types to create and which dom
 
 ---
 
-*Document delivered to: `~/agentmemory/research/wave2/09_associative_memory_analogical_reasoning.md`*
-*Assigned issue: COS-111*
+*Document delivered to: `research/wave2/09_associative_memory_analogical_reasoning.md`*
+*Assigned issue: internal-ref*

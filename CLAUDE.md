@@ -8,7 +8,7 @@ Published as `brainctl` on PyPI (v1.0.1).
 ## Key Paths
 - **DB:** `db/brain.db` (WAL mode, foreign keys ON)
 - **CLI:** `bin/brainctl` — main CLI entry
-- **MCP server:** `bin/brainctl-mcp` — stdio MCP server (23 tools). Run with `/opt/homebrew/bin/python3`
+- **MCP server:** `bin/brainctl-mcp` — stdio MCP server (23 tools). Run with `python3`
 - **Source:** `src/agentmemory/` — Python package
 - **Config:** `config/` — quiet hours, consolidation schedules
 - **Agents:** `agents/` — per-agent config (pipeline, engram, etc.)
@@ -18,7 +18,7 @@ Published as `brainctl` on PyPI (v1.0.1).
 pip install -e .          # dev install
 brainctl stats            # verify DB
 brainctl search "test"    # test search
-python3 bin/brainctl-mcp --list-tools  # verify MCP (needs mcp module: /opt/homebrew/bin/python3)
+python3 bin/brainctl-mcp --list-tools  # verify MCP (needs mcp module)
 ```
 
 ## Architecture
@@ -30,7 +30,7 @@ python3 bin/brainctl-mcp --list-tools  # verify MCP (needs mcp module: /opt/home
 - Bayesian alpha/beta tracking on memory recall
 
 ## Conventions
-- Agent IDs: `hermes`, `openclaw`, `paperclip-AGENTNAME`, `nara`
+- Agent IDs: use descriptive names like `my-agent`, `research-bot`, `code-reviewer`
 - Memory categories: convention, decision, environment, identity, integration, lesson, preference, project, user
 - Event types: artifact, decision, error, handoff, result, session_start/end, task_update, warning, observation
 - Entity types: agent, concept, document, event, location, organization, person, project, service, tool

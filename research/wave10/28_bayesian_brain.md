@@ -2,7 +2,7 @@
 ## Wave 10 Research Deliverable
 
 **Author:** Epoch (Temporal Cognition Engineer)
-**Task:** [COS-344](/COS/issues/COS-344)
+**Task:** 
 **Date:** 2026-03-28
 **DB State:** 22MB brain.db · ~121 active memories · 1,117 events · 26 agents
 **Prereqs:** Wave 1 (01_spaced_repetition, 05_consolidation_cycle), Wave 2 (11a causal graph, 12b advanced retrieval)
@@ -112,7 +112,7 @@ The propagation effect on a single recall is small (w × 0.5 × delta). It accum
 
 ### 2.4 Causal Chain Integration
 
-The existing causal event graph (COS-184) tracked causality at the event level. Belief propagation extends this to memory confidence: if memory A causes B (derived_from edge), and A is confirmed 10 times, B inherits partial confirmation even if B was never independently recalled. This closes a gap the current system ignores.
+The existing causal event graph  tracked causality at the event level. Belief propagation extends this to memory confidence: if memory A causes B (derived_from edge), and A is confirmed 10 times, B inherits partial confirmation even if B was never independently recalled. This closes a gap the current system ignores.
 
 ---
 
@@ -261,7 +261,7 @@ CREATE TABLE agent_memory_profile (
 );
 ```
 
-CostClock-AI agents (billing, auth) work in stable domains → `decay_multiplier = 0.7`.
+example-app-AI agents (billing, auth) work in stable domains → `decay_multiplier = 0.7`.
 Research agents work in ephemeral domains → `decay_multiplier = 1.5`.
 
 This avoids forcing all project memories into a single decay regime.
@@ -274,7 +274,7 @@ The project priors are initially hand-tuned. The right long-term approach:
 2. Fit a Beta distribution to the project's memory confidence distribution
 3. Use the fitted α, β as the prior for that project
 
-This makes project priors **self-calibrating** over time — the system learns that `costclock-ai` memories have high persistence, while research task memories are volatile. Runs via the consolidation cycle. Timeline: implement empirical calibration in Wave 11.
+This makes project priors **self-calibrating** over time — the system learns that `example-app` memories have high persistence, while research task memories are volatile. Runs via the consolidation cycle. Timeline: implement empirical calibration in Wave 11.
 
 ---
 
@@ -533,7 +533,7 @@ def aggregate_beliefs(memories: list[dict]) -> dict:
     }
 ```
 
-This enables the metacognition layer (COS-110) to answer not just "do we know X?" but "how confident are we in X, and how much evidence do we have?"
+This enables the metacognition layer  to answer not just "do we know X?" but "how confident are we in X, and how much evidence do we have?"
 
 ---
 
@@ -601,7 +601,7 @@ This enables the metacognition layer (COS-110) to answer not just "do we know X?
 
 3. **Does 1-hop propagation create coherence issues with the contradiction detection system (06_contradiction_detection)?** If memory A contradicts memory B, and both get confirmed, belief propagation needs to resolve the conflict rather than silently boost both.
 
-4. **Can we validate the Beta model empirically?** COS-110 identified calibration as the single most valuable empirical study. Proposed: take 20 memories with known "ground truth" status (explicitly confirmed or retired), see if the Beta posteriors predict their outcomes better than current scalar confidence.
+4. **Can we validate the Beta model empirically?** internal-ref identified calibration as the single most valuable empirical study. Proposed: take 20 memories with known "ground truth" status (explicitly confirmed or retired), see if the Beta posteriors predict their outcomes better than current scalar confidence.
 
 5. **Interaction with the distillation pipeline:** When a set of episodic memories is consolidated into a semantic memory, what are the initial α, β for the new memory? Option A: sum the evidence (α_new = Σα_i). Option B: use the project prior. Option C: weight by similarity to the consolidated content. This needs a design decision before implementing hierarchical consolidation.
 
@@ -640,4 +640,4 @@ This enables the metacognition layer (COS-110) to answer not just "do we know X?
 
 ---
 
-*Deliverable for [COS-344](/COS/issues/COS-344). Filed under ~/agentmemory/research/wave10/.*
+*Deliverable for . Filed under research/wave10/.*

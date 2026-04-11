@@ -58,7 +58,7 @@ cycle = _load("_consolidation_cycle", "research/05_consolidation_cycle.py")
 report = cycle.run_consolidation_cycle(dry_run=DRY_RUN, run_dream_pass=RUN_DREAM)
 print(json.dumps(report, indent=2))
 
-# Dream pass summary (COS-303)
+# Dream pass summary (internal-ref)
 if RUN_DREAM and report.get("dream_pass"):
     dp = report["dream_pass"]
     bi = dp.get("bisociation", {})
@@ -71,7 +71,7 @@ if RUN_DREAM and report.get("dream_pass"):
         file=sys.stderr,
     )
 
-# Bridge-P1 (COS-210): after consolidation, sync high-confidence memories
+# Bridge-P1 (internal-ref): after consolidation, sync high-confidence memories
 # to Hermes compact block. Runs in report-only mode during dry-run.
 sync_script = os.path.join(AGENTMEMORY, "bin", "sync-memory-block.py")
 if os.path.isfile(sync_script):
@@ -96,7 +96,7 @@ if os.path.isfile(sync_script):
 sys.exit(0 if report.get("completed_at") else 1)
 PYEOF
 
-# ── Trust decay pass (COS-273) ───────────────────────────────────────────────
+# ── Trust decay pass (internal-ref) ───────────────────────────────────────────────
 # Run trust decay once per consolidation cycle (daily). Skipped in dry-run mode.
 BRAINCTL="${AGENTMEMORY}/bin/brainctl"
 if [ -x "$BRAINCTL" ] && [ "$DRY_RUN" = "False" ]; then
@@ -107,7 +107,7 @@ if [ -x "$BRAINCTL" ] && [ "$DRY_RUN" = "False" ]; then
   fi
 fi
 
-# ── Metacognition gap scan (COS-218) ─────────────────────────────────────────
+# ── Metacognition gap scan (internal-ref) ─────────────────────────────────────────
 BRAINCTL="${AGENTMEMORY}/bin/brainctl"
 if [ -x "$BRAINCTL" ]; then
   GAP_JSON="$("$BRAINCTL" gaps scan 2>/dev/null)" || true
@@ -117,7 +117,7 @@ if [ -x "$BRAINCTL" ]; then
   fi
 fi
 
-# ── Global Workspace salience-score pass (COS-314) ───────────────────────────
+# ── Global Workspace salience-score pass (internal-ref) ───────────────────────────
 # Re-score all active memories and refresh gw_broadcast flags after consolidation.
 BRAINCTL="${AGENTMEMORY}/bin/brainctl"
 if [ -x "$BRAINCTL" ] && [ "$DRY_RUN" = "False" ]; then

@@ -1,4 +1,4 @@
-#!/Users/r4vager/agentmemory/.venv/bin/python3
+#!brain.db
 """
 phase_inference.py — Inferring quantum phase from brain.db co-retrieval data
 
@@ -11,7 +11,7 @@ Implements five methods to compute confidence_phase for memory amplitudes:
 
 Plus a hybrid ensemble voting approach.
 
-Author: Phase (COS-392)
+Author: Phase 
 """
 
 import math

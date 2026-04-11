@@ -1,8 +1,8 @@
 # Social Epistemology for Multi-Agent Memory Systems
 ## How Should Agents Weight Each Other's Claims?
 
-**Author:** Sentinel 2 (paperclip-sentinel-2) — Memory Integrity Monitor
-**Task:** [COS-342](/COS/issues/COS-342)
+**Author:** Sentinel 2 (task-tracker-sentinel-2) — Memory Integrity Monitor
+**Task:** 
 **Date:** 2026-03-28
 **DB State:** 28.4MB brain.db · ~122 active memories · 1,116+ events · 178 agents
 
@@ -28,7 +28,7 @@ Implementing these closes the epistemic naivety gap at low schema cost (one new 
 
 Alvin Goldman (1999, *Knowledge in a Social World*) argues that testimony is trustworthy proportional to the **reliability of the source process** that produced it. A claim from a certified surgeon about a surgical procedure is more trustworthy than a claim from a marketing analyst — even if both are sincere and confident.
 
-In brain.db today, a memory written by `paperclip-qa` about database schema has the same default `confidence=0.9` as a memory written by `paperclip-recall` about the same schema. This conflates sincerity with competence.
+In brain.db today, a memory written by `task-tracker-qa` about database schema has the same default `confidence=0.9` as a memory written by `task-tracker-recall` about the same schema. This conflates sincerity with competence.
 
 ### Mapping to brain.db
 
@@ -45,7 +45,7 @@ In brain.db today, a memory written by `paperclip-qa` about database schema has 
 CREATE TABLE IF NOT EXISTS agent_expertise (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     agent_id       TEXT NOT NULL,          -- FK → agents.agent_id
-    domain         TEXT NOT NULL,          -- e.g. 'backend', 'security', 'memory_spine', 'costclock'
+    domain         TEXT NOT NULL,          -- e.g. 'backend', 'security', 'memory_spine', 'example-app'
     expertise_level REAL NOT NULL DEFAULT 0.5,  -- 0.0–1.0, set at hire/config
     prediction_accuracy REAL,             -- derived: fraction of claims later validated
     calibration_score REAL,               -- Brier score proxy: confidence vs. outcome
@@ -174,8 +174,8 @@ ALTER TABLE memories ADD COLUMN source_weight_at_conflict REAL;  -- snapshot at 
 | < 0.2 | Both preserved; escalate immediately; no auto-resolution |
 
 **Example:**
-- `paperclip-backend` writes: "API rate limits are 100 req/min per user" (expertise=0.85, confidence=0.9)
-- `paperclip-qa` writes: "API rate limits are 50 req/min per user" (expertise=0.40 for backend, confidence=0.9)
+- `task-tracker-backend` writes: "API rate limits are 100 req/min per user" (expertise=0.85, confidence=0.9)
+- `task-tracker-qa` writes: "API rate limits are 50 req/min per user" (expertise=0.40 for backend, confidence=0.9)
 - `effective_confidence`: backend=0.765, qa=0.36 → delta=0.405 → backend wins, QA preserved as minority_view
 
 ---
@@ -186,7 +186,7 @@ ALTER TABLE memories ADD COLUMN source_weight_at_conflict REAL;  -- snapshot at 
 
 List (2012, *Group Agency*) argues that a group's epistemic state cannot be reduced to majority vote. Condorcet's jury theorem shows majority rule works when individuals are epistemically independent and each has > 50% accuracy — but breaks down with correlated errors (agents trained on the same corpus, working in the same environment, all making the same systematic mistake).
 
-For workspace_broadcasts: if 15 agents all write the same wrong fact about a CostClock API endpoint because they all read the same incorrect docs, a majority-based aggregation will enshrine the error.
+For workspace_broadcasts: if 15 agents all write the same wrong fact about a example-app API endpoint because they all read the same incorrect docs, a majority-based aggregation will enshrine the error.
 
 ### Design: Epistemic Diversity-Weighted Aggregation
 
@@ -257,7 +257,7 @@ ORDER BY avg_recall DESC;
 
 ### Hermeneutical Gap: Missing Domain Coverage
 
-Some agents write in specialized domains (e.g., `paperclip-prune` on memory retirement policy) where no retrieval vocabulary exists in the FTS5 index yet. Their memories can't be found with standard queries.
+Some agents write in specialized domains (e.g., `task-tracker-prune` on memory retirement policy) where no retrieval vocabulary exists in the FTS5 index yet. Their memories can't be found with standard queries.
 
 **Fix**: domain bootstrapping — when a new domain first appears in memories, auto-generate 3–5 synonym seed terms and add them to an `fts_synonyms` table used by the search layer.
 
@@ -269,9 +269,9 @@ Add `--equity` flag to the existing `~/bin/coherence-check` tool:
 coherence-check --equity
 # Output:
 # OK     hermes           avg_recall=12.4, coverage=94%
-# OK     paperclip-recall avg_recall=8.1,  coverage=87%
-# WARN   paperclip-prune  avg_recall=0.3,  coverage=23% — possible hermeneutical gap
-# CRIT   paperclip-qa     avg_recall=0.0,  never_recalled=8/10 — testimonial suppression
+# OK     task-tracker-recall avg_recall=8.1,  coverage=87%
+# WARN   task-tracker-prune  avg_recall=0.3,  coverage=23% — possible hermeneutical gap
+# CRIT   task-tracker-qa     avg_recall=0.0,  never_recalled=8/10 — testimonial suppression
 ```
 
 ---
@@ -324,7 +324,7 @@ final_score = (rrf_score × 0.6) + (semantic_distance_inv × 0.3) + (source_weig
 ### New brainctl Commands
 
 ```bash
-brainctl expertise set --agent paperclip-sentinel-2 --domain memory_spine --level 0.90
+brainctl expertise set --agent task-tracker-sentinel-2 --domain memory_spine --level 0.90
 brainctl expertise report [--agent X] [--domain Y]
 brainctl conflict list --unresolved
 brainctl conflict resolve <group-id> [--winner <memory-id>] [--preserve-minority]

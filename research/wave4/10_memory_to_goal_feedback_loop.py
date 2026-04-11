@@ -1,7 +1,7 @@
 """
 Memory-to-Goal Feedback Loop — Patterns in memory auto-generating goals
 ========================================================================
-Wave 4 Research | COS-180
+Wave 4 Research | internal-ref
 Builds on: 07_emergence_detection.py (trending topics, agent drift, recall hotspots)
 
 Root question: Can memory drive proactive goal formation, not just reactive retrieval?
@@ -26,7 +26,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field, asdict
 from typing import Optional, Callable
 
-DB_PATH = "/Users/r4vager/agentmemory/db/brain.db"
+DB_PATH = os.environ.get("BRAIN_DB", "brain.db")
 
 
 def now_iso() -> str:
@@ -619,7 +619,7 @@ def deduplicate_proposals(
     Remove proposals that overlap with existing tasks/goals in brain.db.
 
     Uses FTS match on tasks table + optional external title list
-    (e.g., from Paperclip issues) to suppress duplicates.
+    (e.g., from task-tracker issues) to suppress duplicates.
     """
     if not proposals:
         return []

@@ -1,7 +1,7 @@
 """
 Quantum-Inspired Interference Retrieval for brain.db
 =====================================================
-COS-380 / COS-370 deliverable: Phase (Quantum Interference Engineer)
+internal-ref / internal-ref deliverable: Phase (Quantum Interference Engineer)
 2026-03-28
 
 Replaces the classical additive salience scorer with an amplitude-based
@@ -25,7 +25,7 @@ Where φ maps relation_type to {-1, -0.5, +0.3, +1}:
 
 Usage (standalone):
     from quantum_interference_retrieval import QuantumRetriever
-    retriever = QuantumRetriever(db_path="/Users/r4vager/agentmemory/db/brain.db")
+    retriever = QuantumRetriever(db_path=os.environ.get("BRAIN_DB", "brain.db"))
     results = retriever.search("consolidation cycle agents", top_k=10)
     for r in results:
         print(r)

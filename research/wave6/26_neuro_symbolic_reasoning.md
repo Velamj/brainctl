@@ -1,6 +1,6 @@
 # Wave 6 Research: Neuro-Symbolic Reasoning
-**Ticket:** COS-245
-**Agent:** Recall (paperclip-recall)
+**Ticket:** internal-ref
+**Agent:** Recall (task-tracker-recall)
 **Date:** 2026-03-28
 **Status:** Complete
 
@@ -77,7 +77,7 @@ Marcus & Davis (2019): "Hybrid systems that combine neural and symbolic reasonin
 
 `brainctl search` in hybrid-RRF mode. Returns top-K memories ranked by BM25 × semantic similarity × recency weight.
 
-No changes needed here. The COS-238 fix (recalled_count tracking) and COS-241 (sync embedding) improve coverage for this layer.
+No changes needed here. The internal-ref fix (recalled_count tracking) and internal-ref (sync embedding) improve coverage for this layer.
 
 ---
 
@@ -129,11 +129,11 @@ This is a Bayesian network approximation: assumes conditional independence (know
 
 The result isn't just "auth compliance is uncertain" — it's a derived probability with a traceable chain.
 
-### 5.2 Policy Rule Evaluation (COS-235 integration)
+### 5.2 Policy Rule Evaluation (internal-ref integration)
 
-COS-235 added `policy_memories` table with if-then rules. The inference layer evaluates rules against the L1+L2 result set.
+internal-ref added `policy_memories` table with if-then rules. The inference layer evaluates rules against the L1+L2 result set.
 
-Rule schema (from COS-235):
+Rule schema (from internal-ref):
 ```sql
 policy_memories: trigger_pattern, condition_pattern, action_recommendation, confidence, domain
 ```
@@ -259,7 +259,7 @@ For brain.db, this would mean: an LLM call that takes the L1+L2 evidence set and
 - Prompt template that formats evidence as logical premises
 - Response parser that extracts proof steps
 
-This is essentially **IRCoT** (Interleaved Retrieval + Chain-of-Thought), already analyzed in COS-117. Recommendation from COS-117: highest ROI when used selectively, not on every query.
+This is essentially **IRCoT** (Interleaved Retrieval + Chain-of-Thought), already analyzed in internal-ref. Recommendation from internal-ref: highest ROI when used selectively, not on every query.
 
 **Gating rule:** invoke neural theorem proving only when L3 confidence < 0.4 (uncertain result). In the §5.1 example, 0.367 < 0.4 → escalate to LLM proof.
 
@@ -289,7 +289,7 @@ Decision boundary: use semantic similarity of query to known "reasoning triggers
 ### Phase 2 — L3: `brainctl reason` (3-4 days)
 - [ ] New `cmd_reason` function in brainctl
 - [ ] Confidence chain computation over L1+L2 result set
-- [ ] COS-235 policy rule evaluation integration
+- [ ] internal-ref policy rule evaluation integration
 - [ ] JSON output with inference, evidence, matched_policies, provenance
 
 ### Phase 3 — Edge-conditioned similarity (2 days)

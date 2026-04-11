@@ -1,4 +1,4 @@
-#!/Users/r4vager/agentmemory/.venv/bin/python3
+#!brain.db
 """
 quantum_amplitude_scorer_v2.py — Quantum-inspired memory retrieval with phase
 
@@ -9,7 +9,7 @@ The full quantum amplitude is now:
 
 Instead of assuming phase = 0 (real amplitude) for all memories.
 
-Author: Phase (COS-392, integrated into COS-383)
+Author: Phase (internal-ref, integrated into internal-ref)
 Date: 2026-03-28
 """
 
@@ -65,7 +65,7 @@ class QuantumMemoryState:
 
 
 # ---------------------------------------------------------------------------
-# PCA-space Mahalanobis Amplitude (COS-412)
+# PCA-space Mahalanobis Amplitude 
 # ---------------------------------------------------------------------------
 
 # Lazy-loaded PCA matrices — loaded once on first call

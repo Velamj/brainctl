@@ -1,7 +1,7 @@
 # Multi-Agent Belief Entanglement — Correlated Beliefs Across 26 Agents
 ## Quantum Cognition Research — Wave 1
 **Author:** Entangle (Multi-Agent Belief Physicist)
-**Task:** [COS-382](/COS/issues/COS-382) · re-filed from [COS-372](/COS/issues/COS-372)
+**Task:**  · re-filed from 
 **Date:** 2026-03-28
 **DB State:** 26 agents · 150 active memories · 26 active beliefs · 4,718 knowledge edges · 742 semantic-similarity edges
 
@@ -19,7 +19,7 @@ The central claim: when two agents read the same memory, they acquire **correlat
 
 ### 1.1 What Classical Statistics Misses
 
-The current agent_beliefs table (26 rows, one per agent) models beliefs as independent. Cortex's capability scores — `openclaw:capability = 0.8888`, `hermes:capability = 0.7071` — are assigned to agents individually. There is no representation of **belief correlation**: the fact that if hermes's confidence in X rises, paperclip-recall's confidence in X should also rise (because they both read the same high-confidence memory about X).
+The current agent_beliefs table (26 rows, one per agent) models beliefs as independent. Cortex's capability scores — `openclaw:capability = 0.8888`, `hermes:capability = 0.7071` — are assigned to agents individually. There is no representation of **belief correlation**: the fact that if hermes's confidence in X rises, task-tracker-recall's confidence in X should also rise (because they both read the same high-confidence memory about X).
 
 Consider the concrete data:
 
@@ -162,10 +162,10 @@ where A₁, A₂ are two "measurement bases" (e.g., two different query framings
 The top-recalled memory (recalled_count = 125) is hermes's memory about agent count: *"22 active agents in brain.db, 9 active memories per agent average."* This memory has been accessed across the system. We can observe:
 
 - hermes writes it with confidence = 0.9999
-- paperclip-cortex's belief `global:memory_spine:schema_version` references the same substrate with confidence = 0.9
+- task-tracker-cortex's belief `global:memory_spine:schema_version` references the same substrate with confidence = 0.9
 - The confidence difference (0.0999) is smaller than the 0.324 inter-agent confidence delta we observe for hermes-openclaw pairs on shared memory topics
 
-This sub-linear degradation in confidence across the entangled pair (hermes → paperclip-cortex) is a **classical Bell-compatible** correlation — consistent with classical shared evidence. To find genuine violation requires testing across orthogonal framings.
+This sub-linear degradation in confidence across the entangled pair (hermes → task-tracker-cortex) is a **classical Bell-compatible** correlation — consistent with classical shared evidence. To find genuine violation requires testing across orthogonal framings.
 
 ### 3.3 Predicted Violation Scenarios
 
@@ -204,12 +204,12 @@ This has a critical operational implication: **you cannot evaluate belief cohere
 -- Memory M36 (hermes): recalled 125 times
 -- Multiple agents' belief states conditioned on this memory
 -- Top correlated agent pairs via knowledge_edges co_referenced:
--- (hermes, paperclip-cortex): 26 co-referenced edges
+-- (hermes, task-tracker-cortex): 26 co-referenced edges
 -- (hermes, hippocampus): 18 co-referenced edges
--- (hippocampus, paperclip-codex): 14 co-referenced edges
+-- (hippocampus, task-tracker-codex): 14 co-referenced edges
 ```
 
-The triadic pattern {hermes, paperclip-cortex, hippocampus} forms a likely GHZ group: all three are heavily cross-referenced, and hippocampus writes memories that cortex and hermes both read. The three-party entanglement entropy should exceed what pairwise entropies predict.
+The triadic pattern {hermes, task-tracker-cortex, hippocampus} forms a likely GHZ group: all three are heavily cross-referenced, and hippocampus writes memories that cortex and hermes both read. The three-party entanglement entropy should exceed what pairwise entropies predict.
 
 **Test:** compute three-way mutual information:
 
@@ -270,7 +270,7 @@ In quantum mechanics, entanglement is monogamous: if A is maximally entangled wi
 | hermes | 41 (openclaw), 21 (hippocampus), 21 (cortex)... | High spread — hermes is hub |
 | openclaw | 41 (hermes), 20 (cortex), 15 (legion)... | Moderate spread |
 | hippocampus | 21 (hermes), 14 (codex), 14 (sentinel-2)... | Low spread — specialized |
-| paperclip-codex | 20 (legion), 20 (weaver), 17 (weaver)... | Concentrated — small cluster |
+| task-tracker-codex | 20 (legion), 20 (weaver), 17 (weaver)... | Concentrated — small cluster |
 
 hermes is the most entangled agent (hub) — any update hermes makes propagates across the largest entangled group. This is architecturally valuable for coordination but introduces systemic risk: incorrect memories from hermes decohere a disproportionate fraction of the system's total belief space.
 
@@ -282,7 +282,7 @@ hermes is the most entangled agent (hub) — any update hermes makes propagates 
 
 ### 6.1 The Problem Stated Precisely
 
-The COS-372 spec states: *"When Agent A writes a memory and Agent B reads it, B's beliefs update. But A's beliefs should ALSO update (they now know B knows). This bidirectional update is entanglement."*
+The internal-ref spec states: *"When Agent A writes a memory and Agent B reads it, B's beliefs update. But A's beliefs should ALSO update (they now know B knows). This bidirectional update is entanglement."*
 
 This is exactly the **quantum measurement back-action**: the act of measurement (reading) changes not only the measurer's state but also the measured state. In quantum mechanics, a measurement on a shared entangled state collapses both subsystems simultaneously.
 
@@ -355,11 +355,11 @@ ENTANGLEMENT_BUDGET = {
     'hermes': 0.9,       # High: hub agent, must correlate widely
     'openclaw': 0.8,     # High: coordination layer
     'hippocampus': 0.7,  # Moderate: maintenance should be closely coupled
-    'paperclip-cortex': 0.7,  # Moderate: synthesis requires broad correlation
-    'paperclip-recall': 0.6,  # Moderate: retrieval needs alignment
-    'paperclip-sentinel-2': 0.3,  # Low: independence critical for integrity
+    'task-tracker-cortex': 0.7,  # Moderate: synthesis requires broad correlation
+    'task-tracker-recall': 0.6,  # Moderate: retrieval needs alignment
+    'task-tracker-sentinel-2': 0.3,  # Low: independence critical for integrity
     'aegis': 0.3,        # Low: security agent must avoid group-think
-    'paperclip-probe': 0.2,  # Very low: probing requires fresh beliefs
+    'task-tracker-probe': 0.2,  # Very low: probing requires fresh beliefs
 }
 ```
 
@@ -438,7 +438,7 @@ brainctl entangle collapse --memory-id MEMORY_ID
 | `brainctl recall` | Score boost for queries hitting memories in high-entanglement clusters |
 | `coherence_check.py` | Add entanglement entropy as a system health metric |
 | `agent_beliefs` table | Add `entanglement_source_ids` field: which other agents co-hold this belief |
-| Wave 1 COS-379 (Hilbert) | Entanglement edges are a subset of knowledge graph edges — coordinate on schema |
+| Wave 1 internal-ref (Hilbert) | Entanglement edges are a subset of knowledge graph edges — coordinate on schema |
 
 ---
 
@@ -519,5 +519,5 @@ Entanglement monogamy implies a fundamental tension: more generalist agents (her
 ---
 
 *Filed by Entangle (Multi-Agent Belief Physicist) for the Quantum Cognition Research Division.*
-*Deliver to: ~/agentmemory/research/quantum/*
-*Coordinates with: Hilbert (COS-379 — Hilbert space foundations), Phase (COS-380 — interference), Superpose (COS-381 — superposition)*
+*Deliver to: research/quantum/*
+*Coordinates with: Hilbert (internal-ref — Hilbert space foundations), Phase (internal-ref — interference), Superpose (internal-ref — superposition)*

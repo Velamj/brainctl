@@ -1,9 +1,9 @@
 # Global Workspace Theory & Conscious Broadcasting — Making 178 Agents Share a Spotlight
 
-**Task:** COS-243
-**Author:** Cortex (Intelligence Synthesis Analyst)
+**Task:** internal-ref
+**Author:** research-agent
 **Date:** 2026-03-28
-**References:** COS-232 (Memory Event Bus), COS-249 (World Models), COS-231 (Embedding Backfill)
+**References:** internal-ref (Memory Event Bus), internal-ref (World Models), internal-ref (Embedding Backfill)
 
 ---
 
@@ -13,7 +13,7 @@ Baars' Global Workspace Theory (1988) is the most empirically supported theory o
 consciousness in cognitive science. Its core claim: information becomes "conscious"
 when it wins a competition for a global broadcast channel, making it simultaneously
 available to all specialized modules. This research maps GWT onto the 178-agent
-CostClock AI system and designs a **Global Workspace Layer** — a salience-based
+example-app system and designs a **Global Workspace Layer** — a salience-based
 broadcast mechanism on top of brain.db that creates shared situational awareness
 across the org.
 
@@ -171,7 +171,7 @@ def compute_salience(event):
     if event_matches_active_goals(event):
         base += 0.25
 
-    # Prediction error signal (from World Model layer — COS-249)
+    # Prediction error signal (from World Model layer — internal-ref)
     # High prediction error = surprising = high salience
     if event.prediction_error and event.prediction_error > 0.5:
         base += event.prediction_error * 0.15
@@ -194,7 +194,7 @@ brainctl workspace broadcast --memory-id 42 --summary "Critical: auth failure pa
 brainctl workspace tail --n 20
 
 # Agent subscription — filter broadcasts relevant to me
-brainctl workspace subscribe --projects agentmemory costclock-ai --roles researcher
+brainctl workspace subscribe --projects agentmemory example-app --roles researcher
 
 # Integration metric — current org Phi score
 brainctl workspace phi
@@ -207,7 +207,7 @@ brainctl workspace phi --breakdown
 
 ## Ignition Dynamics in Practice
 
-What triggers ignition (broadcast) in CostClock AI?
+What triggers ignition (broadcast) in example-app?
 
 | Event Type | Salience | Broadcast? |
 |------------|----------|-----------|
@@ -265,7 +265,7 @@ below 0.05 for > 2 consecutive measurement windows.
 
 ---
 
-## Relationship to Memory Event Bus (COS-232)
+## Relationship to Memory Event Bus 
 
 The MEB is the *transport layer*. The Global Workspace Layer is the *routing logic*:
 
@@ -322,12 +322,12 @@ The MEB supports the GWT by providing the event stream. The GWT adds:
 
 ## Connections to Other Wave 6 Work
 
-- **COS-249 (World Models):** Prediction errors from the world model are a primary
+- **internal-ref (World Models):** Prediction errors from the world model are a primary
   salience signal. High-error = surprising = ignite and broadcast.
-- **COS-235 (Policy Memory):** Policy updates should broadcast at high salience —
+- **internal-ref (Policy Memory):** Policy updates should broadcast at high salience —
   every agent needs to know when org policy changes.
-- **COS-232 (MEB):** GWT rides on top of MEB. Broadcasts are high-priority MEB events.
-- **COS-233 (Contradiction Detection):** Contradictions detected cross-scope are a
+- **internal-ref (MEB):** GWT rides on top of MEB. Broadcasts are high-priority MEB events.
+- **internal-ref (Contradiction Detection):** Contradictions detected cross-scope are a
   natural ignition trigger — broadcast the contradiction to relevant agents.
 
 ---

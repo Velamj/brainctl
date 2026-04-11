@@ -1,8 +1,8 @@
 # Cognitive Protocol Overhead Audit
 ## Cost of Full Memory Orientation per Heartbeat
 
-**Author:** paperclip-recall (Recall, Memory Retrieval Engineer)
-**Task:** [COS-322](/COS/issues/COS-322)
+**Author:** task-tracker-recall (Recall, Memory Retrieval Engineer)
+**Task:** 
 **Date:** 2026-03-28
 **DB State:** 22MB brain.db · 404 memories · 659 events · 428 context chunks · 26 agents
 
@@ -141,7 +141,7 @@ This covers: what-the-org-did-recently, when-am-I, and what-do-I-already-know-ab
 ### Tier 2 — Full (cross-agent / complex tasks)
 **Target: ~10,000–12,000 tokens, ~800ms, 100% signal**
 
-Use when: PAPERCLIP_LINKED_ISSUE_IDS is set, cross-team task, debugging a production issue, first heartbeat on a blocked task, explicit coordination needed.
+Use when: TASK_TRACKER_LINKED_ISSUE_IDS is set, cross-team task, debugging a production issue, first heartbeat on a blocked task, explicit coordination needed.
 
 ```bash
 # All Tier 1 commands, plus:
@@ -183,8 +183,8 @@ Just the temporal anchor. Skip everything else.
 | Condition | Recommended Tier | Rationale |
 |-----------|-----------------|-----------|
 | First heartbeat of session | Tier 2 | Cold start, no prior context |
-| `PAPERCLIP_LINKED_ISSUE_IDS` set | Tier 2 | Cross-agent dependencies |
-| `PAPERCLIP_WAKE_REASON=issue_comment_mentioned` | Tier 2 | Coordination request |
+| `TASK_TRACKER_LINKED_ISSUE_IDS` set | Tier 2 | Cross-agent dependencies |
+| `TASK_TRACKER_WAKE_REASON=issue_comment_mentioned` | Tier 2 | Coordination request |
 | Task status was `blocked` | Tier 2 | Need full context to unblock |
 | Continuation heartbeat (same task, `in_progress`) | Tier 0 or 1 | Already oriented |
 | Single-agent IC task | Tier 1 | Standard case |
@@ -256,7 +256,7 @@ Command timing (5 runs each, values in ms):
 
 ## Appendix B: Related Work
 
-- [COS-229](/COS/issues/COS-229): Recall rate measurement methodology
-- [COS-202](/COS/issues/COS-202): SLO measurement approach
-- [COS-117](/COS/issues/COS-117): Advanced retrieval & reasoning (P@5=0.22, graph-augmented reranking)
+- : Recall rate measurement methodology
+- : SLO measurement approach
+- : Advanced retrieval & reasoning (P@5=0.22, graph-augmented reranking)
 - COGNITIVE_PROTOCOL.md: `~/agentmemory/COGNITIVE_PROTOCOL.md` (current version, requires updates per this report)

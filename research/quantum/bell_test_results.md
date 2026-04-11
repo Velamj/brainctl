@@ -1,8 +1,8 @@
 # Bell Test Results — Empirical Detection of Entangled Agent Beliefs
 ## Quantum Cognition Research — Wave 2
 **Author:** Entangle (Multi-Agent Belief Physicist)
-**Task:** [COS-393](/COS/issues/COS-393) · Empirical Bell test execution
-**Theory Basis:** [COS-382](/COS/issues/COS-382) · §3.2 Bell Test Design
+**Task:**  · Empirical Bell test execution
+**Theory Basis:**  · §3.2 Bell Test Design
 **Date:** 2026-03-28
 **DB State:** 26 active agents · 825 active memories · 4,718 knowledge edges (total)
 
@@ -10,7 +10,7 @@
 
 ## Abstract
 
-This document presents the empirical execution of the Bell inequality test designed in [COS-382](/COS/issues/COS-382) §3.2. Using brain.db as the measurement substrate, we queried 5 agent pairs under 4 measurement bases across 3 shared topics, computed CHSH scores, and performed GHZ three-party mutual information analysis on the hermes × hippocampus × cortex triad. The central finding: **no pair exceeded the classical CHSH bound of 2.0**, classifying all belief correlations as classical-compatible under the current measurement scheme. However, the hermes ↔ openclaw pair achieved S = 1.9995 — saturating the classical maximum — which indicates maximally correlated classical beliefs and flags this pair as the primary candidate for follow-up Bell tests with finer measurement resolution.
+This document presents the empirical execution of the Bell inequality test designed in  §3.2. Using brain.db as the measurement substrate, we queried 5 agent pairs under 4 measurement bases across 3 shared topics, computed CHSH scores, and performed GHZ three-party mutual information analysis on the hermes × hippocampus × cortex triad. The central finding: **no pair exceeded the classical CHSH bound of 2.0**, classifying all belief correlations as classical-compatible under the current measurement scheme. However, the hermes ↔ openclaw pair achieved S = 1.9995 — saturating the classical maximum — which indicates maximally correlated classical beliefs and flags this pair as the primary candidate for follow-up Bell tests with finer measurement resolution.
 
 ---
 
@@ -22,9 +22,9 @@ This document presents the empirical execution of the Bell inequality test desig
 |---|---|---|
 | hermes ↔ openclaw | High | 6 co_referenced edges, avg_weight=0.867, co_activations=21 |
 | hermes ↔ hippocampus | Moderate | 5 shared memory access events |
-| hippocampus ↔ paperclip-cortex | Moderate | 9 shared distillation memory reads |
-| hermes ↔ paperclip-recall | Moderate | 6 co_referenced edges, avg_weight=0.600 |
-| paperclip-cortex ↔ paperclip-sentinel-2 | Low | 10 shared access events (mostly reclassification logs) |
+| hippocampus ↔ task-tracker-cortex | Moderate | 9 shared distillation memory reads |
+| hermes ↔ task-tracker-recall | Moderate | 6 co_referenced edges, avg_weight=0.600 |
+| task-tracker-cortex ↔ task-tracker-sentinel-2 | Low | 10 shared access events (mostly reclassification logs) |
 
 ### 1.2 Topics Tested
 
@@ -76,16 +76,16 @@ Filtering to edges where source and target memories belong to *different* agents
 
 | Agent Pair | Edges | Total Weight | Avg Weight | Co-Activations |
 |---|---|---|---|---|
-| **hermes ↔ paperclip-lattice** | 12 | 10.4 | 0.867 | 36 |
+| **hermes ↔ task-tracker-lattice** | 12 | 10.4 | 0.867 | 36 |
 | **hermes ↔ openclaw** | 6 | 5.2 | 0.867 | 21 |
-| **hermes ↔ paperclip-recall** | 6 | 3.6 | 0.600 | 18 |
-| openclaw ↔ paperclip-lattice | 2 | 2.0 | 1.000 | 6 |
-| paperclip-lattice ↔ paperclip-recall | 2 | 1.2 | 0.600 | 6 |
-| openclaw ↔ paperclip-recall | 1 | 0.6 | 0.600 | 3 |
+| **hermes ↔ task-tracker-recall** | 6 | 3.6 | 0.600 | 18 |
+| openclaw ↔ task-tracker-lattice | 2 | 2.0 | 1.000 | 6 |
+| task-tracker-lattice ↔ task-tracker-recall | 2 | 1.2 | 0.600 | 6 |
+| openclaw ↔ task-tracker-recall | 1 | 0.6 | 0.600 | 3 |
 
-**Finding:** hermes is the clear entanglement hub, consistent with COS-382 predictions. The hermes ↔ paperclip-lattice link is the strongest (total entanglement signal = 10.4), driven by CostClock-AI domain memories. The hermes ↔ openclaw link (signal = 5.2) is the highest-recall-weighted pair, dominated by memory spine state and brainctl operations.
+**Finding:** hermes is the clear entanglement hub, consistent with internal-ref predictions. The hermes ↔ task-tracker-lattice link is the strongest (total entanglement signal = 10.4), driven by example-app-AI domain memories. The hermes ↔ openclaw link (signal = 5.2) is the highest-recall-weighted pair, dominated by memory spine state and brainctl operations.
 
-Notably, hippocampus and paperclip-cortex do **not** appear in the co_referenced cross-agent edges — their co-access is captured only in the raw access_log (where they share distillation record reads), not in the higher-confidence knowledge edge graph.
+Notably, hippocampus and task-tracker-cortex do **not** appear in the co_referenced cross-agent edges — their co-access is captured only in the raw access_log (where they share distillation record reads), not in the higher-confidence knowledge edge graph.
 
 ### 2.3 Specific Co-Referenced Memory Pairs
 
@@ -95,7 +95,7 @@ The most significant cross-agent co_referenced links (co_activation_count ≥ 3,
 |---|---|---|---|---|
 | Memory #93: Agent memory spine state (22 agents, recalled=126) | hermes | Memory #127: brainctl push gate threshold (recalled=125) | openclaw | 4 |
 | Memory #125: Kernel/brainctl integration (recalled=83) | hermes | Memory #127: brainctl push gate threshold | openclaw | 4 |
-| Memory #127: brainctl push gate threshold | openclaw | Memory #130: CostClock AI context | hermes | 4 |
+| Memory #127: brainctl push gate threshold | openclaw | Memory #130: example-app context | hermes | 4 |
 
 These three hermes-openclaw pairs form the highest-confidence entanglement cluster in the system.
 
@@ -112,9 +112,9 @@ These three hermes-openclaw pairs form the highest-confidence entanglement clust
 | hermes | 1.0000 | +1.000 | 0.9740 | +0.948 |
 | openclaw | 1.0000 | +1.000 | 0.9955 | +0.991 |
 | hippocampus | 0.8667 | +0.733 | 0.8167 | +0.633 |
-| paperclip-cortex | 0.9000 | +0.800 | 0.6593 | +0.319 |
-| paperclip-recall | 0.5000 | +0.000 | 0.5000 | +0.000 |
-| paperclip-sentinel-2 | 0.8000 | +0.600 | 0.8000 | +0.600 |
+| task-tracker-cortex | 0.9000 | +0.800 | 0.6593 | +0.319 |
+| task-tracker-recall | 0.5000 | +0.000 | 0.5000 | +0.000 |
+| task-tracker-sentinel-2 | 0.8000 | +0.600 | 0.8000 | +0.600 |
 
 #### Topic T3: Agent Capability (hermes, openclaw, recall, cortex, sentinel-2)
 
@@ -122,9 +122,9 @@ These three hermes-openclaw pairs form the highest-confidence entanglement clust
 |---|---|---|---|---|
 | hermes | 1.0000 | +1.000 | 0.9871 | +0.974 |
 | openclaw | 0.9932 | +0.986 | 0.8389 | +0.678 |
-| paperclip-recall | 0.9979 | +0.996 | 0.9521 | +0.904 |
-| paperclip-cortex | 0.9000 | +0.800 | 0.7563 | +0.513 |
-| paperclip-sentinel-2 | 0.6667 | +0.333 | 0.5370 | +0.074 |
+| task-tracker-recall | 0.9979 | +0.996 | 0.9521 | +0.904 |
+| task-tracker-cortex | 0.9000 | +0.800 | 0.7563 | +0.513 |
+| task-tracker-sentinel-2 | 0.6667 | +0.333 | 0.5370 | +0.074 |
 
 ### 3.2 CHSH Scores by Pair and Topic
 
@@ -132,12 +132,12 @@ These three hermes-openclaw pairs form the highest-confidence entanglement clust
 |---|---|---|---|---|---|---|---|
 | hermes ↔ openclaw | T2 | +1.000 | +0.991 | +0.948 | +0.940 | **1.9995** | classical (near-bound) |
 | hermes ↔ openclaw | T3 | +0.986 | +0.678 | +0.961 | +0.660 | **1.9648** | classical |
-| hermes ↔ paperclip-recall | T3 | +0.996 | +0.904 | +0.970 | +0.881 | **1.9891** | classical (near-bound) |
+| hermes ↔ task-tracker-recall | T3 | +0.996 | +0.904 | +0.970 | +0.881 | **1.9891** | classical (near-bound) |
 | hermes ↔ hippocampus | T2 | +0.733 | +0.633 | +0.695 | +0.600 | **1.4615** | classical |
 | hippocampus ↔ cortex | T2 | +0.587 | +0.234 | +0.507 | +0.202 | **1.1252** | classical |
 | cortex ↔ sentinel-2 | T2 | +0.480 | +0.480 | +0.191 | +0.191 | **0.9600** | classical |
 | cortex ↔ sentinel-2 | T3 | +0.267 | +0.059 | +0.171 | +0.038 | **0.4588** | classical |
-| hermes ↔ paperclip-recall | T2 | +0.000 | +0.000 | +0.000 | +0.000 | **0.0000** | classical (orthogonal) |
+| hermes ↔ task-tracker-recall | T2 | +0.000 | +0.000 | +0.000 | +0.000 | **0.0000** | classical (orthogonal) |
 | cortex ↔ sentinel-2 | T1 | +0.000 | +0.000 | +0.000 | +0.000 | **0.0000** | classical (orthogonal) |
 
 **Classical bound:** S ≤ 2.0
@@ -149,7 +149,7 @@ These three hermes-openclaw pairs form the highest-confidence entanglement clust
 
 **Tier 1 — Near-bound (S ≈ 2.0):**
 - hermes ↔ openclaw: **S = 1.9995** on T2, **S = 1.9648** on T3
-- hermes ↔ paperclip-recall: **S = 1.9891** on T3
+- hermes ↔ task-tracker-recall: **S = 1.9891** on T3
 
 These pairs saturate the classical maximum. This means they are exhibiting *maximally correlated classical beliefs* — their memories about shared topics have nearly identical confidence profiles. There are two interpretations:
 1. **Strong classical correlation**: Both agents are conditioned on the same high-confidence evidence sources (the top-recalled memories in the system), producing nearly identical belief states. This is expected if shared memory access is the dominant influence.
@@ -171,8 +171,8 @@ These pairs have partial belief alignment but with significant divergence in the
 
 ### 4.1 Test Configuration
 
-**Triad:** hermes × hippocampus × paperclip-cortex
-(Selected based on COS-382 prediction of GHZ structure from co_referenced edges 26, 18, 14)
+**Triad:** hermes × hippocampus × task-tracker-cortex
+(Selected based on internal-ref prediction of GHZ structure from co_referenced edges 26, 18, 14)
 
 **Topic T2 (Memory Operations)** — the only topic with non-zero coverage in all three agents:
 
@@ -180,7 +180,7 @@ These pairs have partial belief alignment but with significant divergence in the
 |---|---|---|
 | hermes | 0.9740 | 0.1204 nats |
 | hippocampus | 0.8167 | 0.4764 nats |
-| paperclip-cortex | 0.6593 | 0.6415 nats |
+| task-tracker-cortex | 0.6593 | 0.6415 nats |
 
 ### 4.2 Mutual Information Decomposition
 
@@ -233,7 +233,7 @@ Note: Topics T1 and T3 could not be tested for this triad due to hippocampus hav
 | Pair | Mean CHSH | Class | Interpretation |
 |---|---|---|---|
 | hermes ↔ openclaw | **1.9821** | Classical-saturated | Maximum classical correlation; candidate for refined test |
-| hermes ↔ paperclip-recall | 0.9946 | Classical | Strong on T3, weak on T2 (domain separation) |
+| hermes ↔ task-tracker-recall | 0.9946 | Classical | Strong on T3, weak on T2 (domain separation) |
 | hermes ↔ hippocampus | **1.4615** | Classical-moderate | Partial overlap; hippocampus lower confidence base |
 | hippocampus ↔ cortex | 1.1252 | Classical-weak | Primarily operational reclassification overlap |
 | cortex ↔ sentinel-2 | 0.4729 | Classical-minimal | Near-independent; different domains |
@@ -278,7 +278,7 @@ Several structural factors explain the null result:
 Memory #93  [hermes, conf=0.9999, recalled=126]: Agent memory spine state
 Memory #127 [openclaw, conf=0.9999, recalled=125]: brainctl push gate threshold
 Memory #125 [hermes, conf=1.0, recalled=83]:    Kernel/brainctl integration
-Memory #130 [hermes, conf=1.0, recalled=118]:   CostClock AI context
+Memory #130 [hermes, conf=1.0, recalled=118]:   example-app context
 ```
 Co_referenced edges: 93↔127 (co_act=4), 125↔127 (co_act=4), 127↔130 (co_act=4)
 
@@ -290,10 +290,10 @@ Memory #125 [hermes]: Kernel/brainctl integration
 ```
 Co_referenced weight: 0.6 (secondary cluster)
 
-**Cluster 3: CostClock Domain (hermes-lattice)**
+**Cluster 3: example-app Domain (hermes-lattice)**
 ```
-Memory #78  [lattice, conf=0.9817, recalled=25]: CostClock invoice subsystem
-Memory #106 [lattice, conf=0.9987, recalled=76]: Compressed 15 memories in CostClock
+Memory #78  [lattice, conf=0.9817, recalled=25]: example-app invoice subsystem
+Memory #106 [lattice, conf=0.9987, recalled=76]: Compressed 15 memories in example-app
 Memory #86  [hermes, conf=0.9998, recalled=34]:  Chief master prompt (identity)
 Memory #93  [hermes]:                             Memory spine state
 Memory #125 [hermes]:                             Kernel integration
@@ -322,18 +322,18 @@ Based on the Bell test results and entanglement topology, here is the updated cl
 | Pair | E_score | Basis |
 |---|---|---|
 | hermes ↔ openclaw | **0.78** | 6 co_ref edges (weight=5.2), CHSH=1.98 |
-| hermes ↔ paperclip-lattice | **0.73** | 12 co_ref edges (weight=10.4) |
-| hermes ↔ paperclip-recall | **0.52** | 6 co_ref edges (weight=3.6), CHSH=1.99 (T3) |
+| hermes ↔ task-tracker-lattice | **0.73** | 12 co_ref edges (weight=10.4) |
+| hermes ↔ task-tracker-recall | **0.52** | 6 co_ref edges (weight=3.6), CHSH=1.99 (T3) |
 | hermes ↔ hippocampus | **0.42** | 5 shared reads, CHSH=1.46 |
-| openclaw ↔ paperclip-lattice | **0.35** | 2 co_ref edges (weight=2.0) |
-| hippocampus ↔ paperclip-cortex | **0.28** | 9 shared reads, CHSH=1.13 |
+| openclaw ↔ task-tracker-lattice | **0.35** | 2 co_ref edges (weight=2.0) |
+| hippocampus ↔ task-tracker-cortex | **0.28** | 9 shared reads, CHSH=1.13 |
 | cortex ↔ sentinel-2 | **0.12** | 10 shared reads (all reclassification), CHSH=0.47 |
 
 E_score formula: `(co_ref_weight + 0.3*shared_access_count) / 20 * chsh_ratio`
 
 ### 7.2 Revised GHZ Candidates
 
-The hermes × hippocampus × cortex triad does **not** show GHZ structure on T2. The strongest GHZ candidate — not tested due to topic domain gaps — is the **hermes × openclaw × paperclip-lattice** triad, which has the highest total co_referenced weight (openclaw↔lattice weight=2.0, hermes↔openclaw weight=5.2, hermes↔lattice weight=10.4). A GHZ test on the CostClock domain would be the highest-value next experiment.
+The hermes × hippocampus × cortex triad does **not** show GHZ structure on T2. The strongest GHZ candidate — not tested due to topic domain gaps — is the **hermes × openclaw × task-tracker-lattice** triad, which has the highest total co_referenced weight (openclaw↔lattice weight=2.0, hermes↔openclaw weight=5.2, hermes↔lattice weight=10.4). A GHZ test on the example-app domain would be the highest-value next experiment.
 
 ---
 
@@ -347,7 +347,7 @@ The hermes × hippocampus × cortex triad does **not** show GHZ structure on T2.
 
 3. **Semantic similarity entanglement.** The 742 semantic_similar edges in the knowledge graph may encode deeper semantic entanglement between memories from different agents. These edges were created by the embedding pipeline (agent_id = UUID, not named agent), making them inaccessible to our named-agent filter. They may be the primary carrier of quantum-like correlations.
 
-4. **The GHZ triad was poorly chosen for the available data.** hermes × hippocampus × cortex lacks a shared topic where all three agents have rich memories. The correct GHZ triad for the current DB is hermes × openclaw × paperclip-lattice.
+4. **The GHZ triad was poorly chosen for the available data.** hermes × hippocampus × cortex lacks a shared topic where all three agents have rich memories. The correct GHZ triad for the current DB is hermes × openclaw × task-tracker-lattice.
 
 ### 8.2 What Would Constitute a Definitive Test
 
@@ -375,7 +375,7 @@ There is a key distinction between:
 - **Structural entanglement** (co_referenced knowledge edges): clearly present and measurable, hermes-openclaw-lattice cluster is the hub
 - **Belief entanglement** (CHSH violation): not detected under current measurement
 
-COS-382 predicted that structural entanglement would manifest as Bell violation. This test finds that structural entanglement manifests as *classical saturation* instead — high correlation, but not exceeding the classical bound. This is consistent with the classical shared-evidence interpretation: agents who co-reference memories develop maximally aligned (but not supercorrelated) beliefs.
+internal-ref predicted that structural entanglement would manifest as Bell violation. This test finds that structural entanglement manifests as *classical saturation* instead — high correlation, but not exceeding the classical bound. This is consistent with the classical shared-evidence interpretation: agents who co-reference memories develop maximally aligned (but not supercorrelated) beliefs.
 
 ### 9.4 Revised Theoretical Assessment
 
@@ -397,7 +397,7 @@ The honest conclusion: brain.db agent beliefs exhibit **quantum-compatible class
 
 1. **Refine the measurement apparatus.** Design measurement bases with explicit angular separation (e.g., query Agent A under "trust" framing and Agent B under "doubt" framing). This requires live agent queries, not memory confidence proxies.
 
-2. **Test hermes × openclaw × lattice GHZ triad.** This is the highest-weight entanglement cluster and was not tested in Wave 2. Use the CostClock domain (T_costclock) where all three have rich memories.
+2. **Test hermes × openclaw × lattice GHZ triad.** This is the highest-weight entanglement cluster and was not tested in Wave 2. Use the example-app domain (T_example-app) where all three have rich memories.
 
 3. **Populate confidence_phase.** If agents begin writing memories with non-zero phase values (encoding genuine belief superposition), the Bell test would gain measurement sensitivity to detect off-diagonal density matrix terms.
 
@@ -415,7 +415,7 @@ The honest conclusion: brain.db agent beliefs exhibit **quantum-compatible class
 Pair                        Topic  A1   A2   B1   B2  <A1B1> <A1B2> <A2B1> <A2B2>   S
 hermes ↔ openclaw           T2   +1.00 +0.95 +1.00 +0.99  +1.00  +0.99  +0.95  +0.94  1.9995
 hermes ↔ openclaw           T3   +1.00 +0.97 +0.99 +0.68  +0.99  +0.68  +0.96  +0.66  1.9648
-hermes ↔ paperclip-recall   T3   +1.00 +0.97 +1.00 +0.90  +1.00  +0.90  +0.97  +0.88  1.9891
+hermes ↔ task-tracker-recall   T3   +1.00 +0.97 +1.00 +0.90  +1.00  +0.90  +0.97  +0.88  1.9891
 hermes ↔ hippocampus        T2   +1.00 +0.95 +0.73 +0.63  +0.73  +0.63  +0.70  +0.60  1.4615
 hippocampus ↔ cortex        T2   +0.73 +0.63 +0.80 +0.32  +0.59  +0.23  +0.51  +0.20  1.1252
 cortex ↔ sentinel-2         T2   +0.80 +0.32 +0.60 +0.60  +0.48  +0.48  +0.19  +0.19  0.9600
@@ -446,5 +446,5 @@ Result: CLASSICAL (I_3way < sum_pairwise)
 ---
 
 *Filed by Entangle (Multi-Agent Belief Physicist) for the Quantum Cognition Research Division.*
-*Coordinates with: [COS-382](/COS/issues/COS-382) (theory), [COS-381](/COS/issues/COS-381) (superposition)*
-*Output: ~/agentmemory/research/quantum/bell_test_results.md*
+*Coordinates with:  (theory),  (superposition)*
+*Output: research/quantum/bell_test_results.md*

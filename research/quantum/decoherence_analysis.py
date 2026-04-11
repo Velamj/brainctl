@@ -3,13 +3,13 @@
 Empirical Decoherence Validation: brain.db Memory Lifecycle Analysis
 ====================================================================
 
-Tests the quantum decoherence model (COS-384) against live memory data:
+Tests the quantum decoherence model  against live memory data:
 - Power-law decay (t^{-γ}) vs classical exponential (e^{-λt})
 - Noise coupling parameter validation
 - Pointer state hypothesis
 - Quantum Zeno effect (measurement protection)
 
-Author: Decohere (COS-396)
+Author: Decohere 
 Uses only built-in Python libraries (sqlite3, json, math, statistics)
 """
 
@@ -216,12 +216,12 @@ def fit_models(decay_curves):
     return results
 
 # ============================================================================
-# Noise Coupling Validation (COS-384 Prediction)
+# Noise Coupling Validation (internal-ref Prediction)
 # ============================================================================
 
 def validate_noise_coupling(groups):
     """
-    COS-384 predicts: λ_eff = λ_0 × (1 + contradiction_rate)
+    internal-ref predicts: λ_eff = λ_0 × (1 + contradiction_rate)
     Proxy: use trust_score as inverse of contradiction rate
     """
     results = {}
@@ -252,7 +252,7 @@ def validate_noise_coupling(groups):
     return results
 
 # ============================================================================
-# Pointer State Hypothesis (COS-384 Prediction)
+# Pointer State Hypothesis (internal-ref Prediction)
 # ============================================================================
 
 def validate_pointer_states(groups):
@@ -355,11 +355,11 @@ def validate_quantum_zeno(groups):
 # ============================================================================
 
 def main():
-    db_path = '/Users/r4vager/agentmemory/db/brain.db'
+    db_path = 'brain.db
 
     print("=" * 80)
     print("EMPIRICAL DECOHERENCE VALIDATION")
-    print("Testing COS-384 Predictions Against brain.db Memory Lifecycle")
+    print("Testing internal-ref Predictions Against brain.db Memory Lifecycle")
     print("=" * 80)
     print()
 
@@ -423,7 +423,7 @@ def main():
     print()
 
     # Validate noise coupling
-    print("[4] Validating noise coupling parameters (COS-384)...")
+    print("[4] Validating noise coupling parameters ...")
     noise_results = validate_noise_coupling(groups)
     for tc in ['permanent', 'long', 'medium', 'short', 'ephemeral']:
         if tc in noise_results:
@@ -471,17 +471,17 @@ def main():
     print("=" * 80)
 
     print(f"\n   Model Preference: Power-law {power_law_wins} wins, Exponential {exp_wins} wins")
-    print(f"   → Prediction (COS-384): Power-law decay under strong noise coupling")
+    print(f"   → Prediction : Power-law decay under strong noise coupling")
     print(f"   → Result: {'CONFIRMED' if power_law_wins > exp_wins else 'INCONCLUSIVE'}")
 
     print(f"\n   Pointer State Protection: {pointer_confirmed}/{pointer_total} temporal classes")
-    print(f"   → Prediction (COS-384): High in-degree memories resist decoherence")
+    print(f"   → Prediction : High in-degree memories resist decoherence")
     print(f"   → Result: {'CONFIRMED' if pointer_confirmed > pointer_total/2 else 'INCONCLUSIVE'}")
 
     print(f"\n   Quantum Zeno Effect: {zeno_count} Zeno, "
           f"{dephasing_count} dephasing, "
           f"{len(zeno_results) - zeno_count - dephasing_count} neutral")
-    print(f"   → Prediction (COS-384): Frequently measured memories show Zeno protection")
+    print(f"   → Prediction : Frequently measured memories show Zeno protection")
     print(f"   → Result: MIXED (some classes show protection, others show dephasing)")
 
     print("\n" + "=" * 80)
@@ -520,7 +520,7 @@ def main():
         } for k, v in zeno_results.items()}
     }
 
-    with open('/Users/r4vager/agentmemory/research/quantum/decoherence_analysis_results.json', 'w') as f:
+    with open('brain.db 'w') as f:
         json.dump(export_data, f, indent=2)
 
     return export_data

@@ -1,7 +1,7 @@
 # Proactive Interference — How Old Memories Block New Learning
 
 **Research Wave:** 12
-**Ticket:** COS-367
+**Ticket:** internal-ref
 **Author:** Epoch (Temporal Cognition Engineer)
 **Date:** 2026-03-28
 **Status:** Complete
@@ -12,7 +12,7 @@
 
 Proactive Interference (PI) describes the phenomenon where prior learning impedes the encoding and retrieval of new, potentially contradictory information. In cognitive science, PI is one of the principal causes of forgetting and belief rigidity in human memory. For brain.db, PI is a systemic risk: as the store ages, high-recalled permanent memories with accumulated Bayesian evidence mass (alpha >> 1, beta ≈ 0) function as cognitive incumbents that structurally suppress competing new writes.
 
-This report documents the empirical PI landscape in brain.db, defines a **Proactive Interference Index (PII)**, proposes a **recency gate** formula, taxonomizes the most PI-prone memory categories, and specifies integration points with AGM belief revision (COS-363) and the Bayesian confidence system (COS-354).
+This report documents the empirical PI landscape in brain.db, defines a **Proactive Interference Index (PII)**, proposes a **recency gate** formula, taxonomizes the most PI-prone memory categories, and specifies integration points with AGM belief revision  and the Bayesian confidence system .
 
 ---
 
@@ -42,7 +42,7 @@ Anderson and Neely extended PI theory with an inhibitory mechanism: retrieval of
 
 Wickens demonstrated that PI can be overcome when the *encoding category* shifts — a phenomenon called "release from PI." When new information is framed in a categorically distinct namespace, interference drops sharply.
 
-**brain.db implication:** Categorical isolation via `scope` (e.g., `project:new-system` vs `project:costclock-ai`) provides natural PI release. New scopes are protected from old-scope interference. This is already partially in place but under-exploited.
+**brain.db implication:** Categorical isolation via `scope` (e.g., `project:new-system` vs `project:example-app`) provides natural PI release. New scopes are protected from old-scope interference. This is already partially in place but under-exploited.
 
 ### 1.4 Consolidation and PI (McGaugh 2000)
 
@@ -99,7 +99,7 @@ Short-class and ephemeral-class memories with recall counts of 24–48 represent
 | id | class | recalled_count | Content preview |
 |---|---|---|---|
 | 376 | short | 48 | MASSIVE SESSION: Built CKO identity, created COG+BRN projects |
-| 410 | short | 45 | COS-319 filed: hippocampus compression discards source_event_id links |
+| 410 | short | 45 | internal-ref filed: hippocampus compression discards source_event_id links |
 | 532 | ephemeral | 31 | LESSON: never run brainctl distill below threshold 0.7 |
 | 300 | short | 33 | ToM inject: Schema is v12, Migration 012 applied |
 
@@ -193,7 +193,7 @@ Using MAX_RECALLED=121:
 **Definition:** Memories in `category=lesson` with high recall and high alpha. Lessons are one-time experiences encoded as universal rules.
 
 **Examples:**
-- id=407: COS-221 implementation lesson (recalled=91, PII=0.844)
+- id=407: internal-ref implementation lesson (recalled=91, PII=0.844)
 - id=532: "never run brainctl distill below threshold 0.7" (recalled=31, ephemeral class but high alpha)
 
 **PI mechanism:** A lesson encoded at one point in time ("never do X because Y") can become wrong when Y changes. But its high PII makes it nearly impossible to overwrite. The lesson "never distill below 0.7" may have been correct given the state of the system in March 2026 but incorrect after a future threshold calibration.
@@ -208,7 +208,7 @@ Using MAX_RECALLED=121:
 
 **Definition:** Memories asserting that a specific tool, command, or API endpoint exists and works in a certain way.
 
-**Examples:** The brainctl `gw listen` bug (COS-322) — the memory "brainctl gw listen works" would suppress the later correction if written as permanent.
+**Examples:** The brainctl `gw listen` bug  — the memory "brainctl gw listen works" would suppress the later correction if written as permanent.
 
 **PI mechanism:** Tool availability is one of the most volatile facts in the system. A high-PII tool availability memory (e.g., `brainctl X works`) can suppress the accurate correction (`brainctl X was removed in v3`) for many heartbeats before the lower-PII new memory accumulates enough evidence.
 
@@ -331,7 +331,7 @@ Permanent memories should require explicit authorization for degradation:
 
 ## 7. Integration Spec
 
-### 7.1 Integration with AGM Belief Revision (COS-363)
+### 7.1 Integration with AGM Belief Revision 
 
 The AGM framework (Alchourrón, Gärdenfors, Makinson) requires a minimal change function that determines which beliefs to retract when a contradiction is detected. PII provides the key input for this function:
 
@@ -353,7 +353,7 @@ AGM revision priority: retract the belief with LOWER PII first.
 3. Schedule a **validation task** — assign the conflict to a trust-ranked agent for adjudication.
 4. Only retract/degrade the incumbent after explicit agent validation or after N additional contradicting memories accumulate (N ≥ 3 recommended).
 
-### 7.2 Integration with Bayesian Confidence System (COS-354)
+### 7.2 Integration with Bayesian Confidence System 
 
 The Bayesian confidence system accumulates evidence via alpha/beta updates. PI adds a pre-write hook and a post-conflict hook:
 
@@ -466,9 +466,9 @@ pi_metrics = {
 | Priority | Action | Schema Change | Owner |
 |---|---|---|---|
 | **CRITICAL** | Implement PII formula as `brainctl memory pii` subcommand | None | Epoch / Hermes |
-| **CRITICAL** | Apply recency gate at write time for competing memories | None (uses existing alpha field) | COS-354 integration |
+| **CRITICAL** | Apply recency gate at write time for competing memories | None (uses existing alpha field) | internal-ref integration |
 | **HIGH** | Add PI degradation hook to coherence-check pipeline | None | Sentinel / Hermes |
-| **HIGH** | Integrate PII into AGM minimal-change selection (COS-363) | None | Sentinel-2 |
+| **HIGH** | Integrate PII into AGM minimal-change selection  | None | Sentinel-2 |
 | **HIGH** | Schedule validation heartbeat for alpha=9 cluster (ids 93, 127, 130, 407) | None | Epoch |
 | **MEDIUM** | Expire stale env-snapshot memories (id=93 especially) | Optional: expires_at | Epoch |
 | **MEDIUM** | Add PI health metrics to cadence report | None | Epoch |

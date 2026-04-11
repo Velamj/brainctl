@@ -4,15 +4,15 @@
 **Author:** Phase (Quantum Interference Engineer)
 **Date:** 2026-03-28
 **Status:** Research in Progress
-**Paperclip Issue:** [COS-392](/COS/issues/COS-392)
-**Depends on:** [COS-379](/COS/issues/COS-379) (Foundations), [COS-380](/COS/issues/COS-380) (Interference)
-**Context:** [COS-383](/COS/issues/COS-383) (Amplitude Scorer — blocked waiting for phase)
+**task-tracker Issue:** 
+**Depends on:**  (Foundations),  (Interference)
+**Context:**  (Amplitude Scorer — blocked waiting for phase)
 
 ---
 
 ## Executive Summary
 
-The quantum cognition model (COS-379) states that memory amplitude is **complex-valued**:
+The quantum cognition model  states that memory amplitude is **complex-valued**:
 
 ```
 α_i = √(confidence) × exp(i × confidence_phase)
@@ -36,7 +36,7 @@ In the quantum model, two memories with **identical confidence** (same |α|²) b
 
 ### 1.2 The Gap: Theory Without Inference
 
-COS-379 and COS-380 assume phase is *given*. But how do we compute it from brain.db data?
+internal-ref and internal-ref assume phase is *given*. But how do we compute it from brain.db data?
 
 **Available signals:**
 1. **Co-activation counts** — how often memories are retrieved together
@@ -678,7 +678,7 @@ def update_phase_after_retrieval(
 
 ### Phase C: Integration (hours 8-12)
 
-1. Integrate phase into quantum amplitude scorer (COS-383)
+1. Integrate phase into quantum amplitude scorer 
 2. Update retrieval ranking with interference-adjusted amplitudes
 3. Implement online phase update rule
 4. Benchmark P@5 improvement against baseline (target: >20%)
@@ -709,9 +709,9 @@ Against the current amplitude scorer (20% P@5):
 
 ## 11. References
 
-- COS-379: Quantum Probability Foundations (Qubit)
-- COS-380: Quantum Interference in Retrieval (Phase)
-- COS-383: Amplitude Scoring (Amplitude) — dependent task
+- internal-ref: Quantum Probability Foundations (Qubit)
+- internal-ref: Quantum Interference in Retrieval (Phase)
+- internal-ref: Amplitude Scoring (Amplitude) — dependent task
 - Busemeyer & Bruza (2012): Quantum Models of Cognition and Decision
 - Anderson et al. (1994): Retrieval-Induced Forgetting in human memory
 

@@ -1,9 +1,9 @@
 # Causal Event Graph — Temporal + Causal Links Between Events
-## Research Report — COS-184
+## Research Report — internal-ref
 **Author:** Epoch (Temporal Cognition Engineer)
 **Date:** 2026-03-28
 **Target:** brain.db — Automatic causal chain construction over the events table
-**Depends on:** [COS-114](/COS/issues/COS-114) (Temporal Reasoning & Causal Inference — foundational framework)
+**Depends on:**  (Temporal Reasoning & Causal Inference — foundational framework)
 
 ---
 
@@ -482,13 +482,13 @@ Hermes: "The deploy failed because config validation was skipped (event 456),
 | Temporal proximity ≠ causation | False positives in auto-detected edges | Confidence scoring + agent confirmation |
 | Confounders not modeled | Two events caused by same hidden trigger look causal | Template-based detection reduces this |
 | Sparse events = weak signal | Low event density means few causal links detected | Agent-reported links fill the gap |
-| No intervention data | Can't distinguish correlation from causation formally | Decision-point logging (Phase 2 from COS-114) |
+| No intervention data | Can't distinguish correlation from causation formally | Decision-point logging (Phase 2 from internal-ref) |
 | Scale: O(n^2) pairwise comparisons | Slow for large event volumes | Window-based limiting + index on (type, created_at) |
 
 **Honest answer to root question:** We can build causal chains automatically from event streams with ~60-70% reliability for high-confidence relationships (explicit references, known type pairs). The remaining 30-40% requires agent self-reporting or remains uncertain. This is useful — imperfect causal chains are vastly better than no causal chains.
 
 ---
 
-*Deliver to: ~/agentmemory/research/wave2/11_causal_event_graph.md*
-*Depends on: [COS-114](/COS/issues/COS-114) (Temporal Reasoning & Causal Inference)*
+*Deliver to: research/wave2/11_causal_event_graph.md*
+*Depends on:  (Temporal Reasoning & Causal Inference)*
 *References: 03_knowledge_graph.py edge types, FRONTIER.md "Causal graph over events" transformative idea*

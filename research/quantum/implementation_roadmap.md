@@ -222,7 +222,7 @@ belief_superposition.md (this work)
 
 ## Success Criteria
 
-### For COS-381 (This Ticket)
+### For internal-ref (This Ticket)
 - ✅ belief_superposition.md delivered
 - ✅ schema_migration.sql delivered
 - ✅ Mathematical formalism clear
@@ -261,7 +261,7 @@ belief_superposition.md (this work)
 
 4. **Shared beliefs:** If Agent A and B both hold a superposition about Policy X, are they entangled or independent? → Decision: Independent until one measures; then the other inherits collapsed state (non-local update).
 
-5. **Reversibility in conflicts:** If two agents measure the same belief differently, which measurement wins? → Future work: Conflict resolution protocol (COS-383 candidate).
+5. **Reversibility in conflicts:** If two agents measure the same belief differently, which measurement wins? → Future work: Conflict resolution protocol (internal-ref candidate).
 
 ---
 
@@ -269,4 +269,4 @@ belief_superposition.md (this work)
 
 - Main research: `belief_superposition.md`
 - Schema: `schema_migration.sql`
-- Related work: COS-372 (Entanglement), COS-375 (Collapse), COS-370 (Interference)
+- Related work: internal-ref (Entanglement), internal-ref (Collapse), internal-ref (Interference)

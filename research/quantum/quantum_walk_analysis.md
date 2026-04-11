@@ -3,8 +3,8 @@
 **Research Lead:** Qubit 2 (Head of Quantum Cognition Research)
 **Project:** Quantum Cognition Research (QCR-W2)
 **Date:** 2026-03-28
-**Paperclip Issue:** COS-397
-**Context:** COS-383 (quantum walk implementation), COS-379 (Hilbert space formalism)
+**task-tracker Issue:** internal-ref
+**Context:** internal-ref (quantum walk implementation), internal-ref (Hilbert space formalism)
 
 ---
 
@@ -12,7 +12,7 @@
 
 This document presents a formal spectral analysis of brain.db's knowledge graph and derives quantum walk speedup bounds for memory retrieval. The central finding is sobering: **brain.db's current knowledge graph structure does not support meaningful quantum walk speedup.** The memory-to-memory subgraph is severely sparse—only 16 of 150 active memories participate in memory-memory edges, forming two small connected components (n=10, n=6). The largest component is essentially a clique with a spectral gap of λ₂ ≈ 1.02, meaning classical random walks already mix in ~3 steps.
 
-However, this analysis also identifies the **conditions under which quantum walk would provide genuine speedup** as the knowledge graph grows, derives the **correct weighted directed walk operator** (which COS-383 does not implement correctly), and shows that **COS-383's decoherence rate is in the localization regime**—17x below optimal.
+However, this analysis also identifies the **conditions under which quantum walk would provide genuine speedup** as the knowledge graph grows, derives the **correct weighted directed walk operator** (which internal-ref does not implement correctly), and shows that **internal-ref's decoherence rate is in the localization regime**—17x below optimal.
 
 ---
 
@@ -32,7 +32,7 @@ However, this analysis also identifies the **conditions under which quantum walk
 | Active memories with ≥1 mem-mem edge | **16** | Only 10.7% of memories are connected |
 | Isolated active memories | **134** | 89.3% of memories have no graph edges |
 
-**Critical finding:** The knowledge graph suffers from severe edge rot. 79% of memory-to-memory edges connect retired or missing memories. Only 56 edges connect active-to-active memory pairs. The quantum walk in COS-383 operates on a nearly empty graph.
+**Critical finding:** The knowledge graph suffers from severe edge rot. 79% of memory-to-memory edges connect retired or missing memories. Only 56 edges connect active-to-active memory pairs. The quantum walk in internal-ref operates on a nearly empty graph.
 
 ### 1.2 Edge Type Distribution (Memory-Memory)
 
@@ -219,9 +219,9 @@ Grover-like quadratic speedup (O(√N) vs O(N)) on graphs requires:
 
 ## 5. Weighted Directed Walk Operator
 
-### 5.1 The Problem with COS-383's Implementation
+### 5.1 The Problem with internal-ref's Implementation
 
-COS-383's `QuantumWalk.walk_from_seed()` (line 284-340) has several formal issues:
+internal-ref's `QuantumWalk.walk_from_seed()` (line 284-340) has several formal issues:
 
 1. **Symmetrization error**: The `load_knowledge_graph()` function (line 347-373) adds reverse edges for all directed edges, treating the graph as undirected. brain.db's knowledge graph is **highly asymmetric** (Frobenius asymmetry = 1.39 on [0, √2] scale). Symmetrization destroys directional information.
 
@@ -355,7 +355,7 @@ Quantum walk provides **no structural advantage** for temporal queries because:
 
 ### 7.1 The Decoherence Spectrum
 
-COS-383 uses a decoherence rate parameter γ = 0.05. The walk's behavior depends critically on γ:
+internal-ref uses a decoherence rate parameter γ = 0.05. The walk's behavior depends critically on γ:
 
 | Regime | Condition | Behavior |
 |--------|-----------|----------|
@@ -371,16 +371,16 @@ For the LCC with classical spectral gap δ = 0.852:
 γ_optimal ≈ δ = 0.852
 ```
 
-**COS-383's γ = 0.05 is in the localization regime** (γ/δ = 0.059).
+**internal-ref's γ = 0.05 is in the localization regime** (γ/δ = 0.059).
 
 At γ = 0.05, the walk amplitude remains concentrated near the seed node. This means:
-- The quantum walk in COS-383 effectively returns the seed node and its immediate neighbors
+- The quantum walk in internal-ref effectively returns the seed node and its immediate neighbors
 - It does NOT explore the graph efficiently
 - The "walk bonus" (line 451) is dominated by self-return probability
 
 ### 7.3 Recommended Parameters
 
-| Parameter | COS-383 Value | Optimal Value | Ratio |
+| Parameter | internal-ref Value | Optimal Value | Ratio |
 |-----------|--------------|---------------|-------|
 | `DECOHERENCE_RATE` | 0.05 | 0.85 | 17x too low |
 | `QUANTUM_WALK_STEPS` | 5 | 2-3 (at current scale) | ~2x too many |
@@ -396,7 +396,7 @@ As the graph grows:
 
 ---
 
-## 8. Comparison with COS-383 Implementation
+## 8. Comparison with internal-ref Implementation
 
 ### 8.1 Issues Found
 
@@ -410,7 +410,7 @@ As the graph grows:
 | Stale edge problem | **Critical** | 79% of memory-memory edges connect retired nodes. Walk traverses ghost topology. |
 | Graph sparsity | **Critical** | 89% of active memories have no edges. Walk cannot reach them. |
 
-### 8.2 What COS-383 Actually Computes
+### 8.2 What internal-ref Actually Computes
 
 Given the issues above, the quantum walk in `compute_quantum_salience()` (line 376-466) effectively computes:
 
@@ -429,7 +429,7 @@ With walk_bonus scaled by 0.1, the total walk contribution to salience is < 0.01
 
 ## 9. Recommendations
 
-### 9.1 Immediate Fixes (COS-383)
+### 9.1 Immediate Fixes 
 
 1. **Prune stale edges**: Remove or archive knowledge edges where both endpoints are retired. This eliminates 79% of dead edges and makes the graph reflect actual memory state.
 
@@ -521,7 +521,7 @@ This confirms that even the quantum walk operator has near-maximal phase gap, co
 
 ## Conclusion
 
-brain.db's knowledge graph, at its current scale and connectivity, does not benefit from quantum walk-based search. The graph is too small (16 connected active memories), too dense (near-complete LCC), and too sparse outside the LCC (89% of memories isolated). COS-383's quantum walk implementation has formal correctness issues (non-unitary evolution, symmetrization of directed graph, localization-regime decoherence) and contributes < 1% to final salience scores.
+brain.db's knowledge graph, at its current scale and connectivity, does not benefit from quantum walk-based search. The graph is too small (16 connected active memories), too dense (near-complete LCC), and too sparse outside the LCC (89% of memories isolated). internal-ref's quantum walk implementation has formal correctness issues (non-unitary evolution, symmetrization of directed graph, localization-regime decoherence) and contributes < 1% to final salience scores.
 
 The quantum walk framework becomes valuable when:
 1. Knowledge graph grows to N ≥ 500 connected memories

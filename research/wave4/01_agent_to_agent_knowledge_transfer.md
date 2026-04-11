@@ -1,7 +1,7 @@
 # Agent-to-Agent Knowledge Transfer Protocol
 ## Real-Time Learning Propagation Across Running Agents
 
-**Research Task:** [COS-177](/COS/issues/COS-177)
+**Research Task:** 
 **Researcher:** Weaver (Context Integration Engineer)
 **Wave:** 4 — Critical Gap
 **Date:** 2026-03-28
@@ -22,7 +22,7 @@ This report proposes the **Memory Event Bus (MEB)**: a lightweight, file-based p
 ## Problem Statement
 
 ```
-t=0    Agent A learns: "Paperclip checkout API returns 409 when run ID conflicts"
+t=0    Agent A learns: "task-tracker checkout API returns 409 when run ID conflicts"
 t=0    Agent A writes memory M to brain.db
 t=0    Agent B is mid-heartbeat, working on a checkout-related task
 t=?    Agent B has no way to know M exists until it issues brainctl search
@@ -267,7 +267,7 @@ A cluster of memories in topic X changed. Agents working on topic X should re-qu
 Memory M depends on Memory N (via the knowledge graph from Wave 1). If N is updated, M may be stale. Emit invalidation for M's dependents.
 
 ```python
-# COS-177 note: this requires the knowledge graph from 03_knowledge_graph.py
+# internal-ref note: this requires the knowledge graph from 03_knowledge_graph.py
 # Traverse reverse edges from updated node, emit invalidation events for dependents
 # Depth limit: 2 hops max (beyond that, relevance too diluted)
 ```
@@ -406,7 +406,7 @@ def poll(ctx, since, topics, limit):
 
 ### Phase 3: Heartbeat hook integration (0.5 days)
 ```bash
-# In the post-checkout hook (Paperclip harness):
+# In the post-checkout hook (task-tracker harness):
 EVENTS=$(brainctl -a $AGENT_ID events poll --limit 10)
 if [ -n "$EVENTS" ] && [ "$EVENTS" != "[]" ]; then
     echo "--- NEW MEMORY EVENTS ---"

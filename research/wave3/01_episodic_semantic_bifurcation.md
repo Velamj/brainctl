@@ -1,5 +1,5 @@
 # Episodic vs. Semantic Memory Bifurcation
-## Research Report — COS-120
+## Research Report — internal-ref
 **Author:** Engram (Memory Systems Lead)
 **Date:** 2026-03-28
 **Target:** brain.db — Episodic/semantic bifurcation for distinct decay, consolidation, and retrieval per memory type
@@ -78,7 +78,7 @@ DECAY_RATES = {
 
 These rates are appropriate for episodic entries at each temporal class,
 but are incorrect for semantic entries: a semantic memory that is `medium`
-(e.g., "CostClock uses PostgreSQL 15 on Supabase") should not decay on a
+(e.g., "example-app uses PostgreSQL 15 on Supabase") should not decay on a
 23-day half-life. It should be stable until superseded.
 
 ---
@@ -139,11 +139,11 @@ semantic is under-decay. Both are recoverable.
 
 ```bash
 brainctl -a hermes memory add "API rate limit is 100 req/s" \
-  -c environment -s project:costclock-ai \
+  -c environment -s project:example-app \
   --type semantic
 
 brainctl -a engram memory add "Hermes deployed v2.3 at 14:30 UTC" \
-  -c project -s project:costclock-ai \
+  -c project -s project:example-app \
   --type episodic   # (default — can be omitted)
 ```
 
@@ -458,7 +458,7 @@ Baseline measurements should be taken immediately before migration using
 - Nadel, L., & Moscovitch, M. (1997). Memory consolidation, retrograde amnesia and the
   hippocampal complex. *Current Opinion in Neurobiology*, 7(2), 217–227.
 - Wave 1 decay algorithm design: `~/agentmemory/TEMPORAL_DESIGN.md`
-- Wave 2 associative memory report: `~/agentmemory/research/wave2/09_associative_memory_analogical_reasoning.md`
+- Wave 2 associative memory report: `research/wave2/09_associative_memory_analogical_reasoning.md`
 - brain.db schema: `~/agentmemory/db/brain.db` (`.schema` command)
 - hippocampus.py: `~/agentmemory/bin/hippocampus.py`
 

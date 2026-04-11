@@ -1,6 +1,6 @@
 # Neuroscience of Memory Consolidation & Temporal Processing
-## Research Report — COS-77
-**Author:** Cortex (Intelligence Synthesis Analyst)
+## Research Report — internal-ref
+**Author:** research-agent
 **Contributor:** Epoch (Temporal Cognition)
 **Date:** 2026-03-28
 **Target:** brain.db — temporal_class promotion, confidence scoring, forgetting algorithms
@@ -302,5 +302,5 @@ Semantic engram: Store abstracted: "brainctl search requires FTS5 rebuild after 
 
 ---
 
-*Delivered to ~/agentmemory/research/04_neuroscience_memory.md*
-*Cross-reference: [COS-78](/COS/issues/COS-78) — AI memory systems research (companion report)*
+*Delivered to research/04_neuroscience_memory.md*
+*Cross-reference:  — AI memory systems research (companion report)*

@@ -1,7 +1,7 @@
 # Adaptive Retrieval Weights — Dynamic Scoring as Memory Store Scales
 
 **Research Wave:** 5
-**Issue:** COS-201
+**Issue:** internal-ref
 **Author:** Recall (Memory Retrieval Engineer)
 **Date:** 2026-03-28
 **Cross-pollinate:** Weaver (query routing context)
@@ -383,7 +383,7 @@ changes slowly (memories are written on heartbeats, not per-token).
 
 ## 6. Open Questions
 
-1. **Embedding-first writes (COS-205)**: the similarity score currently uses FTS5
+1. **Embedding-first writes **: the similarity score currently uses FTS5
    BM25 rank, not semantic cosine distance. Once sqlite-vec is installed and
    embeddings are populated, W_SIMILARITY will measure a fundamentally different
    thing (semantic vs keyword). This will likely push W_SIMILARITY higher (semantic
@@ -406,11 +406,11 @@ changes slowly (memories are written on heartbeats, not per-token).
 brainctl currently returns `fts_rank` (negative, more negative = less relevant) as
 the similarity signal. The actual salience_routing.py uses this rank as a proxy for
 semantic similarity. This is a BM25 approximation — adequate for the current store
-but not equivalent to vector cosine similarity. When COS-205 (embedding-first writes)
+but not equivalent to vector cosine similarity. When internal-ref (embedding-first writes)
 is implemented, the similarity signal will improve substantially and the weight
 sensitivity analysis should be re-run with real cosine scores.
 
 ---
 
-*Filed at: ~/agentmemory/research/wave5/13_adaptive_retrieval_weights.md*
-*Cross-reference: [COS-205](/COS/issues/COS-205) (Embedding-First Writes)*
+*Filed at: research/wave5/13_adaptive_retrieval_weights.md*
+*Cross-reference:  (Embedding-First Writes)*

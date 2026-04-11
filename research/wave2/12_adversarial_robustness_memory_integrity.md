@@ -1,6 +1,6 @@
 # Adversarial Robustness & Memory Integrity
 
-**Task:** COS-115
+**Task:** internal-ref
 **Researcher:** Sentinel 2 — Memory Integrity Monitor
 **Wave:** 2 (Conceptual Foundations)
 **Date:** 2026-03-28
@@ -16,7 +16,7 @@ This report analyzes six threat vectors against brain.db and proposes a layered 
 - **Embedding poisoning** is the highest-risk attack vector — adversarial insertions can hijack vector search without triggering keyword-based checks
 - **Byzantine fault tolerance** for 22+ agents requires a 2-of-3 validation quorum model, not full BFT consensus
 - **Self-healing** should operate on a 3-tier escalation: auto-repair (contradictions), flag-for-review (trust anomalies), quarantine (integrity violations)
-- The existing trust/retraction system (COS-121/COS-189) provides the foundation — this report adds the **attack prevention** layer
+- The existing trust/retraction system (internal-ref/internal-ref) provides the foundation — this report adds the **attack prevention** layer
 
 ---
 
@@ -411,7 +411,7 @@ Not all agents are equally reliable across all domains. Model trust as a matrix:
 trust[agent_id][category] = score  (0.0 to 1.0)
 ```
 
-This is already implemented via `memory_trust_scores` table (COS-189). The key insight is that trust should be **category-specific**: an agent excellent at `project` memories may be unreliable for `decision` memories.
+This is already implemented via `memory_trust_scores` table . The key insight is that trust should be **category-specific**: an agent excellent at `project` memories may be unreliable for `decision` memories.
 
 ### 7.2 Trust Network Graph
 
@@ -501,7 +501,7 @@ def weighted_consensus(memories, category):
 
 ### 9.2 What assumptions in our current brain.db architecture are wrong or naive?
 
-1. **Trust is not binary and not static.** The architecture now supports trust scores (COS-189), but the write path still treats all agents equally — there's no gate based on trust at write time. Low-trust agents should have their memories auto-flagged.
+1. **Trust is not binary and not static.** The architecture now supports trust scores , but the write path still treats all agents equally — there's no gate based on trust at write time. Low-trust agents should have their memories auto-flagged.
 2. **FTS5 sanitization is necessary but insufficient.** We sanitize query syntax but don't validate that memory content itself is well-formed. Malformed JSON in `tags` or `derived_from_ids` can cause silent failures in trust propagation.
 3. **The `retired_at` soft delete assumes benign retirement.** An attacker who can write to the DB can retire critical memories. Retirement should be audited and rate-limited (an agent retiring more than 5 memories per minute is suspicious).
 4. **No authentication between agents and brainctl.** Any process that can call `~/bin/brainctl` can impersonate any agent via `--agent`. This is the single biggest architectural gap for integrity.
@@ -516,8 +516,8 @@ Rationale: Content hashing (Phase 1) is cheap to implement and immediately detec
 
 ## References
 
-- COS-121: Provenance & Trust Chains (complementary — detects drift, this prevents attacks)
-- COS-189: Schema Migration (implemented trust_score, retraction, derived_from_ids)
-- COS-120: Episodic/Semantic Bifurcation (temporal scoping reduces poisoning window)
-- COS-122: Write Contention & Consistency (CAS prevents race-condition exploits)
+- internal-ref: Provenance & Trust Chains (complementary — detects drift, this prevents attacks)
+- internal-ref: Schema Migration (implemented trust_score, retraction, derived_from_ids)
+- internal-ref: Episodic/Semantic Bifurcation (temporal scoping reduces poisoning window)
+- internal-ref: Write Contention & Consistency (CAS prevents race-condition exploits)
 - Wave 1, Module 06: Contradiction Detection (foundation for hallucination detection)

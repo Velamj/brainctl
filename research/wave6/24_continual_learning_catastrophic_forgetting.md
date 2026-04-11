@@ -1,10 +1,10 @@
 # Continual Learning & Catastrophic Forgetting — How to Keep Learning Without Destroying What You Know
 
 **Research Wave:** 6
-**Issue:** COS-248
+**Issue:** internal-ref
 **Author:** Sentinel 2 (Memory Integrity Monitor)
 **Date:** 2026-03-28
-**Builds On:** COS-84 (knowledge graph), COS-85 (coherence-check), COS-121 (provenance/trust chains), COS-122 (write contention/CAS), COS-179 (cross-agent contradiction detection)
+**Builds On:** internal-ref (knowledge graph), internal-ref (coherence-check), internal-ref (provenance/trust chains), internal-ref (write contention/CAS), internal-ref (cross-agent contradiction detection)
 **Cross-pollinate:** Hippocampus (consolidation cycle owner), Engram (episodic/semantic split), Recall (retrieval)
 **Project:** Cognitive Architecture & Enhancement
 
@@ -35,7 +35,7 @@ Catastrophic forgetting in neural networks occurs when learning new tasks overwr
 |------|-----------|-------------------|
 | **Semantic drift** | Consolidation cycle compresses semantically similar memories, losing nuance | None |
 | **Confidence erosion** | Decay pass applies uniform temporal weight reduction regardless of importance | None |
-| **Supersede overwrites** | A new memory with `supersedes_id` replaces the old one, breaking downstream dependents | Provenance chain (COS-121), but no write guard |
+| **Supersede overwrites** | A new memory with `supersedes_id` replaces the old one, breaking downstream dependents | Provenance chain , but no write guard |
 | **Contradiction resolution** | The winner of a contradiction check retires the loser — even if the loser was correct | Coherence check flags, but no replay |
 | **Embedding drift** | Re-embedding old memories with a new model changes their vector neighborhood | No version tracking |
 
@@ -55,7 +55,7 @@ Catastrophic forgetting in neural networks occurs when learning new tasks overwr
 
 **Aljundi et al. (2018) — Memory-Aware Synapses:** Track which synapses (parameters) matter for which outputs. A synapse is important if changing it would change an observed output. No task labels required.
 
-**Mapping:** Provenance graph (COS-121 / COS-84 knowledge graph) already tracks which memories derive from which. A memory is "synaptically important" if downstream memories depend on it. Track this as `downstream_dependent_count` and weight it into the consolidation resistance score.
+**Mapping:** Provenance graph (internal-ref / internal-ref knowledge graph) already tracks which memories derive from which. A memory is "synaptically important" if downstream memories depend on it. Track this as `downstream_dependent_count` and weight it into the consolidation resistance score.
 
 ---
 
@@ -226,7 +226,7 @@ def run_experience_replay(conn, new_memory_count):
 
 ### 4.1 The Dependency Graph as a Protection Mechanism
 
-COS-121 built provenance chains. COS-84 built the knowledge graph (2,675 edges). Neither currently gates writes.
+internal-ref built provenance chains. internal-ref built the knowledge graph (2,675 edges). Neither currently gates writes.
 
 The missing step: before any supersede, compress, or retire action on a memory, walk the knowledge graph to count confirmed downstream dependents.
 
@@ -387,12 +387,12 @@ brainctl search "term" --curriculum
 
 | System | How CLF Connects |
 |--------|-----------------|
-| COS-85 coherence-check | Replay uses coherence-check to verify memory health |
-| COS-121 provenance chains | `downstream_dependent_count` traverses provenance graph |
-| COS-122 write contention/CAS | Write guard is a pre-check before CAS attempt |
-| COS-179 cross-scope contradiction | Intake gate uses cross-scope detection before accepting |
-| COS-233 (Wave 6 cross-scope) | Shares contradiction detection logic |
-| COS-234 (Wave 6 trust scores) | CR score incorporates trust score via `confidence` field |
+| internal-ref coherence-check | Replay uses coherence-check to verify memory health |
+| internal-ref provenance chains | `downstream_dependent_count` traverses provenance graph |
+| internal-ref write contention/CAS | Write guard is a pre-check before CAS attempt |
+| internal-ref cross-scope contradiction | Intake gate uses cross-scope detection before accepting |
+| internal-ref (Wave 6 cross-scope) | Shares contradiction detection logic |
+| internal-ref (Wave 6 trust scores) | CR score incorporates trust score via `confidence` field |
 
 ---
 

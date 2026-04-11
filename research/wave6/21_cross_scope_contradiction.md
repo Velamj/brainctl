@@ -1,10 +1,10 @@
-# Cross-Scope Contradiction Detection — Implementing the COS-179 Consolidation Pass
+# Cross-Scope Contradiction Detection — Implementing the internal-ref Consolidation Pass
 
 **Research Wave:** 6
-**Issue:** COS-233
+**Issue:** internal-ref
 **Author:** Sentinel 2 (Memory Integrity Monitor)
 **Date:** 2026-03-28
-**Builds On:** COS-179 (cross-agent belief reconciliation), wave1/06_contradiction_detection.py
+**Builds On:** internal-ref (cross-agent belief reconciliation), wave1/06_contradiction_detection.py
 **Cross-pollinate:** Hippocampus (consolidation cycle owner), Cortex (belief reconciliation analysis)
 **Project:** Cognitive Architecture & Enhancement
 
@@ -12,7 +12,7 @@
 
 ## Executive Summary
 
-The Wave 1 `06_contradiction_detection.py` catches **within-scope** conflicts only: memories with the same `(agent_id, category, scope)` triple that assert opposing facts. COS-179 identified a more dangerous class of divergence: **cross-scope conflicts**, where two memories from different scopes refer to the same real-world entity but make incompatible claims. Neither scope constraint catches this — the existing system is architecturally blind to it.
+The Wave 1 `06_contradiction_detection.py` catches **within-scope** conflicts only: memories with the same `(agent_id, category, scope)` triple that assert opposing facts. internal-ref identified a more dangerous class of divergence: **cross-scope conflicts**, where two memories from different scopes refer to the same real-world entity but make incompatible claims. Neither scope constraint catches this — the existing system is architecturally blind to it.
 
 This report specifies and implements the cross-scope contradiction detection pass as a new function in `06_contradiction_detection.py`, with an integration hook in `05_consolidation_cycle.py`.
 
@@ -37,11 +37,11 @@ This requires **same scope AND same agent**. Cross-scope conflicts are missed en
 |----------|---------|---------|------------------------------|
 | Hermes writes "brain.db has 22 agents" (global) vs. Engram writes "22 agents, none in agentmemory project yet" (project:agentmemory) | global | project:agentmemory | Incompatible agent count claims |
 | Sentinel 2 writes "coherence check live" (agent scope) vs. Cortex writes "no automated coherence checking exists" | agent:sentinel-2 | project:agentmemory | Directly contradictory system state |
-| Agent A writes "COS-83 is done" (project:costclock) vs. Agent B writes "COS-83 is in_progress" (project:agentmemory) | project:costclock | project:agentmemory | Task status conflict |
+| Agent A writes "internal-ref is done" (project:example-app) vs. Agent B writes "internal-ref is in_progress" (project:agentmemory) | project:example-app | project:agentmemory | Task status conflict |
 
 ### 1.2 Scope Is Not Entity Scope
 
-The `scope` column governs **temporal decay** and **access visibility** — it does not mean the memory is *only about* that scope. A memory in `scope=project:costclock-ai` can make claims about the global auth system, Hermes's identity, or another project's status. Scope-gated detection misses 100% of these cross-cutting claims.
+The `scope` column governs **temporal decay** and **access visibility** — it does not mean the memory is *only about* that scope. A memory in `scope=project:example-app` can make claims about the global auth system, Hermes's identity, or another project's status. Scope-gated detection misses 100% of these cross-cutting claims.
 
 ---
 
@@ -69,9 +69,9 @@ ENTITY_PATTERNS = [
     # Named agents: "hermes", "sentinel-2", "hippocampus" etc.
     r'\b(hermes|sentinel-2|hippocampus|engram|prune|recall|cortex|weaver|scribe|'
     r'legion|axiom|kernel|cipher|armor|probe|nexus|codex|tempo|lattice|aegis|'
-    r'nara|openclaw|paperclip-\w+)\b',
+    r'nara|openclaw|task-tracker-\w+)\b',
 
-    # Issue identifiers: COS-83, PAP-224, etc.
+    # Issue identifiers: internal-ref, PAP-224, etc.
     r'\b([A-Z]{2,5}-\d+)\b',
 
     # System components: brain.db, brainctl, hippocampus.py, etc.
@@ -98,7 +98,7 @@ def extract_entities(content: str) -> set[str]:
 
 ### 2.3 Scope Relatedness Filter
 
-Not all cross-scope pairs are worth comparing. Two memories from completely unrelated scopes (e.g., costclock-ai invoice data vs. agentmemory identity) rarely conflict. Apply a scope relatedness filter first:
+Not all cross-scope pairs are worth comparing. Two memories from completely unrelated scopes (e.g., example-app invoice data vs. agentmemory identity) rarely conflict. Apply a scope relatedness filter first:
 
 ```python
 def scopes_are_related(scope_a: str, scope_b: str) -> bool:
@@ -370,7 +370,7 @@ if run_cross_scope:  # new parameter: run_cross_scope=False by default
 report = run_consolidation_cycle(run_cross_scope=True)
 
 # Or via a dedicated scan command (recommended for Sentinel 2)
-python ~/agentmemory/research/06_contradiction_detection.py --cross-scope --limit 50
+python research/06_contradiction_detection.py --cross-scope --limit 50
 ```
 
 ---
@@ -426,11 +426,11 @@ At 4,000+ memories, add an index-assisted pre-filter using the `topical_scope` o
 
 ---
 
-## 8. Relationship to Trust Score (COS-234)
+## 8. Relationship to Trust Score 
 
-Cross-scope contradiction detection is tightly coupled to trust score calibration ([COS-234](/COS/issues/COS-234)):
+Cross-scope contradiction detection is tightly coupled to trust score calibration ():
 
-1. **Detection triggers trust update:** When a cross-scope conflict is flagged, `trust_score` should be lowered on both memories (per the COS-234 trust event taxonomy: −0.20 per unresolved conflict).
+1. **Detection triggers trust update:** When a cross-scope conflict is flagged, `trust_score` should be lowered on both memories (per the internal-ref trust event taxonomy: −0.20 per unresolved conflict).
 
 2. **Trust as resolution tiebreaker:** When `trust_delta > 0.15`, the higher-trust memory is the preferred survivor — use `classify_resolution()` to surface this automatically.
 
@@ -449,4 +449,4 @@ The cross-scope contradiction pass adds three new capabilities to `06_contradict
 
 The integration hook in `05_consolidation_cycle.py` adds `run_cross_scope=False` parameter to `run_consolidation_cycle()` and wires the new pass into step 7b.
 
-The pass is conservative by design: it only emits events and knowledge edges, never modifying memories directly. Resolution is left to `auto_resolve_contradictions()` (with trust-score tiebreaker from COS-234) or human review.
+The pass is conservative by design: it only emits events and knowledge edges, never modifying memories directly. Resolution is left to `auto_resolve_contradictions()` (with trust-score tiebreaker from internal-ref) or human review.

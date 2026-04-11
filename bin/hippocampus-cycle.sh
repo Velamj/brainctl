@@ -6,11 +6,11 @@ mkdir -p ~/agentmemory/logs
 
 echo "=== Hippocampus cycle started at $(date) ===" | tee "$LOG"
 
-# 0. Neuromodulation detect — update org_state from current conditions (COS-304)
+# 0. Neuromodulation detect — update org_state from current conditions (internal-ref)
 echo "--- Neuromodulation detect ---" | tee -a "$LOG"
 ~/bin/brainctl neuro detect --agent hippocampus 2>&1 | tee -a "$LOG" || true
 
-# 0.5. Temporal classification pass — reclassify memories by age/recall rules (COS-300)
+# 0.5. Temporal classification pass — reclassify memories by age/recall rules (internal-ref)
 echo "--- Temporal classification pass ---" | tee -a "$LOG"
 PYTHONPATH=~/agentmemory/bin python3 -c "
 import sqlite3, hippocampus
@@ -70,7 +70,7 @@ conn.close()
 print('Compression complete')
 " 2>&1 | tee -a "$LOG"
 
-# 4.5. Reflexion propagation pass (COS-320) — propagate generalizable lessons cross-agent
+# 4.5. Reflexion propagation pass (internal-ref) — propagate generalizable lessons cross-agent
 echo "--- Reflexion propagation pass ---" | tee -a "$LOG"
 PYTHONPATH=~/agentmemory/bin python3 -c "
 import sqlite3, hippocampus, json
@@ -91,15 +91,15 @@ python3 ~/agentmemory/bin/cadence.py 2>&1 | tee -a "$LOG"
 echo "--- Validation ---" | tee -a "$LOG"
 ~/bin/brainctl validate 2>&1 | tee -a "$LOG"
 
-# 7. Distillation — promote high-importance unlinked events to durable memories (COS-240)
+# 7. Distillation — promote high-importance unlinked events to durable memories (internal-ref)
 echo "--- Distillation pass ---" | tee -a "$LOG"
 ~/bin/brainctl distill --threshold 0.5 --limit 50 2>&1 | tee -a "$LOG"
 
-# 8. Dream pass — creative synthesis via cross-scope bisociation (COS-271)
+# 8. Dream pass — creative synthesis via cross-scope bisociation (internal-ref)
 echo "--- Dream pass ---" | tee -a "$LOG"
 PYTHONPATH=~/agentmemory/bin python3 ~/agentmemory/bin/hippocampus.py dream-pass --agent hippocampus 2>&1 | tee -a "$LOG"
 
-# 8.5. Embedding coverage pass — embed any new memories created during cycle (COS-361)
+# 8.5. Embedding coverage pass — embed any new memories created during cycle (internal-ref)
 echo "--- Embedding coverage pass ---" | tee -a "$LOG"
 ~/agentmemory/bin/embed-populate --tables memories 2>&1 | tee -a "$LOG" || true
 

@@ -1,12 +1,12 @@
-# COS-246: Theory of Mind & Agent Modeling
+# internal-ref: Theory of Mind & Agent Modeling
 **Series:** Cognitive Operating System Research
 **Wave:** 6
 **Report Number:** 24
 **Date:** 2026-03-28
 **Author:** Weaver (Context Integration Engineer)
 **Status:** Complete
-**Builds On:** COS-177 (Agent-to-Agent Knowledge Transfer), COS-204 (Memory as Policy Engine),
-COS-232 (Memory Event Bus), COS-85 (Coherence / Sentinel)
+**Builds On:** internal-ref (Agent-to-Agent Knowledge Transfer), internal-ref (Memory as Policy Engine),
+internal-ref (Memory Event Bus), internal-ref (Coherence / Sentinel)
 
 ---
 
@@ -55,7 +55,7 @@ object to Box. Sally returns — where does Sally THINK the object is? A ToM-cap
 "Basket" (Sally's belief), not "Box" (ground truth).
 
 **Mapping to our system:**
-- When Hermes receives a new memory write (via MEB, COS-232), it must check: "Which agents still
+- When Hermes receives a new memory write (via MEB, internal-ref), it must check: "Which agents still
   hold the old belief? Their belief is now false."
 - The `agent_beliefs` table stores each agent's current belief per topic.
 - When ground truth changes, `belief_conflicts` captures the divergence.
@@ -161,7 +161,7 @@ CREATE TABLE agent_beliefs (
         --   "project:agentmemory:status"
         --   "agent:hermes:role"
         --   "global:memory_spine:schema_version"
-        --   "task:COS-232:status"
+        --   "task:internal-ref:status"
     belief_content      TEXT    NOT NULL,   -- what the agent believes
     confidence          REAL    NOT NULL DEFAULT 1.0
                             CHECK(confidence >= 0.0 AND confidence <= 1.0),
@@ -272,7 +272,7 @@ CREATE TABLE agent_bdi_state (
         --   "active_task_count": N,
         --   "primary_goal": "...",
         --   "priority": "critical|high|medium|low",
-        --   "task_ids": ["COS-246", ...]
+        --   "task_ids": ["internal-ref", ...]
         -- }
     desires_last_updated_at     TEXT,
 
@@ -353,17 +353,17 @@ SUBCOMMANDS
 
 ```bash
 # Hermes maintenance cycle detects Codex is about to work on a task
-# that requires knowledge of the new MEB schema (COS-232)
-$ brainctl -a hermes tom gap-scan paperclip-codex
+# that requires knowledge of the new MEB schema 
+$ brainctl -a hermes tom gap-scan task-tracker-codex
 TOPIC                              STATUS    STALENESS   CONFUSION_RISK
 global:memory_spine:schema_v011    MISSING   —           0.87
 project:agentmemory:meb_commands   STALE     72h         0.63
 agent:hermes:maintenance_schedule  CURRENT   2h          0.10
 
 # Gap found: inject
-$ brainctl -a hermes tom inject paperclip-codex global:memory_spine:schema_v011
-→ Memory written: scope=agent:paperclip-codex, category=environment
-→ Perspective model updated: observer=hermes, subject=paperclip-codex, topic=...
+$ brainctl -a hermes tom inject task-tracker-codex global:memory_spine:schema_v011
+→ Memory written: scope=agent:task-tracker-codex, category=environment
+→ Perspective model updated: observer=hermes, subject=task-tracker-codex, topic=...
 → Confusion risk reduced: 0.87 → 0.12
 ```
 
@@ -371,7 +371,7 @@ $ brainctl -a hermes tom inject paperclip-codex global:memory_spine:schema_v011
 
 ## 5. Hermes Integration — When to Use ToM
 
-### 5.1 MEB-Triggered Belief Staleness (integrates with COS-232)
+### 5.1 MEB-Triggered Belief Staleness (integrates with internal-ref)
 
 When the MEB fires a `memory_events` insert for an important update:
 
@@ -409,7 +409,7 @@ prerequisite knowledge I assumed they had."
 ```bash
 $ brainctl -a hermes tom status
 AGENT               COVERAGE   STALENESS   CONFUSION_RISK   STATUS
-paperclip-codex     0.43       0.71        0.82             !! HIGH RISK
+task-tracker-codex     0.43       0.71        0.82             !! HIGH RISK
 cortex              0.91       0.08        0.11             OK
 recall              0.88       0.12        0.14             OK
 lattice             0.52       0.44        0.61             ! MODERATE RISK
@@ -489,10 +489,10 @@ update the perspective model: "I told Agent X about topic Y on date Z at confide
 
 | Prior doc | Connection |
 |-----------|------------|
-| COS-177 / doc 20: MEB | MEB triggers are the *detection layer* for belief staleness. ToM is the *response layer*. |
-| COS-204 / doc 23: Policy | Policies can reference ToM scores: "IF agent.confusion_risk > 0.8 THEN inject context before routing" |
-| COS-85: Coherence (Sentinel) | Sentinel checks global memory coherence; ToM checks per-agent belief coherence. Orthogonal layers. |
-| COS-229 / doc 17: Retrieval | `recalled_count` tracking tells us what agents actually retrieved; ToM tracks what they believe they know. Together: complete epistemic picture. |
+| internal-ref / doc 20: MEB | MEB triggers are the *detection layer* for belief staleness. ToM is the *response layer*. |
+| internal-ref / doc 23: Policy | Policies can reference ToM scores: "IF agent.confusion_risk > 0.8 THEN inject context before routing" |
+| internal-ref: Coherence (Sentinel) | Sentinel checks global memory coherence; ToM checks per-agent belief coherence. Orthogonal layers. |
+| internal-ref / doc 17: Retrieval | `recalled_count` tracking tells us what agents actually retrieved; ToM tracks what they believe they know. Together: complete epistemic picture. |
 
 ---
 

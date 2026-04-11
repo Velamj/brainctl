@@ -1,16 +1,16 @@
 -- ============================================================================
 -- Unified Quantum Cognition Research Schema Migration
--- Wave 1 Consolidation: COS-379, COS-381, COS-382, COS-384
+-- Wave 1 Consolidation: internal-ref, internal-ref, internal-ref, internal-ref
 -- ============================================================================
 -- Author: Superpose (consolidation), based on research from Qubit, Decohere, Entangle
 -- Date: 2026-03-28
 -- Purpose: Atomically merge 4 independent quantum schema proposals into brain.db
 --
 -- PROPOSALS CONSOLIDATED:
--- - COS-379 (Qubit): Quantum Probability Foundations — confidence_phase, hilbert_projection
--- - COS-381 (Superpose): Belief Superposition — density_matrix, coherence_score, is_superposed
--- - COS-384 (Decohere): Decoherence & Memory Degradation — coherence_syndrome, decoherence_rate, recovery_candidates table
--- - COS-382 (Entangle): Multi-Agent Belief Entanglement — agent_entanglement, agent_ghz_groups, belief_collapse_events tables
+-- - internal-ref (Qubit): Quantum Probability Foundations — confidence_phase, hilbert_projection
+-- - internal-ref (Superpose): Belief Superposition — density_matrix, coherence_score, is_superposed
+-- - internal-ref (Decohere): Decoherence & Memory Degradation — coherence_syndrome, decoherence_rate, recovery_candidates table
+-- - internal-ref (Entangle): Multi-Agent Belief Entanglement — agent_entanglement, agent_ghz_groups, belief_collapse_events tables
 --
 -- BACKWARD COMPATIBILITY: All changes are additive. Existing data preserved with sensible defaults.
 -- ATOMICITY: This migration applies all wave 1 changes in a single transaction.
@@ -20,53 +20,53 @@ BEGIN TRANSACTION;
 
 -- ============================================================================
 -- PHASE 1: Add columns to memories table
--- (COS-379: Quantum Probability Foundations, COS-384: Decoherence)
+-- (internal-ref: Quantum Probability Foundations, internal-ref: Decoherence)
 -- ============================================================================
 
--- COS-379: Quantum phase for interference effects
+-- internal-ref: Quantum phase for interference effects
 -- The full amplitude: α_i = √(confidence) × exp(i × confidence_phase)
 ALTER TABLE memories ADD COLUMN IF NOT EXISTS confidence_phase REAL DEFAULT 0.0;
 
--- COS-379: Optional pre-computed projection onto common subspace (Hilbert projection)
+-- internal-ref: Optional pre-computed projection onto common subspace (Hilbert projection)
 -- For performance optimization in large-scale interference calculations
 ALTER TABLE memories ADD COLUMN IF NOT EXISTS hilbert_projection BYTEA DEFAULT NULL;
 
--- COS-384: Decoherence diagnostics (JSON: error syndrome, pointer states, etc.)
+-- internal-ref: Decoherence diagnostics (JSON: error syndrome, pointer states, etc.)
 ALTER TABLE memories ADD COLUMN IF NOT EXISTS coherence_syndrome TEXT DEFAULT NULL;
 
--- COS-384: Per-memory decoherence rate (λ_eff in quantum formalism)
+-- internal-ref: Per-memory decoherence rate (λ_eff in quantum formalism)
 -- Represents how quickly this memory loses quantum coherence with environment
 -- Range: [0.0, 1.0]; higher = faster decay. Depends on temporal_class + access patterns
 ALTER TABLE memories ADD COLUMN IF NOT EXISTS decoherence_rate REAL DEFAULT NULL;
 
 -- ============================================================================
 -- PHASE 2: Add columns to agent_beliefs table
--- (COS-381: Belief Superposition, COS-382: Entanglement)
+-- (internal-ref: Belief Superposition, internal-ref: Entanglement)
 -- ============================================================================
 
--- COS-381: Whether this belief is in quantum superposition (vs. classical mixture)
+-- internal-ref: Whether this belief is in quantum superposition (vs. classical mixture)
 ALTER TABLE agent_beliefs ADD COLUMN IF NOT EXISTS is_superposed INTEGER DEFAULT 0;
 
--- COS-381: Full belief density matrix (Hermitian positive semidefinite operator)
+-- internal-ref: Full belief density matrix (Hermitian positive semidefinite operator)
 -- BLOB format: binary serialized format (JSON or msgpack)
 -- Structure: 2D array (or sparse format for large Hilbert spaces)
 ALTER TABLE agent_beliefs ADD COLUMN IF NOT EXISTS belief_density_matrix BYTEA DEFAULT NULL;
 
--- COS-381: Coherence score — magnitude of off-diagonal terms in density matrix
+-- internal-ref: Coherence score — magnitude of off-diagonal terms in density matrix
 -- Range: [0.0, 1.0]
 -- 0.0 = classical mixture (no superposition), 1.0 = pure state (maximal superposition)
 ALTER TABLE agent_beliefs ADD COLUMN IF NOT EXISTS coherence_score REAL DEFAULT 0.0;
 
--- COS-382: JSON array of memory IDs that contributed to belief entanglement
+-- internal-ref: JSON array of memory IDs that contributed to belief entanglement
 -- Enables tracing which shared memories correlate multiple agents' beliefs
 -- Format: JSON array of UUIDs, e.g., '["mem-id-1", "mem-id-2", ...]'
 ALTER TABLE agent_beliefs ADD COLUMN IF NOT EXISTS entanglement_source_ids TEXT DEFAULT NULL;
 
 -- ============================================================================
--- PHASE 3: Create new tables for decoherence (COS-384)
+-- PHASE 3: Create new tables for decoherence (internal-ref)
 -- ============================================================================
 
--- COS-384: recovery_candidates table
+-- internal-ref: recovery_candidates table
 -- Records memories that are potentially recoverable from entanglement traces
 -- (e.g., syndrome decoding using quantum error correction)
 CREATE TABLE IF NOT EXISTS recovery_candidates (
@@ -93,10 +93,10 @@ CREATE INDEX IF NOT EXISTS idx_recovery_candidates_recoverable ON recovery_candi
 CREATE INDEX IF NOT EXISTS idx_recovery_candidates_probability ON recovery_candidates(recovery_probability DESC);
 
 -- ============================================================================
--- PHASE 4: Create new tables for entanglement (COS-382)
+-- PHASE 4: Create new tables for entanglement (internal-ref)
 -- ============================================================================
 
--- COS-382: agent_entanglement table
+-- internal-ref: agent_entanglement table
 -- Pairwise entanglement scores between agents
 CREATE TABLE IF NOT EXISTS agent_entanglement (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS agent_entanglement (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_entanglement_pair ON agent_entanglement(agent_id_a, agent_id_b);
 CREATE INDEX IF NOT EXISTS idx_agent_entanglement_entropy ON agent_entanglement(entanglement_entropy DESC);
 
--- COS-382: agent_ghz_groups table
+-- internal-ref: agent_ghz_groups table
 -- Multi-party entanglement groups (Greenberger-Horne-Zeilinger states)
 -- For N ≥ 3 agents sharing a high-confidence memory
 CREATE TABLE IF NOT EXISTS agent_ghz_groups (
@@ -150,7 +150,7 @@ CREATE TABLE IF NOT EXISTS agent_ghz_groups (
 CREATE INDEX IF NOT EXISTS idx_agent_ghz_groups_memory ON agent_ghz_groups(entangling_memory_id);
 CREATE INDEX IF NOT EXISTS idx_agent_ghz_groups_size ON agent_ghz_groups(group_size);
 
--- COS-382: belief_collapse_events table
+-- internal-ref: belief_collapse_events table
 -- Records when a belief superposition collapses (measurement events)
 CREATE TABLE IF NOT EXISTS belief_collapse_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -424,11 +424,11 @@ CONFLICT ANALYSIS:
 
 1. Column naming:
    - No conflicts. All new columns have distinct names across tables.
-   - agent_beliefs.coherence_score (COS-381) vs memories.coherence_syndrome (COS-384): different meanings, separate tables ✓
+   - agent_beliefs.coherence_score (internal-ref) vs memories.coherence_syndrome (internal-ref): different meanings, separate tables ✓
 
 2. Type consistency:
-   - Density matrices (COS-381) stored as BYTEA (binary blob) for performance
-   - Coherence syndrome (COS-384) stored as TEXT (JSON for human readability)
+   - Density matrices (internal-ref) stored as BYTEA (binary blob) for performance
+   - Coherence syndrome (internal-ref) stored as TEXT (JSON for human readability)
    - This allows different serialization formats suitable to use case ✓
 
 3. Foreign key integrity:

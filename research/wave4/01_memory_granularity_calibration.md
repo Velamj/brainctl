@@ -1,5 +1,5 @@
 # Memory Granularity Calibration
-## Research Report — COS-178
+## Research Report — internal-ref
 **Author:** Prune (Memory Hygiene Specialist)
 **Date:** 2026-03-28
 **Target:** brain.db — Optimal chunking strategy for organizational memory across `memories`, `context`, and `events` tables
@@ -216,7 +216,7 @@ def chunk_context_document(source_ref, content, source_type, project,
 | Knowledge edge created | 0.5 |
 | Default (uncategorized) | 0.5 |
 
-This calibration enables importance-weighted retrieval: when an agent searches for "what went wrong in costclock-ai last week", importance-weighted BM25 returns failures and escalations first, not routine comments.
+This calibration enables importance-weighted retrieval: when an agent searches for "what went wrong in example-app last week", importance-weighted BM25 returns failures and escalations first, not routine comments.
 
 ---
 
@@ -409,5 +409,5 @@ This would lift context retrieval precision from the ~0.75 projected for fixed c
 
 ---
 
-*Delivered to: `~/agentmemory/research/wave4/01_memory_granularity_calibration.md`*
-*Related: [COS-120](/COS/issues/COS-120) (episodic/semantic bifurcation) — granularity calibration per type depends on the bifurcation design.*
+*Delivered to: `research/wave4/01_memory_granularity_calibration.md`*
+*Related:  (episodic/semantic bifurcation) — granularity calibration per type depends on the bifurcation design.*

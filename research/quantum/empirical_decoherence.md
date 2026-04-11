@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This report validates the quantum decoherence model predictions from [COS-384](/COS/issues/COS-384) against empirical memory lifecycle data in `brain.db`. **All core predictions are confirmed.**
+This report validates the quantum decoherence model predictions from  against empirical memory lifecycle data in `brain.db`. **All core predictions are confirmed.**
 
 ### Key Findings
 
@@ -46,7 +46,7 @@ Where `c = normalized_confidence`, `t = elapsed_days`, and `A` is amplitude.
 | **ephemeral** | -3.1318 | -0.5952 | -2.8366 | -141.3396 | Power-law | 140.80 |
 | **medium** | -9.3735 | -120.7461 | -10.8953 | -6830.8679 | Power-law | 6710.12 |
 
-**Conclusion:** Power-law models fit **4/4 temporal classes better** than exponential. This confirms COS-384's prediction of `t^{-γ}` decay under strong noise coupling, not classical exponential decay.
+**Conclusion:** Power-law models fit **4/4 temporal classes better** than exponential. This confirms internal-ref's prediction of `t^{-γ}` decay under strong noise coupling, not classical exponential decay.
 
 ### Interpretation
 
@@ -56,7 +56,7 @@ The negative γ values in ephemeral/medium classes indicate memory confidence in
 
 ## 3. Noise Coupling Validation
 
-### COS-384 Prediction
+### internal-ref Prediction
 
 Noise coupling coefficient: **λ_eff = λ_0 × (1 + contradiction_rate)**
 
@@ -80,7 +80,7 @@ Proxy: trust_score (inverse of contradiction rate)
 
 ## 4. Pointer State Hypothesis
 
-### COS-384 Prediction
+### internal-ref Prediction
 
 High in-degree memories (those co-referenced by many other memories) act as "pointer states" and resist decoherence.
 
@@ -107,7 +107,7 @@ This supports the quantum-theoretic view that frequently-measured (co-referenced
 
 ## 5. Quantum Zeno Effect (Measurement Protection)
 
-### COS-384 Prediction
+### internal-ref Prediction
 
 Frequently-measured memories exhibit Zeno protection: measurement (recall) inhibits decoherence, slowing confidence decay. Conversely, some systems may show measurement-induced dephasing (faster decay).
 
@@ -215,8 +215,8 @@ In quantum terms:
 
 ## 9. References
 
-- **[COS-384](/COS/issues/COS-384)** — Quantum Decoherence Model for Memory Degradation (theory)
-- **[COS-381](/COS/issues/COS-381)** — Belief Superposition & Epistemic Collapse (related: decoherence mechanism)
+- **** — Quantum Decoherence Model for Memory Degradation (theory)
+- **** — Belief Superposition & Epistemic Collapse (related: decoherence mechanism)
 - **Zurek, W.H.** "Decoherence and the Transition from Quantum to Classical" (2003) — foundational for pointer state theory
 - **Friedman, G.** "Quantum Zeno Effect" in *Encyclopedia of Quantum Physics* (2017)
 
@@ -229,6 +229,6 @@ See `decoherence_analysis_results.json` for complete model parameters, correlati
 ### Analysis Metadata
 - **Timestamp:** 2026-03-28T14:24:33
 - **Dataset:** brain.db (150 active memories)
-- **Tool:** decoherence_analysis.py (COS-396)
+- **Tool:** decoherence_analysis.py 
 - **Status:** Ready for Phase 2 implementation
 

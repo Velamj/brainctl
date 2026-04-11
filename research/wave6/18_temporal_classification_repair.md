@@ -2,8 +2,8 @@
 
 **Author:** Engram (b98504a8-eb8e-4bd9-9a98-306936b5bab2)
 **Date:** 2026-03-28
-**Issue:** [COS-230](/COS/issues/COS-230)
-**Prior art:** [COS-202](/COS/issues/COS-202) (SLO baseline), [COS-116](/COS/issues/COS-116) (granularity research)
+**Issue:** 
+**Prior art:**  (SLO baseline),  (granularity research)
 
 ---
 
@@ -17,7 +17,7 @@
 | ephemeral | 0 | 2 | 0% |
 | permanent | 0 | 2 | 0% |
 
-**Prior measurement (COS-202):** 96% medium, 4% long, 0% all others.
+**Prior measurement :** 96% medium, 4% long, 0% all others.
 **This confirms a structural classification failure — not a transient anomaly.**
 
 ---
@@ -68,7 +68,7 @@ The five-tier temporal decay system was designed as the foundation for:
 - **Spaced repetition**: retrieval scheduling depends on temporal tier
 - **Semantic forgetting**: `compress_memories()` targets scope density, not temporal tier
 - **Context compression**: tier affects what gets compressed first
-- **Memory health SLO**: "Temporal Balance" metric (COS-202) is permanently red
+- **Memory health SLO**: "Temporal Balance" metric  is permanently red
 
 All of these systems are operating with a degraded signal because 81%+ of memories
 share the same temporal class.

@@ -1,7 +1,7 @@
 # Information Theory Foundations — Shannon Entropy, Surprise Scoring, and MDL for Memory Valuation
 
-**Author:** Cortex (paperclip-cortex, c44b2bb8) — Intelligence Synthesis Analyst
-**Task:** [COS-415](/COS/issues/COS-415)
+**Author:** Cortex (task-tracker-cortex, c44b2bb8) — Intelligence Synthesis Analyst
+**Task:** 
 **Date:** 2026-04-02
 **DB State:** Active memories in brain.db · 22 agents · Wave 13 research
 
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-Wave 12 designed the write-worthiness formula *W(m)* as a heuristic score combining information gain, confidence, recency, and redundancy ([COS-368](/COS/issues/COS-368)). The Blueprint implementation spec ([COS-402](/COS/issues/COS-402)) is now in review. This report takes the next step: **grounding the write gate and all downstream memory operations in formal information theory**, moving from engineering heuristics to principled mathematics.
+Wave 12 designed the write-worthiness formula *W(m)* as a heuristic score combining information gain, confidence, recency, and redundancy (). The Blueprint implementation spec () is now in review. This report takes the next step: **grounding the write gate and all downstream memory operations in formal information theory**, moving from engineering heuristics to principled mathematics.
 
 **Central claims:**
 
@@ -31,7 +31,7 @@ Wave 12 designed the write-worthiness formula *W(m)* as a heuristic score combin
 
 ### 1.1 Where Wave 12 Left Off
 
-COS-368 designed a write-worthiness score grounded in information theory but computed it using embedding cosine similarity as a proxy for all four components (information gain, confidence prior, recency multiplier, redundancy penalty). The formula:
+internal-ref designed a write-worthiness score grounded in information theory but computed it using embedding cosine similarity as a proxy for all four components (information gain, confidence prior, recency multiplier, redundancy penalty). The formula:
 
 ```
 W = I_approx(m; Store) × confidence_prior(m) × recency_multiplier(m) - redundancy_penalty(m)
@@ -44,13 +44,13 @@ This is an excellent engineering approximation. The problem is that *cosine simi
 
 A security lesson and a deployment procedure can be semantically close (both involve the production system) while being informationally independent. Cosine similarity would penalize the write; information theory would not.
 
-### 1.2 Attention Budget System (COS-362)
+### 1.2 Attention Budget System 
 
 The attention budget system allocates recall capacity across memory indices (categories, scopes). It uses static weights based on query routing rules. There is no feedback from information density — a category with 200 near-duplicate memories gets the same budget as one with 20 high-entropy memories.
 
-### 1.3 Distillation (COS-347, hippocampus.py)
+### 1.3 Distillation (internal-ref, hippocampus.py)
 
-Distillation promotes memories based on `recalled_count` and `confidence`. No entropy or surprise signal is used. The result: memories promoted to `permanent` are those frequently recalled — but frequent recall may reflect routing bias (Gini coefficient 0.91 per COS-352), not intrinsic information value.
+Distillation promotes memories based on `recalled_count` and `confidence`. No entropy or surprise signal is used. The result: memories promoted to `permanent` are those frequently recalled — but frequent recall may reflect routing bias (Gini coefficient 0.91 per internal-ref), not intrinsic information value.
 
 ---
 
@@ -216,12 +216,12 @@ W(m) = surprise(m) × relevance(m) / (1 + redundancy(m))
 
 Where:
 - `surprise(m)` = S(m | Store), normalized to [0, 1]
-- `relevance(m)` = confidence × recency_multiplier (from COS-402, preserved)
+- `relevance(m)` = confidence × recency_multiplier (from internal-ref, preserved)
 - `redundancy(m)` = R(m) ∈ [0, 1]
 
-**Comparison to COS-402 formula:**
+**Comparison to internal-ref formula:**
 
-| Component | COS-402 approximation | COS-415 formalization |
+| Component | internal-ref approximation | internal-ref formalization |
 |---|---|---|
 | Information gain | 1 - max_cosine_sim | -log p_KDE(e_new), normalized |
 | Redundancy | top-3 avg cosine > 0.7 | Subspace projection error |
@@ -231,8 +231,8 @@ Where:
 The key changes: surprise uses the full distribution rather than nearest-neighbor similarity; redundancy uses subspace projection rather than a threshold. Both are more computationally expensive but more accurate.
 
 **Computational cost analysis:**
-- COS-402 approach: O(n) dot products, O(1) merge → suitable for n ≤ 5,000
-- COS-415 approach: O(n) dot products + O(k²) least-squares solve → suitable for n ≤ 2,000
+- internal-ref approach: O(n) dot products, O(1) merge → suitable for n ≤ 5,000
+- internal-ref approach: O(n) dot products + O(k²) least-squares solve → suitable for n ≤ 2,000
 
 Given current store size (~150 active memories), both are fast. For larger stores, approximate nearest neighbor (ANN) with sqlite-vec cuts the O(n) scan to O(log n).
 
@@ -298,7 +298,7 @@ This is the distillation policy the hippocampus consolidation cycle should use w
 
 ## 4. Attention Budget as Information Gain Routing
 
-### 4.1 Current State (COS-362)
+### 4.1 Current State 
 
 The attention budget allocates recall capacity across categories/scopes based on query routing rules. The allocation is static: a category always gets the same fraction of budget regardless of how much information it contains.
 
@@ -368,7 +368,7 @@ brainctl entropy breakdown
 
 **Implementation location:** `~/bin/brainctl` — new `entropy` subcommand, using functions from `~/bin/lib/information_theory.py` (new module).
 
-**Schema dependencies:** Requires `embedding` column populated (100% coverage post-COS-231 backfill). No schema changes needed.
+**Schema dependencies:** Requires `embedding` column populated (100% coverage post-internal-ref backfill). No schema changes needed.
 
 ### 5.2 Surprise Score at Write Time
 
@@ -451,7 +451,7 @@ ic = information_contribution(m, all_embeddings)  # surprise against rest of sto
 promote_score = recalled_count_normalized * 0.2 + confidence * 0.3 + ic * 0.5
 ```
 
-**Effect:** Memories that are frequently recalled AND information-dense get promoted. Memories that are frequently recalled but redundant (high-recall due to routing bias per COS-352) do not automatically promote.
+**Effect:** Memories that are frequently recalled AND information-dense get promoted. Memories that are frequently recalled but redundant (high-recall due to routing bias per internal-ref) do not automatically promote.
 
 ---
 
@@ -467,9 +467,9 @@ Based on the 150 active memories in brain.db and the empirically observed cluste
 | global/lesson | ~2.2 bits | Some redundancy from repeated lessons |
 | global/environment | ~1.8 bits | Clustered — same core facts restated |
 | agentmemory/lesson | ~2.5 bits | Research findings — diverse |
-| costclock-ai/project | ~1.5 bits | Implementation progress notes — redundant |
+| example-app/project | ~1.5 bits | Implementation progress notes — redundant |
 
-**Prediction:** The `brainctl entropy breakdown` command will reveal that ~30-40% of store entropy comes from `global/decision` and `agentmemory/lesson`, while `costclock-ai/project` will have the highest redundancy density.
+**Prediction:** The `brainctl entropy breakdown` command will reveal that ~30-40% of store entropy comes from `global/decision` and `agentmemory/lesson`, while `example-app/project` will have the highest redundancy density.
 
 ### 6.2 Retrospective Worthiness Audit
 
@@ -484,7 +484,7 @@ Applying the revised W(m) formula retrospectively to all 150 active memories:
 
 ### 6.3 Known Failure Modes
 
-1. **Surprise instability at small n** — When n < 20, the KDE bandwidth dominates and surprise scores are unreliable. Mitigation: fall back to cosine-based COS-402 formula below n=20.
+1. **Surprise instability at small n** — When n < 20, the KDE bandwidth dominates and surprise scores are unreliable. Mitigation: fall back to cosine-based internal-ref formula below n=20.
 
 2. **Redundancy false positives for complements** — Memory A about "brainctl push gate" and memory B about "brainctl search results" may both be redundant to each other if they share embedding components from the `brainctl` concept. Mitigation: compute redundancy *conditional on category* — only compare within the same `scope/category`.
 
@@ -496,9 +496,9 @@ Applying the revised W(m) formula retrospectively to all 150 active memories:
 
 ## 7. Integration Sequence
 
-Recommended order to avoid conflicts with COS-402 (in review):
+Recommended order to avoid conflicts with internal-ref (in review):
 
-1. **Merge COS-402 first** — W(m) gate with cosine approximation is live.
+1. **Merge internal-ref first** — W(m) gate with cosine approximation is live.
 2. **Implement `~/bin/lib/information_theory.py`** — All the formal functions in this doc.
 3. **Add schema columns** (`surprise_score`, `redundancy_score`) + backfill.
 4. **Implement `brainctl entropy`** — Uses information_theory.py.
@@ -545,4 +545,4 @@ Recommended order to avoid conflicts with COS-402 (in review):
 
 ---
 
-*Delivered as Wave 13 research, [COS-415](/COS/issues/COS-415). Next: Blueprint ([COS-400](/COS/issues/COS-400)) to produce implementation spec for `information_theory.py`, `brainctl entropy`, schema columns, and hippocampus integration.*
+*Delivered as Wave 13 research, . Next: Blueprint () to produce implementation spec for `information_theory.py`, `brainctl entropy`, schema columns, and hippocampus integration.*

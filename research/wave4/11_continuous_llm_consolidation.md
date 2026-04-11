@@ -1,6 +1,6 @@
 # Continuous LLM Consolidation — Research Report
 
-**Wave 4 Research** | [COS-183](/COS/issues/COS-183)
+**Wave 4 Research** | 
 **Author:** Tensor
 **Date:** 2026-03-28
 **Builds on:** `05_consolidation_cycle.py`, `08_context_compression.py` (Wave 1)
@@ -256,7 +256,7 @@ sqlite-vec is not yet installed, so full embedding similarity is unavailable. Pr
 | **Phase 2** | Add write-time dedup in brainctl `memory add` | Small — ~50 lines | brainctl source access |
 | **Phase 3** | Implement running summary with SUMMARIZE_EVERY_K=3 | Medium — LLM integration | LLM hook in `consolidate_cluster` already exists |
 | **Phase 4** | Replace polling with brainctl write hooks (event-driven) | Large | brainctl plugin API |
-| **Phase 5** | Embedding-based clustering | Medium | sqlite-vec installed ([COS-205](/COS/issues/COS-205)) |
+| **Phase 5** | Embedding-based clustering | Medium | sqlite-vec installed () |
 
 Phase 1 alone answers the root question: **yes, continuous compression can eliminate garbage accumulation** — it's primarily a scheduling problem, not an algorithmic one.
 
@@ -309,7 +309,7 @@ See `wave4/11_continuous_llm_consolidation.py` — reference implementation of t
 
 ## Connections to Other Wave 4 Work
 
-- **[COS-178](/COS/issues/COS-178) — Memory Granularity Calibration**: Continuous mode makes granularity more important — if memories are too fine-grained, consolidation will thrash. Calibration work should inform the `min_cluster_size` and `summarize_every_k` parameters.
-- **[COS-205](/COS/issues/COS-205) — Embedding-First Writes**: Phase 5 of this roadmap. When embeddings are stored at write time, the clustering in Phase 4 becomes semantic-first rather than lexical-first.
-- **[COS-184](/COS/issues/COS-184) — Causal Event Graph**: Continuous consolidation produces events at higher frequency. Causal graph should be updated incrementally in the same poll cycle.
-- **[COS-122](/COS/issues/COS-122) — Multi-Agent Write Contention**: Continuous consolidation adds a new write source. Must be accounted for in the write serialization design.
+- ** — Memory Granularity Calibration**: Continuous mode makes granularity more important — if memories are too fine-grained, consolidation will thrash. Calibration work should inform the `min_cluster_size` and `summarize_every_k` parameters.
+- ** — Embedding-First Writes**: Phase 5 of this roadmap. When embeddings are stored at write time, the clustering in Phase 4 becomes semantic-first rather than lexical-first.
+- ** — Causal Event Graph**: Continuous consolidation produces events at higher frequency. Causal graph should be updated incrementally in the same poll cycle.
+- ** — Multi-Agent Write Contention**: Continuous consolidation adds a new write source. Must be accounted for in the write serialization design.

@@ -2,8 +2,8 @@
 
 **Author:** Engram (b98504a8-eb8e-4bd9-9a98-306936b5bab2)
 **Date:** 2026-03-28
-**Issue:** [COS-242](/COS/issues/COS-242)
-**Prior art:** [COS-202](/COS/issues/COS-202) (SLO baseline), [COS-218](/COS/issues/COS-218) (memory event bus), [COS-230](/COS/issues/COS-230) (temporal classification repair)
+**Issue:** 
+**Prior art:**  (SLO baseline),  (memory event bus),  (temporal classification repair)
 
 ---
 
@@ -160,7 +160,7 @@ FROM memories m
 JOIN knowledge_edges ke ON ke.target_table='memories' AND ke.target_id=m.id
 WHERE m.scope IN (
   SELECT scope FROM memories
-  WHERE scope LIKE '%costclock%'  -- similar to new project
+  WHERE scope LIKE '%example-app%'  -- similar to new project
   AND scope != 'project:new-project-name'
   LIMIT 3
 )

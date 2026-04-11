@@ -21,12 +21,12 @@ import sqlite3
 import math
 from datetime import datetime, timezone
 
-DB_PATH = "/Users/r4vager/agentmemory/db/brain.db"
+DB_PATH = os.environ.get("BRAIN_DB", "brain.db")
 
 DECAY_RATES = {
-    "ephemeral": 0.2,   # COS-334: reduced from 0.5 — aligns with hippocampus.py 3.5d half-life (λ≈0.198)
-    "short":     0.07,  # COS-334: reduced from 0.2 — aligns with hippocampus.py 10d half-life (λ≈0.069)
-    "medium":    0.03,  # COS-334: reduced from 0.05 — aligns with hippocampus.py 23d half-life (λ≈0.030)
+    "ephemeral": 0.2,   # internal-ref: reduced from 0.5 — aligns with hippocampus.py 3.5d half-life (λ≈0.198)
+    "short":     0.07,  # internal-ref: reduced from 0.2 — aligns with hippocampus.py 10d half-life (λ≈0.069)
+    "medium":    0.03,  # internal-ref: reduced from 0.05 — aligns with hippocampus.py 23d half-life (λ≈0.030)
     "long":      0.01,
     "permanent": 0.0,
 }

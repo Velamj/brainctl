@@ -1,4 +1,4 @@
-# COS-204: Memory as a Policy Engine — Distributed Decisions Without a Central Oracle
+# internal-ref: Memory as a Policy Engine — Distributed Decisions Without a Central Oracle
 
 **Series:** Cognitive Operating System Research
 **Wave:** 5
@@ -15,7 +15,7 @@ Hermes currently routes all significant decisions through a central orchestratio
 
 The central claim is that many decision classes that appear to require central judgment are actually retrievable from prior experience encoded in memory. When an agent asks "should I use approach A or B?", the relevant signal already exists in `brain.db` as a pattern of outcomes across prior tasks. Formalizing that signal as a **policy memory** — a retrievable, versioned, context-sensitive directive — allows agents to act on organizational wisdom without interrupting the orchestrator.
 
-This report defines what constitutes a safe policy delegation, distinguishes memory-driven policy from hard-coded rules, catalogs failure modes, proposes a feedback loop for policy freshness, relates the architecture to COS-180's goal-feedback work, and specifies a concrete schema and query interface directly implementable in brain.db.
+This report defines what constitutes a safe policy delegation, distinguishes memory-driven policy from hard-coded rules, catalogs failure modes, proposes a feedback loop for policy freshness, relates the architecture to internal-ref's goal-feedback work, and specifies a concrete schema and query interface directly implementable in brain.db.
 
 ---
 
@@ -26,7 +26,7 @@ This report defines what constitutes a safe policy delegation, distinguishes mem
 3. [Memory-Policy vs. Hard-Coded Rule: What Makes It Adaptive?](#3-memory-policy-vs-hard-coded-rule-what-makes-it-adaptive)
 4. [Failure Modes](#4-failure-modes)
 5. [Feedback Loop: Keeping Policies Current](#5-feedback-loop-keeping-policies-current)
-6. [Relationship to COS-180: Goal Proposals and Policy Orthogonality](#6-relationship-to-cos-180-goal-proposals-and-policy-orthogonality)
+6. [Relationship to internal-ref: Goal Proposals and Policy Orthogonality](#6-relationship-to-cos-180-goal-proposals-and-policy-orthogonality)
 7. [Concrete Architecture](#7-concrete-architecture)
 8. [New Questions Raised by This Research](#8-new-questions-raised-by-this-research)
 9. [Assumptions That Are Wrong or Naive](#9-assumptions-that-are-wrong-or-naive)
@@ -43,7 +43,7 @@ This report addresses five primary research questions:
 2. How is a memory-policy distinguished from a hard-coded rule, and what makes it adaptive?
 3. What failure modes exist — policy capture, stale policy, conflicting policies?
 4. What feedback loop keeps policies current as organizational context changes?
-5. What is the relationship to COS-180 (memory-to-goal feedback) — do goal proposals become policies, or are they orthogonal?
+5. What is the relationship to internal-ref (memory-to-goal feedback) — do goal proposals become policies, or are they orthogonal?
 
 **Scope boundaries:** This report addresses decision delegation within the Hermes multi-agent system (178 agents, brain.db SQLite backend). It does not address inter-system policy federation, user-facing policy disclosure, or regulatory compliance requirements. Recommendations are intended to be directly implementable against the existing `brain.db` schema without requiring a full architectural rebuild.
 
@@ -307,11 +307,11 @@ A policy with confidence below `min_confidence_threshold` (e.g., 0.4) should not
 
 ---
 
-## 6. Relationship to COS-180: Goal Proposals and Policy Orthogonality
+## 6. Relationship to internal-ref: Goal Proposals and Policy Orthogonality
 
-### 6.1 Summary of COS-180's Architecture
+### 6.1 Summary of internal-ref's Architecture
 
-COS-180 (Memory-to-Goal Feedback) addresses how accumulated memory informs goal proposals — the mechanism by which Hermes or its agents identify objectives worth pursuing based on patterns in historical outcomes. The core loop is: memory → pattern recognition → goal proposal → evaluation → adoption or rejection.
+internal-ref (Memory-to-Goal Feedback) addresses how accumulated memory informs goal proposals — the mechanism by which Hermes or its agents identify objectives worth pursuing based on patterns in historical outcomes. The core loop is: memory → pattern recognition → goal proposal → evaluation → adoption or rejection.
 
 ### 6.2 The Surface-Level Confusion
 
@@ -321,7 +321,7 @@ Goal proposals and policies appear similar at first glance: both are derived fro
 
 ### 6.3 The Correct Distinction
 
-| Dimension | Goal (COS-180) | Policy (This report) |
+| Dimension | Goal  | Policy (This report) |
 |---|---|---|
 | **Nature** | Desired future state | Decision heuristic for current action |
 | **Timeframe** | Medium-to-long horizon | Immediate action guidance |
@@ -342,7 +342,7 @@ Goals and policies are **not orthogonal** — they interact through two channels
 
 ### 6.5 Recommendation
 
-Maintain separate tables (`goal_memories` per COS-180, `policies` per this report). Add a foreign key `derived_from_goal_id` in the `policies` table to allow tracing when a policy was explicitly derived to serve a goal. Add a `goal_context` field in policy queries so that goal-aware retrieval can filter and rank policies.
+Maintain separate tables (`goal_memories` per internal-ref, `policies` per this report). Add a foreign key `derived_from_goal_id` in the `policies` table to allow tracing when a policy was explicitly derived to serve a goal. Add a `goal_context` field in policy queries so that goal-aware retrieval can filter and rank policies.
 
 ---
 
@@ -377,7 +377,7 @@ CREATE TABLE policies (
 
     -- Provenance
     derived_from_memory_ids   TEXT,                      -- JSON array of memory IDs that generated this policy
-    derived_from_goal_id      TEXT REFERENCES goals(id), -- if derived to serve a COS-180 goal
+    derived_from_goal_id      TEXT REFERENCES goals(id), -- if derived to serve a internal-ref goal
     authored_by               TEXT NOT NULL,             -- agent_id or 'hermes' or 'user'
     derivation_method         TEXT,                      -- 'manual' | 'outcome_aggregation' | 'llm_synthesis'
 
@@ -656,23 +656,23 @@ More outcome data improves policy confidence only if the data is representative 
 
 ## 10. Highest-Impact Follow-Up Research
 
-**Priority 1: Outcome Measurement Infrastructure (COS-205)**
-The feedback loop is the entire point of a memory-policy system, and it depends on accurate, timely outcome measurement. COS-205 should define: what counts as a task outcome, who evaluates quality, what latency is acceptable between task completion and outcome recording, and how multi-step task outcomes are decomposed. Without this, the policy engine is write-only.
+**Priority 1: Outcome Measurement Infrastructure **
+The feedback loop is the entire point of a memory-policy system, and it depends on accurate, timely outcome measurement. internal-ref should define: what counts as a task outcome, who evaluates quality, what latency is acceptable between task completion and outcome recording, and how multi-step task outcomes are decomposed. Without this, the policy engine is write-only.
 
-**Priority 2: Embedding Stability and Model Versioning (COS-206)**
-Semantic retrieval depends on stable embeddings. COS-206 should define an embedding versioning strategy for brain.db: how policy embeddings are versioned alongside their generation model, how re-embedding is triggered when models change, and how retrieval degrades gracefully during a re-embedding transition.
+**Priority 2: Embedding Stability and Model Versioning **
+Semantic retrieval depends on stable embeddings. internal-ref should define an embedding versioning strategy for brain.db: how policy embeddings are versioned alongside their generation model, how re-embedding is triggered when models change, and how retrieval degrades gracefully during a re-embedding transition.
 
-**Priority 3: Policy Derivation Engine (COS-207)**
-The policy derivation workflow described in Section 7.7 is a sketch. COS-207 should specify the full derivation algorithm: clustering method, minimum sample size, quality dominance threshold, cross-agent validation protocol, and promotion criteria. This is the most complex engineering work in the architecture and warrants dedicated research.
+**Priority 3: Policy Derivation Engine **
+The policy derivation workflow described in Section 7.7 is a sketch. internal-ref should specify the full derivation algorithm: clustering method, minimum sample size, quality dominance threshold, cross-agent validation protocol, and promotion criteria. This is the most complex engineering work in the architecture and warrants dedicated research.
 
-**Priority 4: Adversarial Robustness (COS-208)**
-The risk of adversarial policy injection (Section 8, Question 5) is not hypothetical — any multi-agent system with a memory feedback loop is susceptible to strategic outcome manipulation. COS-208 should enumerate the threat model and propose mitigation: anomaly detection on outcome patterns, multi-source outcome validation, cryptographic signing of outcome records, and rate limits on policy reinforcement events from single agents.
+**Priority 4: Adversarial Robustness **
+The risk of adversarial policy injection (Section 8, Question 5) is not hypothetical — any multi-agent system with a memory feedback loop is susceptible to strategic outcome manipulation. internal-ref should enumerate the threat model and propose mitigation: anomaly detection on outcome patterns, multi-source outcome validation, cryptographic signing of outcome records, and rate limits on policy reinforcement events from single agents.
 
-**Priority 5: Policy Legibility and Explainability (COS-209)**
-As policies become load-bearing in agent decision-making, there will be demands (operational, regulatory, or ethical) to explain why a policy says what it says. COS-209 should design a policy explanation interface: given a `policy_id`, produce a human-readable summary of the evidence behind it, including representative memories, outcome distributions, and the derivation steps. This work intersects with XAI (explainable AI) research on concept extraction from embedding spaces.
+**Priority 5: Policy Legibility and Explainability **
+As policies become load-bearing in agent decision-making, there will be demands (operational, regulatory, or ethical) to explain why a policy says what it says. internal-ref should design a policy explanation interface: given a `policy_id`, produce a human-readable summary of the evidence behind it, including representative memories, outcome distributions, and the derivation steps. This work intersects with XAI (explainable AI) research on concept extraction from embedding spaces.
 
-**Priority 6: Reinforcement Learning Integration (COS-210)**
-The memory-policy architecture described here is a precursor to a full RL-based policy learning system. COS-210 should evaluate whether the outcome signal in `policy_invocations` is rich enough to serve as a reward signal for a lightweight policy gradient update, and if so, design the training loop. This would upgrade the system from empirical (batch-derived) policies to continuously-updated policies — approaching the third tier on the adaptivity spectrum in Section 3.4.
+**Priority 6: Reinforcement Learning Integration **
+The memory-policy architecture described here is a precursor to a full RL-based policy learning system. internal-ref should evaluate whether the outcome signal in `policy_invocations` is rich enough to serve as a reward signal for a lightweight policy gradient update, and if so, design the training loop. This would upgrade the system from empirical (batch-derived) policies to continuously-updated policies — approaching the third tier on the adaptivity spectrum in Section 3.4.
 
 ---
 
@@ -745,6 +745,6 @@ sqlite-vss — Vector similarity search extension for SQLite: https://github.com
 
 ---
 
-*End of COS-204 Research Report*
+*End of internal-ref Research Report*
 
 *This report is part of the Cognitive Operating System (COS) research series for the Hermes multi-agent system. The COS series is maintained in `/agentmemory/research/` and indexed in `/agentmemory/research/index.md`.*

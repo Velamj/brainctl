@@ -1,9 +1,9 @@
 # Proactive Memory Push — Anticipatory Context Delivery Before Agents Ask
-## Research Report — COS-124
+## Research Report — internal-ref
 **Author:** Weaver (Context Integration Engineer)
 **Date:** 2026-03-28
 **Project:** Cognitive Architecture & Enhancement (Wave 3)
-**Target:** brain.db + brainctl + Paperclip heartbeat architecture
+**Target:** brain.db + brainctl + task-tracker heartbeat architecture
 
 ---
 
@@ -15,7 +15,7 @@ All current memory retrieval in the 22-agent (scaling to 178-agent) brain.db sys
 
 **Recommended implementation path:**
 1. New `brainctl push` command: score + select top-K memories for a given task description
-2. Paperclip post-checkout hook: invoke `brainctl push` and log results to events table
+2. task-tracker post-checkout hook: invoke `brainctl push` and log results to events table
 3. CLAUDE.md injection point: push output prepended to agent's context at heartbeat start
 4. Utility tracking: correlate push IDs to recalled_count delta over the session
 
@@ -44,16 +44,16 @@ If the predictive signal is accurate, the agent's "search residual" shrinks — 
 
 Clark extends predictive coding to action and embodied cognition: the brain is an *inference engine* that generates hypotheses about its immediate future and uses perception to update them. The implication for agentic systems: the system should maintain a running forward model of what the agent is *about to need*, and pre-position resources accordingly.
 
-In practical terms for our system: when Paperclip assigns issue `COS-124` to Weaver, the system knows (a) the task description, (b) Weaver's recent event history, (c) the project graph, and (d) historical memory access patterns for similar tasks. This is sufficient to generate a meaningful pre-fetch set before Weaver issues its first tool call.
+In practical terms for our system: when task-tracker assigns issue `internal-ref` to Weaver, the system knows (a) the task description, (b) Weaver's recent event history, (c) the project graph, and (d) historical memory access patterns for similar tasks. This is sufficient to generate a meaningful pre-fetch set before Weaver issues its first tool call.
 
-### 1.3 Distinction from COS-112 (Wave 2 — Predictive Cognition)
+### 1.3 Distinction from internal-ref (Wave 2 — Predictive Cognition)
 
-COS-112 focused on *what* to predict — which memories are likely to become relevant, using forgetting curves, recency, and semantic similarity. COS-124 addresses the orthogonal question: *how* to deliver those predictions to the agent before they ask. The two research threads are complementary:
+internal-ref focused on *what* to predict — which memories are likely to become relevant, using forgetting curves, recency, and semantic similarity. internal-ref addresses the orthogonal question: *how* to deliver those predictions to the agent before they ask. The two research threads are complementary:
 
-- COS-112: scoring model (what is likely relevant)
-- COS-124: delivery mechanism (how to get it there proactively)
+- internal-ref: scoring model (what is likely relevant)
+- internal-ref: delivery mechanism (how to get it there proactively)
 
-A production implementation would use COS-112's scoring output as the retrieval signal for COS-124's push channel.
+A production implementation would use internal-ref's scoring output as the retrieval signal for internal-ref's push channel.
 
 ---
 
@@ -65,7 +65,7 @@ The key design question is: **at what moment does a proactive push produce the h
 
 | Trigger | Signal Quality | Latency Budget | Noise Risk |
 |---|---|---|---|
-| Task assignment (Paperclip) | Medium — intent known, no agent context yet | High (seconds to minutes before work begins) | Low |
+| Task assignment (task-tracker) | Medium — intent known, no agent context yet | High (seconds to minutes before work begins) | Low |
 | **Issue checkout** | **High — agent has committed to work, has run context** | **Medium (checkout adds ~100ms)** | **Low** |
 | First tool call in heartbeat | High — topic confirmed by action | Low (agent already working) | Low |
 | Topic shift detection (mid-session) | Very high — confirmed pivot | Very low (post-hoc) | Medium |
@@ -86,17 +86,17 @@ Rationale:
 ### 2.2 Trigger Architecture
 
 ```
-Paperclip heartbeat wake
+task-tracker heartbeat wake
   └─ Agent calls: POST /api/issues/:id/checkout
        └─ [hook / post-checkout event fires]
-            └─ brainctl push --task-id COS-124 --description "..." --agent weaver
+            └─ brainctl push --task-id internal-ref --description "..." --agent weaver
                  └─ top-K memories/context returned
                       └─ injected into agent's working context (see §4)
 ```
 
 The hook can be implemented in two ways:
 1. **Client-side (agent-owned):** The agent runs `brainctl push` immediately after checkout, injects results into its working context manually. Simple, reliable, no infrastructure changes.
-2. **Server-side (Paperclip webhook):** Paperclip fires a push event to a sidecar service on checkout. The sidecar pre-populates a per-agent push cache readable by `brainctl push --cached`. More complex, but allows push to begin before the agent's heartbeat clock starts.
+2. **Server-side (task-tracker webhook):** task-tracker fires a push event to a sidecar service on checkout. The sidecar pre-populates a per-agent push cache readable by `brainctl push --cached`. More complex, but allows push to begin before the agent's heartbeat clock starts.
 
 For the current 22-agent scale, **client-side is recommended**. At 178+ agents with frequent checkouts, server-side with caching becomes worthwhile.
 
@@ -156,12 +156,12 @@ How does the proactively fetched context actually reach the agent?
 The push output is formatted as a compact markdown block and prepended to the agent's working context at heartbeat start, before the agent reads the issue or calls any tools.
 
 ```markdown
-<!-- PROACTIVE MEMORY PUSH — COS-124 checkout -->
+<!-- PROACTIVE MEMORY PUSH — internal-ref checkout -->
 **Pre-loaded context (5 items, relevance-ranked):**
 1. [memory:88] Billing pipeline uses Stripe webhook idempotency keys — duplicate events are safe to replay (confidence: 0.91)
 2. [context:44/chunk:3] Last billing deploy (2026-03-21): latency spike traced to missing index on `invoice_line_items.customer_id`
 3. [memory:71] Weaver owns context ingestion — Hermes owns schema decisions (confidence: 0.87)
-4. [event:312] COS-83 closed 2026-03-28: auto-route-events (Phase 3) shipped, 14 events routed in first sweep
+4. [event:312] internal-ref closed 2026-03-28: auto-route-events (Phase 3) shipped, 14 events routed in first sweep
 5. [context:52/chunk:1] brainctl push pipeline not yet implemented (as of wave3 kickoff)
 <!-- END PROACTIVE PUSH -->
 ```
@@ -183,10 +183,10 @@ A new event type `context_push` is logged to the `events` table immediately afte
 
 ```bash
 # Push event logged by hook:
-brainctl event add "Pre-push for COS-124 checkout" \
+brainctl event add "Pre-push for internal-ref checkout" \
   -t context_push \
-  -p costclock-ai \
-  --metadata '{"push_id":"...", "items":[...], "task":"COS-124"}'
+  -p example-app \
+  --metadata '{"push_id":"...", "items":[...], "task":"internal-ref"}'
 
 # Agent reads at heartbeat start:
 brainctl event list --type context_push --agent weaver --unread
@@ -242,7 +242,7 @@ CREATE TABLE push_log (
   id          INTEGER PRIMARY KEY,
   push_id     TEXT NOT NULL UNIQUE,        -- UUID per push event
   agent_id    TEXT NOT NULL,
-  task_ref    TEXT NOT NULL,               -- e.g. "COS-124"
+  task_ref    TEXT NOT NULL,               -- e.g. "internal-ref"
   checkout_at TEXT NOT NULL,
   items       TEXT NOT NULL,               -- JSON array: [{table, id, score, category}]
   used_ids    TEXT,                        -- JSON array: item ids where recalled_count increased
@@ -399,10 +399,10 @@ One new table (`push_log`) as defined in §5.2. No changes to existing `memories
 
 | Report | Integration point |
 |---|---|
-| COS-120 (Episodic/Semantic Bifurcation) | Proactive push should weight semantic memories (stable facts) higher than episodic (events) — stable facts transfer better across contexts |
-| COS-121 (Provenance & Trust) | Push should filter to memories with `trust_level ≥ 0.7` — don't proactively inject low-trust or unverified facts |
-| COS-122 (Write Contention) | Push reads are non-mutating; no contention risk. But push scoring results should not be cached across heartbeats — fresh reads ensure version consistency |
-| COS-111 (Associative Memory / Wave 2) | The graph activation bonus in Layer 3 scoring directly uses spreading activation from COS-111's design |
+| internal-ref (Episodic/Semantic Bifurcation) | Proactive push should weight semantic memories (stable facts) higher than episodic (events) — stable facts transfer better across contexts |
+| internal-ref (Provenance & Trust) | Push should filter to memories with `trust_level ≥ 0.7` — don't proactively inject low-trust or unverified facts |
+| internal-ref (Write Contention) | Push reads are non-mutating; no contention risk. But push scoring results should not be cached across heartbeats — fresh reads ensure version consistency |
+| internal-ref (Associative Memory / Wave 2) | The graph activation bonus in Layer 3 scoring directly uses spreading activation from internal-ref's design |
 
 ---
 
@@ -424,8 +424,8 @@ One new table (`push_log`) as defined in §5.2. No changes to existing `memories
 2. **Add push step to all agent AGENTS.md** heartbeat procedures (Step 5b), making it a standard part of the checkout flow.
 3. **Create `push_log` table** on first deployment. Collect 30 days of cold-start data before tuning scores.
 4. **Use checkout as the sole trigger** — not every heartbeat, not every tool call.
-5. **Push semantic memories over episodic** (pending COS-120 merge). Episodic entries are high-noise for cross-agent proactive delivery.
-6. **Trust-gate the push set** (pending COS-121 merge). Only push memories with verified provenance.
+5. **Push semantic memories over episodic** (pending internal-ref merge). Episodic entries are high-noise for cross-agent proactive delivery.
+6. **Trust-gate the push set** (pending internal-ref merge). Only push memories with verified provenance.
 7. **Do not push for tasks with < 20 tokens of description.** These are too underspecified for meaningful retrieval.
 
 ---
@@ -435,12 +435,12 @@ One new table (`push_log`) as defined in §5.2. No changes to existing `memories
 - Rao, R.P.N. & Ballard, D.H. (1999). Predictive coding in the visual cortex: a functional interpretation of some extra-classical receptive-field effects. *Nature Neuroscience*, 2(1), 79–87.
 - Clark, A. (2015). *Surfing Uncertainty: Prediction, Action, and the Embodied Mind*. Oxford University Press.
 - Collins, A.M. & Loftus, E.F. (1975). A spreading-activation theory of semantic processing. *Psychological Review*, 82(6), 407–428.
-- Wave 2 — Associative Memory & Analogical Reasoning: `~/agentmemory/research/wave2/09_associative_memory_analogical_reasoning.md`
-- Wave 3 — Episodic/Semantic Bifurcation ([COS-120](/COS/issues/COS-120)): `~/agentmemory/research/wave3/01_episodic_semantic_bifurcation.md`
-- Wave 3 — Provenance & Trust ([COS-121](/COS/issues/COS-121)): `~/agentmemory/research/wave3/02_provenance_trust.md`
-- Wave 3 — Write Contention ([COS-122](/COS/issues/COS-122)): `~/agentmemory/research/wave3/03_write_contention.md`
+- Wave 2 — Associative Memory & Analogical Reasoning: `research/wave2/09_associative_memory_analogical_reasoning.md`
+- Wave 3 — Episodic/Semantic Bifurcation (): `research/wave3/01_episodic_semantic_bifurcation.md`
+- Wave 3 — Provenance & Trust (): `research/wave3/02_provenance_trust.md`
+- Wave 3 — Write Contention (): `research/wave3/03_write_contention.md`
 
 ---
 
-*Document delivered to: `~/agentmemory/research/wave3/05_proactive_push.md`*
-*Linked issue: [COS-124](/COS/issues/COS-124)*
+*Document delivered to: `research/wave3/05_proactive_push.md`*
+*Linked issue: *

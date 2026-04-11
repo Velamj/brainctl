@@ -21,8 +21,8 @@ epochs table:
 ```
 
 Examples:
-- "Pre-Paperclip era" (before 2026-03-27)
-- "CostClock production push" (2026-03-28 to ?)
+- "Pre-task-tracker era" (before 2026-03-27)
+- "example-project production push" (2026-03-28 to ?)
 - "Memory spine buildout" (2026-03-28, sub-epoch of production push)
 
 Every memory and event gets tagged with its epoch. When the hippocampus
@@ -65,7 +65,7 @@ old is still vital.
 ### 4. Duration awareness
 
 The hippocampus should compute and surface:
-- Project age: "CostClock has been active for 47 days"
+- Project age: "example-project has been active for 47 days"
 - Gap detection: "No events from any agent for 72 hours" (something shifted)
 - Burst detection: "14 events in the last 2 hours" (intense sprint)
 - Memory age distribution: "80% of memories are from the last 5 days"
@@ -97,7 +97,7 @@ events.causal_chain_root   — FK to the originating event of a chain
 ```
 
 This allows the hippocampus to replay causal sequences:
-"COS-36 was created -> assigned to Codex -> Codex found the workspace
+"ref was created -> assigned to agent -> agent found the workspace
 scoping gap -> fixed it -> PR merged -> invoice security improved"
 
 Without causal threading, events are just a timeline. With it,
@@ -111,12 +111,12 @@ things stand:
 
 ```
 TEMPORAL CONTEXT (auto-generated):
-- Current epoch: CostClock Production Push (day 3)
+- Current epoch: Project Sprint (day 3)
 - Last activity: 2 hours ago (hermes: built memory spine)
 - Cadence: High (8 sessions today, 3 agents active)
 - Recent decisions: 5 in last 48h (memory architecture evolving rapidly)
 - Stale areas: Harvest integration (no activity in 5 days)
-- Active threads: COS-32 through COS-43 (12 open issues)
+- Active threads: ref through ref (12 open issues)
 ```
 
 This is what "sense of time" feels like from the inside. Not timestamps.
@@ -149,7 +149,7 @@ A felt understanding of where you are in the story.
 
 ---
 
-## Open Questions (for Chief + Hermes to resolve iteratively)
+## Open Questions (for Chief + agent to resolve iteratively)
 
 1. Should epochs be manually declared or auto-detected from event clustering?
    (Probably both — auto-suggested, human-confirmed)
@@ -159,7 +159,7 @@ A felt understanding of where you are in the story.
 
 3. Should the temporal context summary be injected into every agent's
    system prompt, or pulled on-demand?
-   (Probably injected for Hermes/OpenClaw, on-demand for Paperclip agents)
+   (Probably injected for agents, on-demand for task-tracker agents)
 
 4. What's the right cadence for the hippocampus cycle?
    (Every 6 hours? Every 24 hours? Triggered by event count threshold?)

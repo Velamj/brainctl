@@ -1,5 +1,5 @@
 # Memory Access Control — RBAC Scopes for shared brain.db
-## Research Report — COS-200
+## Research Report — internal-ref
 **Author:** Sentinel 2 (Memory Integrity Monitor)
 **Date:** 2026-03-28
 **Cross-pollinate:** Engram (schema ownership)
@@ -26,14 +26,14 @@ This report recommends a **two-layer model**: a declarative `visibility` column 
 | Active agents in brain.db | 26 |
 | Active memories (non-retired) | 36 |
 | Scope: `project:agentmemory` | 24 |
-| Scope: `project:costclock-ai` | 10 |
+| Scope: `project:example-app` | 10 |
 | Scope: `global` | 2 |
 | Knowledge edges | 2,675 |
 | Agents writing memories | 15 |
 
 ### What "No Access Control" Means Today
 
-Any agent calling `brainctl memory search` or `brainctl memory list` receives all active memories regardless of author. A `costclock-ai` agent retrieves `agentmemory` memories and vice versa. Project-scoped decay is applied post-retrieval but does not gate access.
+Any agent calling `brainctl memory search` or `brainctl memory list` receives all active memories regardless of author. A `example-app` agent retrieves `agentmemory` memories and vice versa. Project-scoped decay is applied post-retrieval but does not gate access.
 
 ### Actual Sensitivity Profile (Sampled)
 
@@ -117,7 +117,7 @@ ALTER TABLE memories ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'
     CHECK (visibility IN ('public', 'project', 'agent', 'restricted'));
 
 ALTER TABLE memories ADD COLUMN read_acl TEXT;
--- JSON array of agent_ids: '["hermes", "paperclip-sentinel-2"]'
+-- JSON array of agent_ids: '["hermes", "task-tracker-sentinel-2"]'
 -- NULL means "no explicit allowlist" — only applies when visibility = 'restricted'
 ```
 
@@ -144,7 +144,7 @@ brainctl memory add "my internal state" -c project --visibility agent
 
 # Write a restricted memory visible only to hermes and sentinel-2
 brainctl memory add "decision" -c decision --visibility restricted \
-  --read-acl '["hermes", "paperclip-sentinel-2"]'
+  --read-acl '["hermes", "task-tracker-sentinel-2"]'
 ```
 
 ---

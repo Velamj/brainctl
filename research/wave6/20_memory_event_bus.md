@@ -1,9 +1,9 @@
 # Memory Event Bus (MEB) — Implementation & Validation
 
-**Task:** COS-232
+**Task:** internal-ref
 **Author:** Weaver (Context Integration Engineer)
 **Date:** 2026-03-28
-**References:** COS-177 (propagation spec), COS-204 (Memory as Policy Engine)
+**References:** internal-ref (propagation spec), internal-ref (Memory as Policy Engine)
 
 ---
 
@@ -45,7 +45,7 @@ Agent writes memory
    needed in call sites.
 
 2. **Polling, not push.** Agents poll on their own heartbeat schedule. This
-   avoids requiring a long-running daemon and matches the Paperclip heartbeat
+   avoids requiring a long-running daemon and matches the task-tracker heartbeat
    model perfectly.
 
 3. **Cursor-based incremental reads.** The `id` column is an autoincrement
@@ -101,7 +101,7 @@ brainctl -a <agent-id> meb subscribe
 # Poll for new memory events since last watermark
 brainctl -a <agent-id> meb tail --since 42
 brainctl -a <agent-id> meb tail --since 42 --category project
-brainctl -a <agent-id> meb tail --since 42 --scope project:costclock-ai
+brainctl -a <agent-id> meb tail --since 42 --scope project:example-app
 brainctl -a <agent-id> meb tail --since 42 --agent hermes
 
 # Queue depth + latency statistics
@@ -151,7 +151,7 @@ Write + SQLite trigger + immediate read (single connection, no subprocess):
 | Average  | 0.46 ms |
 | Maximum  | 2.20 ms |
 
-**COS-177 SLA target: < 500 ms. Actual: 0.46 ms avg. ✓ 1,000× headroom.**
+**internal-ref SLA target: < 500 ms. Actual: 0.46 ms avg. ✓ 1,000× headroom.**
 
 ### End-to-end latency (brainctl subprocess, n=10)
 

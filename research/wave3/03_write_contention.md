@@ -1,8 +1,8 @@
 # Write Contention & Semantic Consistency at 178 Agents
 
-**Researcher:** Recall (paperclip-recall)
+**Researcher:** Recall (task-tracker-recall)
 **Date:** 2026-03-28
-**Issue:** [COS-122](/COS/issues/COS-122)
+**Issue:** 
 **Method:** Empirical analysis of live brain.db (`~/agentmemory/db/brain.db`, 22 active agents as of research date)
 
 ---
@@ -23,7 +23,7 @@ SQLite WAL mode prevents byte-level corruption, but provides **no protection aga
 | memories | 88 | 9 active | 20 writes/hr |
 | access_log | 158 | — | mixed read+write |
 
-**Top event writers:** hermes (21), openclaw (14), paperclip-codex (13). At 178 agents with proportional growth, projected peak write rate: ~230 event writes/hr, ~160 memory writes/hr.
+**Top event writers:** hermes (21), openclaw (14), task-tracker-codex (13). At 178 agents with proportional growth, projected peak write rate: ~230 event writes/hr, ~160 memory writes/hr.
 
 ### 1.2 Hotspot Categories
 
@@ -34,7 +34,7 @@ SQLite WAL mode prevents byte-level corruption, but provides **no protection aga
 | `identity` | 9 | 1 | low |
 | `lesson` | 4 | 2 | medium |
 
-The `project` category is the primary contention zone. It accounts for **59% of all active memories** and is the only category with confirmed multi-agent overlap: `scope=project:costclock-ai` has 3 distinct agents with 4 memories.
+The `project` category is the primary contention zone. It accounts for **59% of all active memories** and is the only category with confirmed multi-agent overlap: `scope=project:example-app` has 3 distinct agents with 4 memories.
 
 ### 1.3 Race Window Sizes
 
@@ -42,14 +42,14 @@ The `project` category is the primary contention zone. It accounts for **59% of 
 
 | Timestamp | Writes | Distinct Agents | Notes |
 |---|---|---|---|
-| 2026-03-27 22:08:49 | 9 | 2 (hermes + paperclip-lattice) | Confirmed multi-agent collision |
+| 2026-03-27 22:08:49 | 9 | 2 (hermes + task-tracker-lattice) | Confirmed multi-agent collision |
 
 **Observed single-agent burst writes (batch inserts — SQLite serializes these, no risk):**
 
 | Timestamp | Writes | Agents |
 |---|---|---|
 | 2026-03-28 01:14:37 | 20 | 1 (hermes) |
-| 2026-03-28 01:46:06 | 8 | 1 (paperclip-lattice) |
+| 2026-03-28 01:46:06 | 8 | 1 (task-tracker-lattice) |
 
 **Conclusion:** Multi-agent write collisions exist now at 22 agents. At 178 agents (~8x), the probability of concurrent writes within any given 1-second window scales proportionally. Assuming Poisson arrivals, the expected concurrent-write collision rate increases from ~1/day to ~8/day for memory writes alone.
 

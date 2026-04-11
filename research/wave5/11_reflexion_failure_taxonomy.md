@@ -1,8 +1,8 @@
 # Reflexion Failure Taxonomy — Optimal Failure Classification and Lesson Lifecycle
-## Research Report — COS-199
+## Research Report — internal-ref
 **Author:** Hermes (Intelligence Director, Memory & Cognition Division)
 **Date:** 2026-03-28
-**Companion to:** COS-195 (reflexion memory storage implementation)
+**Companion to:** internal-ref (reflexion memory storage implementation)
 **Cross-pollinate:** Engram (schema), Recall (retrieval), Sentinel (integrity), Cortex (intelligence synthesis)
 **Project:** Cognitive Architecture & Enhancement
 
@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-COS-195 added `brainctl --reflexion` to log failure lessons into brain.db. That implementation answers *where* lessons go. This report answers the harder questions: *which failures deserve lessons, when do lessons expire, when should a lesson override vs. hint, and how do lessons cross agent boundaries.*
+internal-ref added `brainctl --reflexion` to log failure lessons into brain.db. That implementation answers *where* lessons go. This report answers the harder questions: *which failures deserve lessons, when do lessons expire, when should a lesson override vs. hint, and how do lessons cross agent boundaries.*
 
 The core findings are:
 
@@ -56,7 +56,7 @@ The agent asserts a fact or claims to perform an action that did not occur or ca
 
 **Class 4: COORDINATION_FAILURE**
 The agent fails to correctly interface with the multi-agent coordination system. Subcases: checkout conflict (409 errors), auth/identity mismatch (API resolves to wrong agent), stale lock (executionRunId no longer valid), duplicate execution (multiple agents working the same task).
-- Detectability: very high (explicit error codes from Paperclip API)
+- Detectability: very high (explicit error codes from task-tracker API)
 - Generalizability: very high (protocol rules are org-wide)
 - Lesson lifetime: short — protocol changes fix root causes quickly
 
@@ -72,9 +72,9 @@ Querying the 179 events in the live database reveals clear failure class distrib
 
 **COORDINATION_FAILURE is the dominant failure class in this org.** The following patterns appear across agents:
 
-- **Auth/identity mismatch** (paperclip-armor, paperclip-nexus, paperclip-codex, paperclip-probe, paperclip-tempo): Multiple agents report `API key identity mismatch — token resolves to Kokoro while env targets [agent]`. This same failure appears in at least 6 distinct agent event logs. No reflexion lesson has been filed for it despite it blocking tasks repeatedly.
-- **Checkout conflicts (409)** (paperclip-weaver, paperclip-prune, paperclip-sentinel-2, paperclip-cortex): Heartbeat runs report `409 checkout conflict — queued run [X] holds the lock`. paperclip-cortex reports `4/5 tasks had 409 conflicts this heartbeat`.
-- **Stale executionRunId locks** (paperclip-sentinel-2): `stale executionRunId locks (889ddee4, fbc053d5) prevent modification from current run (4472ad59)`.
+- **Auth/identity mismatch** (task-tracker-armor, task-tracker-nexus, task-tracker-codex, task-tracker-probe, task-tracker-tempo): Multiple agents report `API key identity mismatch — token resolves to agent-1 while env targets [agent]`. This same failure appears in at least 6 distinct agent event logs. No reflexion lesson has been filed for it despite it blocking tasks repeatedly.
+- **Checkout conflicts (409)** (task-tracker-weaver, task-tracker-prune, task-tracker-sentinel-2, task-tracker-cortex): Heartbeat runs report `409 checkout conflict — queued run [X] holds the lock`. task-tracker-cortex reports `4/5 tasks had 409 conflicts this heartbeat`.
+- **Stale executionRunId locks** (task-tracker-sentinel-2): `stale executionRunId locks (889ddee4, fbc053d5) prevent modification from current run (4472ad59)`.
 
 **CONTEXT_LOSS is the second most common failure class.** The coherence checker (Sentinel) has logged 6 coherence check events, 4 of them WARNING-level, all triggered by stale assumptions about agent counts. Memories claimed 12 agents when reality was 21-22.
 
@@ -88,7 +88,7 @@ Based on frequency, detectability, and generalizability analysis, three failure 
 
 | Priority | Failure Class | Rationale |
 |----------|--------------|-----------|
-| 1 | COORDINATION_FAILURE | Highest observed frequency; fully deterministic lessons (if condition X, do Y); lessons generalize to all Paperclip agents |
+| 1 | COORDINATION_FAILURE | Highest observed frequency; fully deterministic lessons (if condition X, do Y); lessons generalize to all task-tracker agents |
 | 2 | CONTEXT_LOSS | Second-highest frequency; coherence checker auto-generates trigger signals; lessons have clear expiry conditions |
 | 3 | TOOL_MISUSE | Tool APIs change; lessons need code-change-triggered expiry; partial generalization within agent_type groups |
 
@@ -100,14 +100,14 @@ REASONING_ERROR and HALLUCINATION: instrument via outcome tracking first; defer 
 
 ### 2.1 The Problem with Pure Time-Based TTL
 
-The current `memories.expires_at` field supports time-based expiry. This is insufficient for reflexion lessons. A lesson about `401 on Paperclip checkout` might be valid for 18 months or become irrelevant 48 hours after the auth system is fixed. A lesson about checking agent count before claiming to know the org size might be permanently valid. Time-based TTL requires a domain expert to set the right duration per lesson, which will not happen consistently across 178 agents.
+The current `memories.expires_at` field supports time-based expiry. This is insufficient for reflexion lessons. A lesson about `401 on task-tracker checkout` might be valid for 18 months or become irrelevant 48 hours after the auth system is fixed. A lesson about checking agent count before claiming to know the org size might be permanently valid. Time-based TTL requires a domain expert to set the right duration per lesson, which will not happen consistently across 178 agents.
 
 ### 2.2 Proposed Expiration Trigger Hierarchy
 
 Lessons should be governed by the **first-triggering condition** from this priority-ordered list:
 
 **Trigger 1: Code/config change fixes root cause (HIGHEST PRIORITY)**
-When a code commit or configuration change resolves the structural cause of the failure, all lessons for that failure class and root cause should be retired. This is the cleanest expiry signal. Implementation: when brainctl logs a lesson, the agent records a `root_cause_ref` (e.g., `paperclip-api/checkout-protocol`, `brain.db/schema-v5`). When changes touch those refs, Sentinel can query all lessons with matching `root_cause_ref` and mark them `expiration_triggered=code_fix`.
+When a code commit or configuration change resolves the structural cause of the failure, all lessons for that failure class and root cause should be retired. This is the cleanest expiry signal. Implementation: when brainctl logs a lesson, the agent records a `root_cause_ref` (e.g., `task-tracker-api/checkout-protocol`, `brain.db/schema-v5`). When changes touch those refs, Sentinel can query all lessons with matching `root_cause_ref` and mark them `expiration_triggered=code_fix`.
 
 **Trigger 2: N consecutive successes of the same task class (RECOMMENDED PRIMARY)**
 If the lesson was filed because task class T failed, and the same agent (or any agent of the same type) subsequently completes N consecutive tasks of class T without triggering the same failure, the lesson has been successfully learned and acted upon. The lesson should be demoted from `active` to `archived` (not deleted — archived lessons inform future lesson quality).
@@ -205,7 +205,7 @@ Above 0.65, apply the confidence thresholds above.
 
 ### 4.1 The Core Problem
 
-paperclip-weaver files a lesson: `"When heartbeat finds a 409 conflict, exit immediately per protocol — never retry."` paperclip-recall encounters the same situation two days later. Should Recall receive Weaver's lesson? The answer should be yes — but the mechanism must be principled, not a global broadcast.
+task-tracker-weaver files a lesson: `"When heartbeat finds a 409 conflict, exit immediately per protocol — never retry."` task-tracker-recall encounters the same situation two days later. Should Recall receive Weaver's lesson? The answer should be yes — but the mechanism must be principled, not a global broadcast.
 
 Naive approaches fail:
 - **Broadcast all lessons to all agents**: Floods agent context with irrelevant lessons; degrades performance
@@ -221,8 +221,8 @@ A lesson generalizes across another agent if and only if:
 
 For example:
 - A lesson about `brainctl --reflexion flag syntax` generalizes to all agents that use brainctl
-- A lesson about Paperclip checkout protocol generalizes to all Paperclip agents
-- A lesson about CostClock API rate limiting generalizes to agents working in the costclock-ai project
+- A lesson about task-tracker checkout protocol generalizes to all task-tracker agents
+- A lesson about example-app API rate limiting generalizes to agents working in the example-app project
 - A lesson about Cortex's specific intelligence synthesis reasoning pattern does not generalize
 
 ### 4.3 The `generalizable_to` Field
@@ -232,18 +232,18 @@ The lesson schema (Section 5) includes a `generalizable_to` field as a JSON arra
 ```json
 {
   "generalizable_to": [
-    "agent_type:paperclip",       // all paperclip agents
+    "agent_type:task-tracker",       // all task-tracker agents
     "agent_type:openclaw",        // all openclaw agents
     "capability:brainctl",        // all agents that use brainctl
-    "project:costclock-ai",       // agents in this project
-    "agent:paperclip-recall",     // specific agent
+    "project:example-app",       // agents in this project
+    "agent:task-tracker-recall",     // specific agent
     "scope:global"                // all agents (use sparingly)
   ]
 }
 ```
 
 **Rules for generalizable_to population:**
-- COORDINATION_FAILURE lessons: default to `["agent_type:paperclip"]` (all Paperclip agents face the same protocol)
+- COORDINATION_FAILURE lessons: default to `["agent_type:task-tracker"]` (all task-tracker agents face the same protocol)
 - TOOL_MISUSE (brainctl): default to `["capability:brainctl"]`
 - TOOL_MISUSE (project-specific): default to `["project:<project>"]`
 - CONTEXT_LOSS about shared data (agent counts, task states): `["scope:global"]`
@@ -274,7 +274,7 @@ CREATE TABLE IF NOT EXISTS reflexion_lessons (
     -- Identity
     source_agent_id TEXT NOT NULL REFERENCES agents(id),
     source_event_id INTEGER REFERENCES events(id),  -- the failure event that triggered this lesson
-    source_run_id TEXT,                               -- Paperclip run ID from the failed task
+    source_run_id TEXT,                               -- task-tracker run ID from the failed task
 
     -- Failure classification
     failure_class TEXT NOT NULL                      -- REASONING_ERROR | CONTEXT_LOSS | HALLUCINATION |
@@ -310,7 +310,7 @@ CREATE TABLE IF NOT EXISTS reflexion_lessons (
     expiration_policy TEXT NOT NULL DEFAULT 'success_count',  -- success_count | code_fix | ttl | manual
     expiration_n INTEGER DEFAULT 5,                   -- for success_count policy: N consecutive successes needed
     expiration_ttl_days INTEGER,                      -- for ttl policy
-    root_cause_ref TEXT,                              -- for code_fix policy: e.g., 'paperclip-api/checkout-protocol'
+    root_cause_ref TEXT,                              -- for code_fix policy: e.g., 'task-tracker-api/checkout-protocol'
     consecutive_successes INTEGER NOT NULL DEFAULT 0, -- current progress toward expiration_n
     last_validated_at TEXT,                           -- when last success was recorded
 
@@ -385,9 +385,9 @@ END;
 
 ## 6. brainctl --reflexion Implementation
 
-### 6.1 Current State (COS-195 Implementation)
+### 6.1 Current State (internal-ref Implementation)
 
-COS-195 implemented `brainctl memory write --reflexion "<lesson>"` which forces `category=lesson` and injects `reflexion` into the tags array. This writes to the `memories` table. That is the wrong destination — `memories` lacks the metadata richness needed for the failure taxonomy, expiration lifecycle, and cross-agent generalization mechanics.
+internal-ref implemented `brainctl memory write --reflexion "<lesson>"` which forces `category=lesson` and injects `reflexion` into the tags array. This writes to the `memories` table. That is the wrong destination — `memories` lacks the metadata richness needed for the failure taxonomy, expiration lifecycle, and cross-agent generalization mechanics.
 
 ### 6.2 Proposed brainctl --reflexion Interface
 
@@ -396,9 +396,9 @@ COS-195 implemented `brainctl memory write --reflexion "<lesson>"` which forces 
 brainctl reflexion write \
   --failure-class COORDINATION_FAILURE \
   --failure-subclass auth_identity_mismatch \
-  --trigger "When attempting to checkout a Paperclip task and the API identity resolves to a different agent than the one in ENV" \
-  --lesson "Before checkout, call brainctl agent whoami and compare to PAPERCLIP_AGENT_ID. If mismatch, exit with code 2 and post a blocker comment. Do not retry under the wrong identity." \
-  --generalizable-to "agent_type:paperclip" \
+  --trigger "When attempting to checkout a task-tracker task and the API identity resolves to a different agent than the one in ENV" \
+  --lesson "Before checkout, call brainctl agent whoami and compare to TASK_TRACKER_AGENT_ID. If mismatch, exit with code 2 and post a blocker comment. Do not retry under the wrong identity." \
+  --generalizable-to "agent_type:task-tracker" \
   --source-event <event_id> \
   --source-run <run_id>
 ```
@@ -406,13 +406,13 @@ brainctl reflexion write \
 This inserts into `reflexion_lessons` with:
 - `failure_class=COORDINATION_FAILURE` → `confidence=0.95`, `override_level=HARD_OVERRIDE`
 - `expiration_policy=success_count`, `expiration_n=3` (default for COORDINATION_FAILURE)
-- `generalizable_to=["agent_type:paperclip"]`
+- `generalizable_to=["agent_type:task-tracker"]`
 
 **Querying lessons for injection (retrieval path):**
 ```bash
 brainctl reflexion query \
-  --agent paperclip-weaver \
-  --task-description "Checking out COS-124 for proactive memory push research" \
+  --agent task-tracker-weaver \
+  --task-description "Checking out internal-ref for proactive memory push research" \
   --similarity-threshold 0.65 \
   --top-k 5
 ```
@@ -422,7 +422,7 @@ Returns lessons ordered by `(confidence * similarity_score)` where similarity is
 **Recording a success (expiration progress):**
 ```bash
 brainctl reflexion success \
-  --agent paperclip-weaver \
+  --agent task-tracker-weaver \
   --task-class heartbeat_checkout \
   --lesson-ids 42,51  # lessons that were retrieved and applied
 ```
@@ -432,7 +432,7 @@ Increments `consecutive_successes` on each listed lesson. If `consecutive_succes
 **Recording a failure recurrence (confidence demotion):**
 ```bash
 brainctl reflexion failure-recurrence \
-  --agent paperclip-weaver \
+  --agent task-tracker-weaver \
   --lesson-id 42 \
   --note "Same auth mismatch despite lesson being retrieved"
 ```
@@ -443,13 +443,13 @@ Applies −0.15 confidence penalty, resets `consecutive_successes=0`.
 ```bash
 brainctl reflexion retire \
   --lesson-id 42 \
-  --reason "COS-210 fixed the API key resolution — agents now get correct identity automatically" \
+  --reason "internal-ref fixed the API key resolution — agents now get correct identity automatically" \
   --root-cause-resolved
 ```
 
 ### 6.3 Backward Compatibility
 
-The existing `brainctl memory write --reflexion` command (COS-195) should continue to work, writing to the `memories` table as before. New `brainctl reflexion` subcommands target `reflexion_lessons`. Eventually, `memories` with `category=lesson` and `reflexion` tag should be migrated to `reflexion_lessons` in a future maintenance cycle. No breaking change is introduced.
+The existing `brainctl memory write --reflexion` command  should continue to work, writing to the `memories` table as before. New `brainctl reflexion` subcommands target `reflexion_lessons`. Eventually, `memories` with `category=lesson` and `reflexion` tag should be migrated to `reflexion_lessons` in a future maintenance cycle. No breaking change is introduced.
 
 ---
 
@@ -472,14 +472,14 @@ WHERE status = 'active';
 And for cross-agent generalization lookup:
 ```sql
 -- SQLite JSON functions for generalizable_to queries
--- Example: find lessons applicable to paperclip-weaver
--- agent_type: paperclip, capabilities: brainctl, heartbeat
+-- Example: find lessons applicable to task-tracker-weaver
+-- agent_type: task-tracker, capabilities: brainctl, heartbeat
 SELECT * FROM reflexion_lessons
 WHERE status = 'active'
 AND (
-    generalizable_to LIKE '%"agent_type:paperclip"%'
+    generalizable_to LIKE '%"agent_type:task-tracker"%'
     OR generalizable_to LIKE '%"scope:global"%'
-    OR generalizable_to LIKE '%"agent:paperclip-weaver"%'
+    OR generalizable_to LIKE '%"agent:task-tracker-weaver"%'
     OR generalizable_to LIKE '%"capability:brainctl"%'
 )
 ORDER BY confidence DESC;
@@ -569,7 +569,7 @@ The hippocampus maintenance cycle (running every 5 hours per `brainctl maintenan
 
 4. **How do we measure the reflexion ROI?** We can count `times_prevented_failure` but we can't easily measure the counterfactual (how often would failure have occurred without the lesson). We need a shadow mode: inject lessons silently for some agent runs, don't inject for others, compare failure rates. This is a controlled experiment — design it formally.
 
-5. **What is the right lesson granularity?** A lesson can be too specific ("in COS-124, when Weaver encounters a 409, exit") or too general ("on all errors, be careful"). Optimal granularity is somewhere in between. How do we prevent lesson drift toward one extreme? Do we need a granularity score?
+5. **What is the right lesson granularity?** A lesson can be too specific ("in internal-ref, when Weaver encounters a 409, exit") or too general ("on all errors, be careful"). Optimal granularity is somewhere in between. How do we prevent lesson drift toward one extreme? Do we need a granularity score?
 
 6. **How should the reflexion system handle failures that are themselves caused by bad lessons?** A lesson instructs an agent to do X; X turns out to be wrong in a new context; the agent fails. This is a lesson-induced failure. The system should detect when a retrieved lesson preceded a failure and consider lesson demotion — but currently `failure-recurrence` requires manual invocation. Who triggers it automatically?
 
@@ -577,17 +577,17 @@ The hippocampus maintenance cycle (running every 5 hours per `brainctl maintenan
 
 ## 9. Assumptions in Current Architecture That Are Wrong or Naive
 
-1. **`memories.category = 'lesson'` is sufficient for reflexion storage.** It is not. The generic memories schema has no failure class, no expiration lifecycle, no override semantics, no generalizability metadata. The two existing reflexion lessons in brain.db (`paperclip-scribe-2`'s checkout conflict and reflexion validation test) have no tags beyond `["reflexion"]` and no way to know when they should expire or who else should receive them. This is a minimal viable placeholder, not a production design.
+1. **`memories.category = 'lesson'` is sufficient for reflexion storage.** It is not. The generic memories schema has no failure class, no expiration lifecycle, no override semantics, no generalizability metadata. The two existing reflexion lessons in brain.db (`task-tracker-scribe-2`'s checkout conflict and reflexion validation test) have no tags beyond `["reflexion"]` and no way to know when they should expire or who else should receive them. This is a minimal viable placeholder, not a production design.
 
 2. **The `scope` field can encode generalizability.** The current `memories.scope` values (`global`, `project:<name>`, `agent:<id>`) are used for temporal decay classification and access control, not generalization routing. Using `scope=global` to mean "all agents should learn this lesson" conflates two orthogonal concerns. A lesson can be global in scope but should only be delivered to agents with the `brainctl` capability. The `generalizable_to` field in the proposed schema separates these concerns correctly.
 
-3. **All agents benefit equally from the same lesson.** A lesson about Paperclip checkout protocol is mandatory for all 178 Paperclip agents. A lesson about brainctl reflexion flag syntax is relevant only to agents that use brainctl. The current implementation has no way to express this distinction — `scope=global` goes everywhere. This will result in context pollution as the lesson store grows.
+3. **All agents benefit equally from the same lesson.** A lesson about task-tracker checkout protocol is mandatory for all 178 task-tracker agents. A lesson about brainctl reflexion flag syntax is relevant only to agents that use brainctl. The current implementation has no way to express this distinction — `scope=global` goes everywhere. This will result in context pollution as the lesson store grows.
 
 4. **Confidence on a lesson is static.** The existing `memories.confidence` field is initialized at write time and changed only by the hippocampus decay cycle. There is no mechanism for confidence to increase when a lesson proves its value (successive preventions) or decrease when it fails to prevent recurrence. Lessons without feedback loops can stay at `confidence=1.0` indefinitely even if they've never prevented a failure.
 
-5. **The reflexion loop is closed.** The COS-195 implementation provides the write path. But the read path (retrieving lessons before a task) and the feedback path (recording outcomes to update lesson confidence) are not implemented. Without these, the reflexion loop is open — we're storing lessons but never systematically learning from them across runs. The three-part system (write, retrieve, feedback) must all be present for Reflexion to deliver its promised 20-40% improvement.
+5. **The reflexion loop is closed.** The internal-ref implementation provides the write path. But the read path (retrieving lessons before a task) and the feedback path (recording outcomes to update lesson confidence) are not implemented. Without these, the reflexion loop is open — we're storing lessons but never systematically learning from them across runs. The three-part system (write, retrieve, feedback) must all be present for Reflexion to deliver its promised 20-40% improvement.
 
-6. **FTS5 keyword search is sufficient for lesson retrieval.** For COORDINATION_FAILURE lessons with explicit keywords (409, auth, checkout), FTS5 works. For CONTEXT_LOSS or REASONING_ERROR lessons with abstract trigger conditions, keyword matching will miss relevant lessons. Vector similarity search on `trigger_conditions` embedding is required for the lesson retrieval to be reliable. The current COS-195 implementation does not embed lessons.
+6. **FTS5 keyword search is sufficient for lesson retrieval.** For COORDINATION_FAILURE lessons with explicit keywords (409, auth, checkout), FTS5 works. For CONTEXT_LOSS or REASONING_ERROR lessons with abstract trigger conditions, keyword matching will miss relevant lessons. Vector similarity search on `trigger_conditions` embedding is required for the lesson retrieval to be reliable. The current internal-ref implementation does not embed lessons.
 
 ---
 
@@ -597,7 +597,7 @@ The hippocampus maintenance cycle (running every 5 hours per `brainctl maintenan
 Design and implement the feedback path: how does an agent signal that a retrieved lesson helped? How does the system distinguish "task succeeded with lesson" from "task succeeded despite lesson being irrelevant"? This is the critical missing piece. Without it, lesson confidence never evolves and the system cannot learn whether its lessons work. Estimated effort: 1 agent-day (schema extension + brainctl commands). Assignee recommendation: Engram (schema) + Recall (retrieval).
 
 ### Priority 2: COORDINATION_FAILURE Lesson Backfill (Immediate)
-The auth/identity mismatch pattern appears in at least 6 agent event logs with no corresponding reflexion lesson. These should be filed immediately using the `brainctl reflexion write` command with `failure_class=COORDINATION_FAILURE`, `generalizable_to=["agent_type:paperclip"]`, `confidence=0.95`, `override_level=HARD_OVERRIDE`. This is the single highest-ROI action available right now. Estimated effort: 2 hours. Assignee recommendation: Hermes or Sentinel.
+The auth/identity mismatch pattern appears in at least 6 agent event logs with no corresponding reflexion lesson. These should be filed immediately using the `brainctl reflexion write` command with `failure_class=COORDINATION_FAILURE`, `generalizable_to=["agent_type:task-tracker"]`, `confidence=0.95`, `override_level=HARD_OVERRIDE`. This is the single highest-ROI action available right now. Estimated effort: 2 hours. Assignee recommendation: Hermes or Sentinel.
 
 ### Priority 3: vec_reflexion_lessons and Semantic Retrieval (High)
 Implement the embedding pipeline for `trigger_conditions` and `lesson_content`. This unlocks the similarity-gated injection that prevents lesson noise. Without this, the injection system must rely on FTS5 alone, which will miss abstract lessons and over-inject irrelevant ones. This is a dependency for the full override-vs-hint mechanism. Estimated effort: 1 agent-day. Assignee recommendation: Recall (owns vec embedding pipeline).
@@ -615,9 +615,9 @@ Once 50+ lessons are stored, conduct an audit of `generalizable_to` assignments:
 
 ## Appendix A: Reflexion Literature Notes
 
-**Shinn, N., Cassano, F., Gopinath, A., Narasimhan, K., & Yao, S. (2023). Reflexion: Language agents with verbal reinforcement learning.** The core paper. Key findings: 20-40% improvement on HotpotQA, HumanEval, AlfWorld with 3+ reflection iterations. The paper does not address multi-agent generalization, lesson expiration, or differentiated failure classes. All four research questions in this report are out of scope for the original paper.
+**Shinn, N., Cassano, F., Gopinath, A., agent-2simhan, K., & Yao, S. (2023). Reflexion: Language agents with verbal reinforcement learning.** The core paper. Key findings: 20-40% improvement on HotpotQA, HumanEval, AlfWorld with 3+ reflection iterations. The paper does not address multi-agent generalization, lesson expiration, or differentiated failure classes. All four research questions in this report are out of scope for the original paper.
 
-**Yao, S., Zhao, J., Yu, D., Du, N., Shafran, I., Narasimhan, K., & Cao, Y. (2023). ReAct: Synergizing reasoning and acting in language models.** Defines the interleaved reasoning-action paradigm. Key insight for this taxonomy: reasoning errors and tool misuse errors are distinct failure modes even when they occur in the same action sequence. An agent can reason correctly and use the wrong tool, or reason incorrectly about the right tool. This motivates the REASONING_ERROR / TOOL_MISUSE distinction in the taxonomy.
+**Yao, S., Zhao, J., Yu, D., Du, N., Shafran, I., agent-2simhan, K., & Cao, Y. (2023). ReAct: Synergizing reasoning and acting in language models.** Defines the interleaved reasoning-action paradigm. Key insight for this taxonomy: reasoning errors and tool misuse errors are distinct failure modes even when they occur in the same action sequence. An agent can reason correctly and use the wrong tool, or reason incorrectly about the right tool. This motivates the REASONING_ERROR / TOOL_MISUSE distinction in the taxonomy.
 
 **Amodei, D., Olah, C., Steinhardt, J., Christiano, P., Schulman, J., & Mané, D. (2016). Concrete problems in AI safety.** The specification gaming and reward misalignment framework maps to REASONING_ERROR at the agent level: the agent achieves the literal objective (passes its own evaluation) while failing the intended objective. This is the hardest class to detect and the one most in need of human review in override semantics.
 
@@ -630,29 +630,29 @@ Three concrete lesson records that should be created immediately for the failure
 **Lesson 1 — Auth Identity Mismatch (COORDINATION_FAILURE)**
 ```json
 {
-  "source_agent_id": "paperclip-armor",
+  "source_agent_id": "task-tracker-armor",
   "failure_class": "COORDINATION_FAILURE",
   "failure_subclass": "auth_identity_mismatch",
-  "trigger_conditions": "Attempting to checkout or update a Paperclip task when the API key identity resolves to a different agent than the one specified in the PAPERCLIP_AGENT_ID environment variable",
-  "lesson_content": "Before any Paperclip checkout, run brainctl agent whoami and compare the returned agent ID to PAPERCLIP_AGENT_ID. If they differ, do not attempt checkout. Post a blocker comment to the issue explaining the identity mismatch and exit with code 2. Never retry under the wrong identity.",
-  "generalizable_to": ["agent_type:paperclip"],
+  "trigger_conditions": "Attempting to checkout or update a task-tracker task when the API key identity resolves to a different agent than the one specified in the TASK_TRACKER_AGENT_ID environment variable",
+  "lesson_content": "Before any task-tracker checkout, run brainctl agent whoami and compare the returned agent ID to TASK_TRACKER_AGENT_ID. If they differ, do not attempt checkout. Post a blocker comment to the issue explaining the identity mismatch and exit with code 2. Never retry under the wrong identity.",
+  "generalizable_to": ["agent_type:task-tracker"],
   "confidence": 0.95,
   "override_level": "HARD_OVERRIDE",
   "expiration_policy": "success_count",
   "expiration_n": 3,
-  "root_cause_ref": "paperclip-api/agent-identity"
+  "root_cause_ref": "task-tracker-api/agent-identity"
 }
 ```
 
 **Lesson 2 — 409 Checkout Conflict (COORDINATION_FAILURE)**
 ```json
 {
-  "source_agent_id": "paperclip-weaver",
+  "source_agent_id": "task-tracker-weaver",
   "failure_class": "COORDINATION_FAILURE",
   "failure_subclass": "checkout_409_conflict",
-  "trigger_conditions": "Attempting to checkout a Paperclip task when a prior queued run already holds the checkout lock (409 HTTP response from checkout endpoint)",
+  "trigger_conditions": "Attempting to checkout a task-tracker task when a prior queued run already holds the checkout lock (409 HTTP response from checkout endpoint)",
   "lesson_content": "On 409 checkout conflict, exit immediately per protocol. Do not retry. The queued run with the lock will execute. Log the conflict event in brain.db and return clean exit code. Never force-checkout or attempt workarounds.",
-  "generalizable_to": ["agent_type:paperclip"],
+  "generalizable_to": ["agent_type:task-tracker"],
   "confidence": 0.95,
   "override_level": "HARD_OVERRIDE",
   "expiration_policy": "success_count",
@@ -666,7 +666,7 @@ Three concrete lesson records that should be created immediately for the failure
   "source_agent_id": "hermes",
   "failure_class": "CONTEXT_LOSS",
   "failure_subclass": "stale_agent_count",
-  "trigger_conditions": "When preparing to make a claim about the number of active agents in the Paperclip org or brain.db, based on memory rather than a live database query",
+  "trigger_conditions": "When preparing to make a claim about the number of active agents in the task-tracker org or brain.db, based on memory rather than a live database query",
   "lesson_content": "Agent counts change rapidly (22+ agents registered, growing). Never state an agent count from memory. Always query: SELECT COUNT(*) FROM agents WHERE status='active'. Similarly, verify memory counts, event counts before citing them.",
   "generalizable_to": ["scope:global"],
   "confidence": 0.85,

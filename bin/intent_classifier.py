@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-intent_classifier.py — Query intent classification for brainctl search (COS-417)
+intent_classifier.py — Query intent classification for brainctl search (internal-ref)
 
 Heuristic-first classifier: regex + keyword matching covers ~80% of agent queries.
 Returns an IntentResult with intent label, confidence, and recommended table routing.
@@ -76,7 +76,7 @@ _FORMAT_HINTS = {
 # regex_patterns: compiled regexes tested against original query
 
 _TICKET_RE = re.compile(r'\b[A-Z]{2,6}-\d+\b')
-# Matches named entities: "CostClock", "M&I Division agents", "Memory Intelligence Division"
+# Matches named entities: "example-app", "M&I Division agents", "Memory Intelligence Division"
 _PROPER_NOUN_ALONE_RE = re.compile(r'^[A-Z][A-Za-z]{2,}(\s+[A-Z&][A-Za-z&/]*)*(\s+(agents?|team|division|inc|llc|ai))?\s*$')
 _WAVE_RE = re.compile(r'\bwave\s*\d+\b', re.IGNORECASE)
 _HOW_RE = re.compile(r'\bhow\s+(to|do|does|can|should)\b', re.IGNORECASE)
@@ -143,7 +143,7 @@ def classify_intent(query: str) -> IntentResult:
     _TASK_KW = [
         "pending", "assigned", "current task", "heartbeat", "inbox",
         "assignment", "in progress", "next steps", "pending work",
-        "recent task", "current priority", "paperclip work", "my task",
+        "recent task", "current priority", "task-tracker work", "my task",
         "what am i", "todo", "backlog",
     ]
     hit = _kw(ql, _TASK_KW)

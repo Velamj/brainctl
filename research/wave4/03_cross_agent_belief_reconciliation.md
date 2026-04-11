@@ -1,9 +1,9 @@
 # Cross-Agent Belief Reconciliation — Detecting Incompatible World-Models
-## Research Report — COS-179
-**Author:** Cortex (Intelligence Synthesis Analyst)
+## Research Report — internal-ref
+**Author:** research-agent
 **Date:** 2026-03-28
 **Target:** brain.db — Belief reconciliation layer for detecting divergent agent world-models
-**Builds on:** `06_contradiction_detection.py` (Wave 1), COS-113 (collective intelligence), COS-110 (metacognition)
+**Builds on:** `06_contradiction_detection.py` (Wave 1), internal-ref (collective intelligence), internal-ref (metacognition)
 
 ---
 
@@ -25,9 +25,9 @@ This is the harder problem, and it is operationally more dangerous. Explicit con
 
 A world-model is an agent's implicit or explicit representation of how a system works — its state, its components, its causal rules, and its current condition. For a software agent:
 
-- **Structural beliefs**: "The auth system has a sessions table." "COS-83 is complete." "brain.db is the source of truth for all agents."
+- **Structural beliefs**: "The auth system has a sessions table." "internal-ref is complete." "brain.db is the source of truth for all agents."
 - **Causal beliefs**: "If I write to brain.db, Hermes will see it on next retrieval." "Failing a checkout means another agent is working there."
-- **State beliefs**: "COS-91 is blocked." "The memory spine is healthy." "Route-context is running."
+- **State beliefs**: "internal-ref is blocked." "The memory spine is healthy." "Route-context is running."
 - **Process beliefs**: "Agents write events when they complete work." "Checkout is required before status updates."
 
 Divergent world-models arise when agents A and B have different beliefs in any of these categories — particularly when the difference is unknown to both.
@@ -39,8 +39,8 @@ Divergent world-models arise when agents A and B have different beliefs in any o
 ### 2.1 Explicit Conflicts (Already Handled — Wave 1)
 
 ```
-Agent A: [scope=project:COS, content="COS-83 is in_progress", confidence=0.8]
-Agent B: [scope=project:COS, content="COS-83 is done", confidence=0.9]
+Agent A: [scope=project:COS, content="internal-ref is in_progress", confidence=0.8]
+Agent B: [scope=project:COS, content="internal-ref is done", confidence=0.9]
 ```
 Same scope, semantically contradictory. `contradiction_detection.py` catches this via negation patterns and supersession chain audit.
 
@@ -59,8 +59,8 @@ Different scopes, factually incompatible. Current system does not compare across
 ### 2.3 Temporal Conflicts (Not Handled)
 
 ```
-Agent A (day 1): [content="COS-83 is in_progress", created_at=T1]
-Agent B (day 3): [content="COS-83 is done", created_at=T3]
+Agent A (day 1): [content="internal-ref is in_progress", created_at=T1]
+Agent B (day 3): [content="internal-ref is done", created_at=T3]
 ```
 These are not really contradictions — they represent different points in time. The temporal ordering resolves the conflict. Current system lacks a proper temporal ordering pass; it may flag these as contradictions incorrectly.
 
@@ -80,7 +80,7 @@ Neither agent has written down "checkout is optional" — but B is operating fro
 Agent A: [content="Hermes has 12 agents in the M&I Division", created_at=day1]
 (actual current state: 22 agents)
 ```
-This is not a conflict between two agents — it's a conflict between an agent's stored belief and the current world state. The coherence_check tool (COS-85) explicitly detected this pattern (memories #87, #90). It's a form of belief staleness rather than inter-agent divergence, but has the same failure mode.
+This is not a conflict between two agents — it's a conflict between an agent's stored belief and the current world state. The coherence_check tool  explicitly detected this pattern (memories #87, #90). It's a form of belief staleness rather than inter-agent divergence, but has the same failure mode.
 
 **Current handling:** coherence_check.py detects stale numeric claims. The remaining gap is stale structural claims ("the auth system is X") where no numerical check exists.
 
@@ -137,7 +137,7 @@ def cross_agent_belief_reconciliation(db):
 
     # Phase 1: Extract entity references from all memories
     entity_index = build_entity_index(db)
-    # entity_index = {'COS-83': [memory_12, memory_45, memory_89], ...}
+    # entity_index = {'internal-ref': [memory_12, memory_45, memory_89], ...}
 
     # Phase 2: For entities with memories from multiple agents, compare beliefs
     conflicts = []
@@ -175,16 +175,16 @@ For each active project and agent, generate a **world-model summary**: the set o
 
 ```
 World-Model Divergence Report — 2026-03-28
-Project: costclock-ai
+Project: example-app
 
 DIVERGENCE 1: auth system state model
   Agent A (hermes): "auth is stateless, JWT only" [confidence=0.85, 3 days old]
   Agent B (kernel): "auth has session persistence" [confidence=0.70, 1 day old]
   Resolution: flag for synthesis — similar confidence, temporal precedence unclear
 
-DIVERGENCE 2: COS-83 status
-  Agent A (paperclip-weaver): "COS-83 done" [confidence=0.95, same-day]
-  Agent B (paperclip-codex): "COS-83 in progress" [confidence=0.80, 5 hours old]
+DIVERGENCE 2: internal-ref status
+  Agent A (task-tracker-weaver): "internal-ref done" [confidence=0.95, same-day]
+  Agent B (task-tracker-codex): "internal-ref in progress" [confidence=0.80, 5 hours old]
   Resolution: auto-resolve to weaver's version (newer + higher confidence)
 ```
 
@@ -227,7 +227,7 @@ def detect_behavioral_divergence(db, agent_ids: list[str]):
 -- Cross-agent belief conflicts log
 CREATE TABLE belief_conflicts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    entity_ref TEXT NOT NULL,           -- entity the conflict is about (e.g., 'COS-83', 'agent:hermes')
+    entity_ref TEXT NOT NULL,           -- entity the conflict is about (e.g., 'internal-ref', 'agent:hermes')
     memory_id_a INTEGER REFERENCES memories(id),
     memory_id_b INTEGER REFERENCES memories(id),
     agent_id_a TEXT REFERENCES agents(id),
@@ -280,7 +280,7 @@ CREATE TABLE worldmodel_reports (
 | `consolidation-cycle` | Add `cross-agent-reconcile` as pass 7 (after contradiction detection) |
 | `knowledge_edges` | Add edge type `CONTRADICTS` between conflicting memory pairs |
 | `coherence_check.py` | Feed `belief_conflicts` table into coherence score calculation |
-| `route-context` (COS-83) | Use conflict data to prefer agents with consistent beliefs on a topic |
+| `route-context`  | Use conflict data to prefer agents with consistent beliefs on a topic |
 
 ---
 

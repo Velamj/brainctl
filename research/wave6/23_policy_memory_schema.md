@@ -1,24 +1,24 @@
-# COS-235: Policy Memory Schema — Implementation Report
+# internal-ref: Policy Memory Schema — Implementation Report
 
 **Series:** Cognitive Operating System Research
 **Wave:** 6
 **Report Number:** 23
 **Date:** 2026-03-28
-**Author:** Cortex (Intelligence Synthesis Analyst)
+**Author:** research-agent
 **Status:** Complete
-**Builds On:** COS-204 (Memory as Policy Engine), COS-180 (Memory-to-Goal Feedback), COS-199 (Reflexion Failure Taxonomy)
+**Builds On:** internal-ref (Memory as Policy Engine), internal-ref (Memory-to-Goal Feedback), internal-ref (Reflexion Failure Taxonomy)
 
 ---
 
 ## Summary
 
-This report documents the concrete implementation of the policy memory engine specified in COS-204. It covers:
+This report documents the concrete implementation of the policy memory engine specified in internal-ref. It covers:
 
 1. The `policy_memories` table schema (SQL migration for brain.db)
 2. The `brainctl policy` command interface (match, add, feedback)
 3. Three seed policies derived from existing organizational decisions in brain.db
 
-The implementation deliberately prioritizes a deployable MVP over the full COS-204 vision. A single `policy_memories` table replaces the three-table design (policies + policy_invocations + policy_invalidation_events) for the initial cut; the richer architecture can be layered in via follow-up issues.
+The implementation deliberately prioritizes a deployable MVP over the full internal-ref vision. A single `policy_memories` table replaces the three-table design (policies + policy_invocations + policy_invalidation_events) for the initial cut; the richer architecture can be layered in via follow-up issues.
 
 ---
 
@@ -26,11 +26,11 @@ The implementation deliberately prioritizes a deployable MVP over the full COS-2
 
 ### 1.1 Design Decisions
 
-**Single table vs. three tables**: COS-204 specified `policies`, `policy_invocations`, and `policy_invalidation_events`. The MVP collapses invocation tracking into aggregate counters on `policy_memories` (success_count, failure_count, feedback_count). This avoids a foreign-key-heavy schema for a feature with no existing consumers. The `policy_invocations` log can be added in a follow-up when outcome attribution is needed for debugging.
+**Single table vs. three tables**: internal-ref specified `policies`, `policy_invocations`, and `policy_invalidation_events`. The MVP collapses invocation tracking into aggregate counters on `policy_memories` (success_count, failure_count, feedback_count). This avoids a foreign-key-heavy schema for a feature with no existing consumers. The `policy_invocations` log can be added in a follow-up when outcome attribution is needed for debugging.
 
 **`policy_memories` naming vs. `policies`**: Named `policy_memories` to signal residency in brain.db alongside the `memories` table and to match the lexicon of the broader memory spine. Policies are a specialised memory type — reusable decision directives extracted from experience — not a separate architectural concept.
 
-**Confidence decay at query time**: Rather than running a background job to update `confidence_threshold`, the `brainctl policy match` command computes effective confidence on the fly using the wisdom half-life formula from COS-204 Section 5.4. The schema stores raw confidence; the CLI applies decay.
+**Confidence decay at query time**: Rather than running a background job to update `confidence_threshold`, the `brainctl policy match` command computes effective confidence on the fly using the wisdom half-life formula from internal-ref Section 5.4. The schema stores raw confidence; the CLI applies decay.
 
 **No vector embedding column**: The initial schema omits a `context_embedding BLOB` column. Semantic matching is handled by FTS5 keyword search (same pattern as `memories_fts` and `reflexion_lessons_fts`). Embedding-based retrieval can be added via a `vec_policy_memories` virtual table in a follow-up once the volume of policies justifies it.
 
@@ -38,7 +38,7 @@ The implementation deliberately prioritizes a deployable MVP over the full COS-2
 
 ```sql
 -- policy_memories: reusable decision directives derived from organizational experience
--- COS-235 implementation of COS-204 Policy Engine architecture
+-- internal-ref implementation of internal-ref Policy Engine architecture
 
 CREATE TABLE IF NOT EXISTS policy_memories (
     policy_id           TEXT PRIMARY KEY,             -- UUID v4
@@ -143,14 +143,14 @@ $ brainctl policy match "checkout failed with 409 — another agent owns this ta
 Policy Match Results (2 found):
 
 [1] coordination-checkout-conflict-guard  [confidence: 0.95]  [category: coordination]
-    Trigger: Paperclip checkout returns 409 Conflict
+    Trigger: task-tracker checkout returns 409 Conflict
     Directive: Do not retry. The task belongs to another agent. Move to the next
                assignment. Never use --force or manual status overwrite to claim
                a 409'd task.
     Success rate: 100% (12/12)  |  Last validated: 2026-03-28
 
 [2] auth-identity-mismatch-guard  [confidence: 0.90]  [category: coordination]
-    Trigger: PAPERCLIP_AGENT_ID and /api/agents/me disagree on identity
+    Trigger: TASK_TRACKER_AGENT_ID and /api/agents/me disagree on identity
     Directive: Abort all mutating API calls. Perform read-only checks only until
                the auth context is corrected. Do not proceed with task work.
     Success rate: 100% (3/3)  |  Last validated: 2026-03-28
@@ -199,7 +199,7 @@ $ brainctl policy add \
   --scope global \
   --confidence 0.95 \
   --derived-from "memory:127" \
-  -a paperclip-cortex
+  -a task-tracker-cortex
 
 Created policy: pol_4f7c2a1b  [memory-distillation-push-gate]
 ```
@@ -238,7 +238,7 @@ The `last_validated_at` timestamp is refreshed on every feedback event, which re
 ```bash
 $ brainctl policy feedback coordination-checkout-conflict-guard --success \
   --notes "409 received, skipped to next task, no conflict" \
-  -a paperclip-cortex
+  -a task-tracker-cortex
 
 Updated policy: coordination-checkout-conflict-guard
   confidence: 0.950 → 0.970
@@ -255,40 +255,40 @@ Three seed policies were derived from existing decisions and memories in brain.d
 
 ### Seed Policy 1: Checkout Conflict — Do Not Retry
 
-**Source**: brain.db events (Paperclip heartbeat protocol) + reflexion lessons (coordination failure class from COS-199)
+**Source**: brain.db events (task-tracker heartbeat protocol) + reflexion lessons (coordination failure class from internal-ref)
 
 ```
 policy_id:          pol_seed_001_checkout_conflict
 name:               coordination-checkout-conflict-guard
 category:           coordination
 scope:              global
-trigger_condition:  Paperclip checkout endpoint returns 409 Conflict when attempting
+trigger_condition:  task-tracker checkout endpoint returns 409 Conflict when attempting
                     to check out a task
 action_directive:   Do not retry the checkout. The task is owned by another agent.
                     Move immediately to the next assigned task. Never attempt manual
                     status overwrite, force-flag, or bypass to claim a conflicted task.
                     Log the 409 as an observation event and continue.
-confidence:         0.97  (evidence: Paperclip protocol is explicit; 0 exceptions observed)
+confidence:         0.97  (evidence: task-tracker protocol is explicit; 0 exceptions observed)
 wisdom_half_life:   90    (coordination protocols change slowly)
-derived_from:       events describing 409 handling in Paperclip heartbeat skill
+derived_from:       events describing 409 handling in task-tracker heartbeat skill
 ```
 
-**Rationale**: The Paperclip heartbeat protocol explicitly prohibits 409 retries. This is the highest-frequency coordination decision agents face during multi-agent runs. Hard-coding it as a policy ensures new agents get it right without reading the full protocol spec.
+**Rationale**: The task-tracker heartbeat protocol explicitly prohibits 409 retries. This is the highest-frequency coordination decision agents face during multi-agent runs. Hard-coding it as a policy ensures new agents get it right without reading the full protocol spec.
 
 ---
 
 ### Seed Policy 2: Auth Identity Mismatch — Read-Only Until Corrected
 
-**Source**: brain.db memory #85 ("Operational guardrail: if PAPERCLIP_AGENT_ID and /api/agents/me disagree...")
+**Source**: brain.db memory #85 ("Operational guardrail: if TASK_TRACKER_AGENT_ID and /api/agents/me disagree...")
 
 ```
 policy_id:          pol_seed_002_auth_mismatch
 name:               auth-identity-mismatch-guard
 category:           coordination
 scope:              global
-trigger_condition:  PAPERCLIP_AGENT_ID environment variable and the identity returned
+trigger_condition:  TASK_TRACKER_AGENT_ID environment variable and the identity returned
                     by GET /api/agents/me disagree — they resolve to different agent IDs
-action_directive:   Abort all mutating Paperclip API calls (POST, PATCH, DELETE).
+action_directive:   Abort all mutating task-tracker API calls (POST, PATCH, DELETE).
                     Perform read-only checks only (GET requests). Do not checkout,
                     update, or comment on any issue until the auth context is corrected.
                     Log a warning event and alert the escalation chain.
@@ -297,7 +297,7 @@ wisdom_half_life:   60
 derived_from:       memory:85
 ```
 
-**Rationale**: Memory #85 was written as an operational guardrail after an observed incident where auth context disagreement caused silent identity errors in Paperclip mutations. Encoding it as a policy ensures agents can query it directly without searching memories.
+**Rationale**: Memory #85 was written as an operational guardrail after an observed incident where auth context disagreement caused silent identity errors in task-tracker mutations. Encoding it as a policy ensures agents can query it directly without searching memories.
 
 ---
 
@@ -314,7 +314,7 @@ trigger_condition:  A manager-level agent (Hermes, Engram, Legion, or any agent 
                     direct reports) receives a task that involves ground-level execution
                     work (coding, file editing, data processing, API calls)
 action_directive:   Do not execute the ground-level work directly. Decompose the task,
-                    create subtasks in Paperclip, and assign to the appropriate IC agents.
+                    create subtasks in task-tracker, and assign to the appropriate IC agents.
                     The manager's role is to define success criteria, unblock ICs, and
                     report up — not to grind through implementation. Exception: quick
                     one-off reads or searches that would take longer to delegate than do.
@@ -348,9 +348,9 @@ The `policy` subcommand was added to `~/bin/brainctl` with three sub-subcommands
 
 - **Vector embedding column**: Deferred. FTS5 keyword matching is sufficient for the initial 3-10 policies. Add `context_embedding BLOB` and a `vec_policy_memories` virtual table when policy count exceeds ~20.
 - **`policy_invocations` table**: Deferred. Per-invocation audit log adds significant write load for a new, unproven feature. Add once Hermes wants per-decision attribution for the feedback loop.
-- **`policy_invalidation_events` table**: Deferred. The org-level change event subscription model (Section 5.3 of COS-204) is valuable but complex. Implement once policy adoption is proven.
-- **Conflict detection**: Deferred. With 3 seed policies there are no conflicts. Add `conflicts_with_policy_ids` and the conflict resolution hierarchy (COS-204 Section 7.6) once the policy set grows to warrant it.
-- **Auto-derivation workflow**: Deferred to COS-207 (Policy Derivation Engine).
+- **`policy_invalidation_events` table**: Deferred. The org-level change event subscription model (Section 5.3 of internal-ref) is valuable but complex. Implement once policy adoption is proven.
+- **Conflict detection**: Deferred. With 3 seed policies there are no conflicts. Add `conflicts_with_policy_ids` and the conflict resolution hierarchy (internal-ref Section 7.6) once the policy set grows to warrant it.
+- **Auto-derivation workflow**: Deferred to internal-ref (Policy Derivation Engine).
 
 ---
 
@@ -360,7 +360,7 @@ The `policy` subcommand was added to `~/bin/brainctl` with three sub-subcommands
 
 2. **Scope inheritance**: Should a policy scoped to `project:agentmemory` also be returned for `project:agentmemory:subproject`? The current implementation does exact-match on scope. A prefix-match option would allow hierarchical scoping.
 
-3. **Policy promotion from reflexion lessons**: Several reflexion lessons (COS-199) are functionally identical to policies. Should `brainctl policy add --from-reflexion <lesson_id>` exist to promote a lesson to a policy when it has demonstrated sufficient generalizability?
+3. **Policy promotion from reflexion lessons**: Several reflexion lessons  are functionally identical to policies. Should `brainctl policy add --from-reflexion <lesson_id>` exist to promote a lesson to a policy when it has demonstrated sufficient generalizability?
 
 4. **Confidence floor on manual policies**: Seed policies authored by Cortex start at confidence 0.85-1.0. But they have never been invoked and cannot have an empirical basis. Should manually-seeded policies carry a lower initial confidence (e.g., 0.6) with a `derivation_method=manual` tag to distinguish them from outcome-derived policies?
 
@@ -368,9 +368,9 @@ The `policy` subcommand was added to `~/bin/brainctl` with three sub-subcommands
 
 ## References
 
-- COS-204: Memory as Policy Engine (complete architecture spec, Wave 5)
-- COS-199: Reflexion Failure Taxonomy (failure class taxonomy and lesson lifecycle)
-- COS-180: Memory-to-Goal Feedback (goal/policy distinction)
+- internal-ref: Memory as Policy Engine (complete architecture spec, Wave 5)
+- internal-ref: Reflexion Failure Taxonomy (failure class taxonomy and lesson lifecycle)
+- internal-ref: Memory-to-Goal Feedback (goal/policy distinction)
 - brain.db memory #85: Auth identity mismatch guardrail
 - brain.db memory #127: Memory distillation push gate threshold
 - brain.db event #50: Hermes internalization of manager delegation principle

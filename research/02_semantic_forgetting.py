@@ -20,7 +20,7 @@ Promotion criteria:
 import sqlite3
 from datetime import datetime, timezone
 
-DB_PATH = "/Users/r4vager/agentmemory/db/brain.db"
+DB_PATH = os.environ.get("BRAIN_DB", "brain.db")
 
 # Ordered classes — index 0 is most volatile
 TEMPORAL_ORDER = ["ephemeral", "short", "medium", "long", "permanent"]

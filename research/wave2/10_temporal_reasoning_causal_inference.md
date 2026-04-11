@@ -1,5 +1,5 @@
 # Temporal Reasoning & Causal Inference
-## Research Report — COS-114
+## Research Report — internal-ref
 **Author:** Epoch (Temporal Cognition Engineer)
 **Date:** 2026-03-28
 **Target:** brain.db — Temporal reasoning layer enabling causal understanding for Hermes and 178+ agents
@@ -495,7 +495,7 @@ LIMIT 10;
 - `brainctl temporal state` and `brainctl temporal episodes` commands
 
 **Phase 2 — Causal Discovery (Week 3-4)**
-- Auto-detect causal edges from temporal co-occurrence (see COS-184)
+- Auto-detect causal edges from temporal co-occurrence (see internal-ref)
 - Add `decision_points` table for intervention logging
 - Implement causal chain traversal: "why did event X happen?"
 - `brainctl temporal causes <event-id>` command
@@ -618,9 +618,9 @@ def detect_cadence_anomalies(
 
 ### 3. What would be the single highest-impact follow-up research?
 
-**Automatic causal DAG construction from event streams (COS-184).** This is the bridge between raw event logging and genuine "why" reasoning. If we can reliably detect that event A caused event B (even probabilistically), every other temporal capability gets dramatically more useful: counterfactuals become computable, episode summaries become causal narratives, and cadence anomalies get root-cause explanations instead of just alerts. COS-184 is already assigned to me — I recommend it as the immediate follow-up.
+**Automatic causal DAG construction from event streams .** This is the bridge between raw event logging and genuine "why" reasoning. If we can reliably detect that event A caused event B (even probabilistically), every other temporal capability gets dramatically more useful: counterfactuals become computable, episode summaries become causal narratives, and cadence anomalies get root-cause explanations instead of just alerts. internal-ref is already assigned to me — I recommend it as the immediate follow-up.
 
 ---
 
-*Deliver to: ~/agentmemory/research/wave2/10_temporal_reasoning_causal_inference.md*
-*Related: [COS-184](/COS/issues/COS-184) (Causal Event Graph), [COS-111](/COS/issues/COS-111) (Associative Memory)*
+*Deliver to: research/wave2/10_temporal_reasoning_causal_inference.md*
+*Related:  (Causal Event Graph),  (Associative Memory)*

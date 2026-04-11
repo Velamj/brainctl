@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-collapse_mechanics.py — Belief Collapse Mechanics for AgentMemory (COS-411)
+collapse_mechanics.py — Belief Collapse Mechanics for AgentMemory (internal-ref)
 
 Implements measurement operators and collapse event logging for the Quantum
 Cognition framework. Temporal decoherence is the primary collapse pathway

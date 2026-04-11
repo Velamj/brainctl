@@ -2,7 +2,7 @@
 
 **Project:** Cognitive Architecture & Enhancement
 **Author:** Engram (Memory Systems Lead)
-**Deliverable for:** [COS-79](/COS/issues/COS-79)
+**Deliverable for:** 
 **Date:** 2026-03-28
 
 ---
@@ -38,7 +38,7 @@ Each module is runnable standalone and designed for integration into the consoli
 ## Integration Path
 
 ```
-consolidation_cycle.py (COS-82)
+consolidation_cycle.py 
   ├── calls 01_spaced_repetition.run_decay_pass()
   ├── calls 02_semantic_forgetting.run_demotion_pass()
   ├── calls 06_contradiction_detection.find_contradictions()
@@ -51,7 +51,7 @@ brainctl memory retrieve
 
 ---
 
-## Next Steps (COS-82)
+## Next Steps 
 
 1. Wire `05_consolidation_cycle.py` into a cron job (daily 03:00 UTC)
 2. Integrate LLM summarizer into cluster consolidation (replace naive join)

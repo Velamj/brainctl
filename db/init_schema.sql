@@ -779,7 +779,7 @@ CREATE TABLE agent_beliefs (
         --   "project:agentmemory:status"
         --   "agent:my-agent:role"
         --   "global:memory_spine:schema_version"
-        --   "task:COS-246:status"
+        --   "task:internal-ref:status"
     belief_content      TEXT    NOT NULL,
     confidence          REAL    NOT NULL DEFAULT 1.0
                             CHECK(confidence >= 0.0 AND confidence <= 1.0),
@@ -899,7 +899,7 @@ CREATE TABLE agent_bdi_state (
         --   "active_task_count": N,
         --   "primary_goal": "...",
         --   "priority": "critical|high|medium|low",
-        --   "task_ids": ["COS-246", ...]
+        --   "task_ids": ["internal-ref", ...]
         -- }
     desires_last_updated_at     TEXT,
 
@@ -1432,7 +1432,7 @@ CREATE TABLE belief_collapse_events (
     agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
     collapsed_state TEXT NOT NULL,
     measured_amplitude REAL NOT NULL,
-    -- Expanded trigger type vocabulary (COS-411)
+    -- Expanded trigger type vocabulary (internal-ref)
     collapse_type TEXT NOT NULL,
     collapse_context TEXT DEFAULT NULL,
     collapse_fidelity REAL DEFAULT 1.0,

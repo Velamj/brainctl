@@ -1,7 +1,7 @@
 # Effective Hilbert Space Dimension — PCA Analysis
 
 **Date:** 2026-03-28  
-**Task:** [COS-395](/COS/issues/COS-395)  
+**Task:**   
 **Database:** `~/agentmemory/db/brain.db`  
 **Total embeddings analysed:** 1649  
 **Embedding model:** nomic-embed-text (768d)  
@@ -65,18 +65,18 @@ Each principal component represents a latent cognitive dimension along which bra
 ### PC1 (20.33% variance)
 
 **High-scoring entries (positive pole):**
-- `[paperclip-cortex]` Memory #293 reclassified medium -> ephemeral (age=0.0d, recalled=9, conf=0.900->0.450)
-- `[paperclip-cortex]` Memory #430 reclassified medium -> ephemeral (age=0.0d, recalled=0, conf=0.500->0.250)
+- `[task-tracker-cortex]` Memory #293 reclassified medium -> ephemeral (age=0.0d, recalled=9, conf=0.900->0.450)
+- `[task-tracker-cortex]` Memory #430 reclassified medium -> ephemeral (age=0.0d, recalled=0, conf=0.500->0.250)
 - `[unknown]` 
 - `[unknown]` 
 - `[aegis]` Memory #429 reclassified medium -> ephemeral (age=0.0d, recalled=0, conf=0.500->0.250)
 
 **Low-scoring entries (negative pole):**
-- `[paperclip-cortex]` Distilled event #515 (importance=0.5) to memory #660
+- `[task-tracker-cortex]` Distilled event #515 (importance=0.5) to memory #660
 - `[hermes]` Distilled event #525 (importance=0.5) to memory #670
 - `[hermes]` Distilled event #516 (importance=0.5) to memory #661
 - `[hermes]` Distilled event #5 (importance=0.5) to memory #793
-- `[paperclip-weaver]` Distilled event #616 (importance=0.5) to memory #435
+- `[task-tracker-weaver]` Distilled event #616 (importance=0.5) to memory #435
 
 ### PC2 (11.51% variance)
 
@@ -114,7 +114,7 @@ Coherence check: score=0.8 | 2 findings | st
 - `[hermes]` MASSIVE SESSION: Built CKO identity, created COG+BRN projects (76 issues total), hired/woke/managed 
 - `[hermes]` Major session: built entire agent memory spine from scratch. Created ~/agentmemory/ with SQLite+FTS5
 - `[hermes]` Major session: built entire agent memory spine from scratch. Created ~/agentmemory/ with SQLite+FTS5
-- `[paperclip-recall]` COS-122 complete: write contention research delivered. Empirical findings: multi-agent collisions co
+- `[task-tracker-recall]` internal-ref complete: write contention research delivered. Empirical findings: multi-agent collisions co
 
 **Low-scoring entries (negative pole):**
 - `[event]` [Routed context — relevance 0.40] From: event:event:84
@@ -129,16 +129,16 @@ Compressed 15 memories in scope project:cost
 - `[event]` [Routed context — relevance 0.40] From: event:event:21
 
 Compressed 15 memories in scope project:cost
-- `[event]` Compressed 15 memories in scope project:costclock-ai:invoice-compression-test-1774662366 into 5 memo
+- `[event]` Compressed 15 memories in scope project:example-app:invoice-compression-test-1774662366 into 5 memo
 
 ### PC4 (3.52% variance)
 
 **High-scoring entries (positive pole):**
-- `[paperclip-cortex]` COS-341 complete: Active Inference & Free Energy research delivered to ~/agentmemory/research/wave10
-- `[paperclip-recall]` COS-351 done: Active Inference Phase 1 — precision weighting added to both FTS and exact retrieval s
-- `[paperclip-sentinel-2]` COS-363 complete: AGM belief revision research delivered to ~/agentmemory/research/wave12/29_agm_bel
-- `[paperclip-recall]` COS-336 done: Deployed adaptive retrieval weights in salience_routing.py and brainctl. Added compute
-- `[paperclip-recall]` COS-336 done: Deployed adaptive retrieval weights in salience_routing.py and brainctl. Added compute
+- `[task-tracker-cortex]` internal-ref complete: Active Inference & Free Energy research delivered to research/wave10
+- `[task-tracker-recall]` internal-ref done: Active Inference Phase 1 — precision weighting added to both FTS and exact retrieval s
+- `[task-tracker-sentinel-2]` internal-ref complete: AGM belief revision research delivered to research/wave12/29_agm_bel
+- `[task-tracker-recall]` internal-ref done: Deployed adaptive retrieval weights in salience_routing.py and brainctl. Added compute
+- `[task-tracker-recall]` internal-ref done: Deployed adaptive retrieval weights in salience_routing.py and brainctl. Added compute
 
 **Low-scoring entries (negative pole):**
 - `[conversation]` {"session_id": "cron_472a0f85f06b_20260326_125153", "source": "cron", "model": "gpt-5.2-codex", "mes
@@ -150,11 +150,11 @@ Compressed 15 memories in scope project:cost
 ### PC5 (3.03% variance)
 
 **High-scoring entries (positive pole):**
-- `[paperclip-engram]` Engram heartbeat: inbox empty, no assigned tasks. Exiting.
-- `[paperclip-engram]` Engram heartbeat: inbox empty, no assigned tasks. Exiting.
-- `[paperclip-recall]` Recall heartbeat: inbox empty, no assignments. Clean exit.
-- `[paperclip-recall]` Recall heartbeat: inbox empty, no assignments. Clean exit.
-- `[paperclip-recall]` Recall heartbeat: inbox empty, no assignments. Clean exit.
+- `[task-tracker-engram]` Engram heartbeat: inbox empty, no assigned tasks. Exiting.
+- `[task-tracker-engram]` Engram heartbeat: inbox empty, no assigned tasks. Exiting.
+- `[task-tracker-recall]` Recall heartbeat: inbox empty, no assignments. Clean exit.
+- `[task-tracker-recall]` Recall heartbeat: inbox empty, no assignments. Clean exit.
+- `[task-tracker-recall]` Recall heartbeat: inbox empty, no assignments. Clean exit.
 
 **Low-scoring entries (negative pole):**
 - `[conversation]` {"session_id": "cron_472a0f85f06b_20260327_191103", "source": "cron", "model": "gpt-5.2-codex", "mes
@@ -166,18 +166,18 @@ Compressed 15 memories in scope project:cost
 ### PC6 (2.16% variance)
 
 **High-scoring entries (positive pole):**
-- `[paperclip-weaver]` brainctl attention-class get/set commands available (COS-358). Column attention_class added to agent
+- `[task-tracker-weaver]` brainctl attention-class get/set commands available . Column attention_class added to agent
 - `[hermes]` test event
-- `[paperclip-tempo]` Heartbeat run: pre-search completed, wake reason heartbeat_timer, inbox empty, direct Tempo assignee
+- `[task-tracker-tempo]` Heartbeat run: pre-search completed, wake reason heartbeat_timer, inbox empty, direct Tempo assignee
 - `[hermes]` Grandchild event: tests passed
 - `[hermes]` Grandchild event: tests passed
 
 **Low-scoring entries (negative pole):**
 - `[hippocampus]` Consolidation cycle — decayed=9, retired=0, demoted=0, promoted=0, contradictions=0, merged=0, compr
-- `[paperclip-codex]` Consolidation cycle — decayed=9, retired=0, demoted=0, promoted=0, contradictions=0, merged=0, compr
-- `[paperclip-codex]` Consolidation cycle — decayed=9, retired=0, demoted=0, promoted=0, contradictions=0, merged=0, compr
+- `[task-tracker-codex]` Consolidation cycle — decayed=9, retired=0, demoted=0, promoted=0, contradictions=0, merged=0, compr
+- `[task-tracker-codex]` Consolidation cycle — decayed=9, retired=0, demoted=0, promoted=0, contradictions=0, merged=0, compr
 - `[hippocampus]` Consolidation cycle — decayed=9, retired=0, demoted=0, promoted=0, contradictions=0, merged=0, compr
-- `[paperclip-codex]` Consolidation cycle — decayed=9, retired=0, demoted=0, promoted=0, contradictions=0, merged=0, compr
+- `[task-tracker-codex]` Consolidation cycle — decayed=9, retired=0, demoted=0, promoted=0, contradictions=0, merged=0, compr
 
 ### PC7 (2.15% variance)
 
@@ -191,24 +191,24 @@ Compressed 15 memories in scope project:cost
 **Low-scoring entries (negative pole):**
 - `[hippocampus]` Consolidation cycle — decayed=41, retired=0, demoted=0, promoted=0, contradictions=0, merged=0, comp
 - `[hippocampus]` Consolidation cycle — decayed=41, retired=0, demoted=0, promoted=0, contradictions=0, merged=0, comp
-- `[paperclip-codex]` Consolidation cycle — decayed=9, retired=0, demoted=0, promoted=0, contradictions=0, merged=0, compr
+- `[task-tracker-codex]` Consolidation cycle — decayed=9, retired=0, demoted=0, promoted=0, contradictions=0, merged=0, compr
 - `[hippocampus]` Consolidation cycle — decayed=9, retired=0, demoted=0, promoted=0, contradictions=0, merged=0, compr
-- `[paperclip-codex]` Consolidation cycle — decayed=9, retired=0, demoted=0, promoted=0, contradictions=0, merged=0, compr
+- `[task-tracker-codex]` Consolidation cycle — decayed=9, retired=0, demoted=0, promoted=0, contradictions=0, merged=0, compr
 
 ### PC8 (1.62% variance)
 
 **High-scoring entries (positive pole):**
-- `[paperclip-cipher]` COS-72 heartbeat: no new context since last analysis post. Still awaiting Kokoro review on VORTEX-MA
-- `[paperclip-cipher]` COS-72 heartbeat: no new context since last analysis post. Still awaiting Kokoro review on VORTEX-MA
-- `[paperclip-cipher]` COS-72 heartbeat: no new comments from Kokoro. Blocked-task dedup — skipping re-engagement. Awaiting
-- `[paperclip-cipher]` COS-72 heartbeat: no new comments from Kokoro. Blocked-task dedup — skipping re-engagement. Awaiting
-- `[paperclip-cortex]` COS-86 heartbeat 5: Intelligence brief posted. Brain.db health improving — active memories 14 (up fr
+- `[task-tracker-cipher]` internal-ref heartbeat: no new context since last analysis post. Still awaiting agent-1 review on VORTEX-MA
+- `[task-tracker-cipher]` internal-ref heartbeat: no new context since last analysis post. Still awaiting agent-1 review on VORTEX-MA
+- `[task-tracker-cipher]` internal-ref heartbeat: no new comments from agent-1. Blocked-task dedup — skipping re-engagement. Awaiting
+- `[task-tracker-cipher]` internal-ref heartbeat: no new comments from agent-1. Blocked-task dedup — skipping re-engagement. Awaiting
+- `[task-tracker-cortex]` internal-ref heartbeat 5: Intelligence brief posted. Brain.db health improving — active memories 14 (up fr
 
 **Low-scoring entries (negative pole):**
 - `[da3c6951-eae8-4818-83a1-611a09142779]` Routed context (event:event:21) to 10 agents: Cortex, Prism, Engram, Vertex, Conduit +5 more
-- `[da3c6951-eae8-4818-83a1-611a09142779]` Routed context (event:event:14) to 10 agents: Hermes, Kokoro, Onramp, Recall, Sentinel 2 +5 more
-- `[hermes]` Filed COS-76: hiring 8 agents for the Memory & Intelligence Division under Hermes. Assigned to Legio
-- `[hermes]` Filed COS-76: hiring 8 agents for the Memory & Intelligence Division under Hermes. Assigned to Legio
+- `[da3c6951-eae8-4818-83a1-611a09142779]` Routed context (event:event:14) to 10 agents: Hermes, agent-1, Onramp, Recall, Sentinel 2 +5 more
+- `[hermes]` Filed internal-ref: hiring 8 agents for the Memory & Intelligence Division under Hermes. Assigned to Legio
+- `[hermes]` Filed internal-ref: hiring 8 agents for the Memory & Intelligence Division under Hermes. Assigned to Legio
 - `[da3c6951-eae8-4818-83a1-611a09142779]` Routed context (event:event:13) to 10 agents: Recall, Warden, Sentinel 2, Hermes, Locus +5 more
 
 ### PC9 (1.43% variance)
@@ -221,33 +221,33 @@ Compressed 15 memories in scope project:cost
 - `[da3c6951-eae8-4818-83a1-611a09142779]` Routed context (event:event:16) to 10 agents: Epoch, Engram 2, Engram, Prune, Locus +5 more
 
 **Low-scoring entries (negative pole):**
-- `[paperclip-weaver]` Heartbeat: inbox empty, no assignments. Idle.
-- `[paperclip-weaver]` Heartbeat: inbox empty, no assignments. Idle.
-- `[paperclip-sentinel-2]` Heartbeat: inbox empty, no assignments in any status. Clean exit.
-- `[paperclip-prune]` Heartbeat: no assignments found. Inbox empty. Nothing to do.
-- `[paperclip-engram]` COS-188 complete: Added memory_type column (episodic|semantic) to brain.db. Semantic memories decay 
+- `[task-tracker-weaver]` Heartbeat: inbox empty, no assignments. Idle.
+- `[task-tracker-weaver]` Heartbeat: inbox empty, no assignments. Idle.
+- `[task-tracker-sentinel-2]` Heartbeat: inbox empty, no assignments in any status. Clean exit.
+- `[task-tracker-prune]` Heartbeat: no assignments found. Inbox empty. Nothing to do.
+- `[task-tracker-engram]` internal-ref complete: Added memory_type column (episodic|semantic) to brain.db. Semantic memories decay 
 
 ### PC10 (1.32% variance)
 
 **High-scoring entries (positive pole):**
-- `[paperclip-codex]` Memory #50 decaying — consider recalling or retiring
+- `[task-tracker-codex]` Memory #50 decaying — consider recalling or retiring
 - `[hippocampus]` Memory #556 decaying — consider recalling or retiring
 - `[hippocampus]` Memory #555 decaying — consider recalling or retiring
 - `[hippocampus]` Memory #557 decaying — consider recalling or retiring
 - `[hippocampus]` Memory #551 decaying — consider recalling or retiring
 
 **Low-scoring entries (negative pole):**
-- `[paperclip-recall]` Distilled event #272 (importance=0.5) to memory #210
-- `[paperclip-cortex]` Distilled event #228 (importance=0.9) to memory #314
+- `[task-tracker-recall]` Distilled event #272 (importance=0.5) to memory #210
+- `[task-tracker-cortex]` Distilled event #228 (importance=0.9) to memory #314
 - `[hippocampus]` Distilled event #279 (importance=0.8) to memory #193
-- `[paperclip-cortex]` Distilled event #228 (importance=0.9) to memory #191
-- `[paperclip-engram]` Distilled event #262 (importance=0.5) to memory #218
+- `[task-tracker-cortex]` Distilled event #228 (importance=0.9) to memory #191
+- `[task-tracker-engram]` Distilled event #262 (importance=0.5) to memory #218
 
 ---
 
 ## 3. Interference Effectiveness vs. Dimension
 
-The QCR Phase ([COS-380](/COS/issues/COS-380)) and Amplitude ([COS-383](/COS/issues/COS-383)) modules currently compute interference in the full 768d space. With an effective dimension of 159, all interference computations should be projected into the reduced 159-PC basis before scoring.
+The QCR Phase () and Amplitude () modules currently compute interference in the full 768d space. With an effective dimension of 159, all interference computations should be projected into the reduced 159-PC basis before scoring.
 
 **Performance improvement from dimension reduction:**
 
@@ -277,23 +277,23 @@ Recommendation: pre-project all embeddings to the top 159 PCs at ingest time. St
 | kernel | — | 0.4413 |
 | obsidian_note | — | 0.3407 |
 | openclaw | — | 0.5176 |
-| paperclip-armor | — | 0.4304 |
-| paperclip-axiom | — | 0.4512 |
-| paperclip-cipher | — | 0.4610 |
-| paperclip-codex | — | 0.5472 |
-| paperclip-cortex | — | 0.5163 |
-| paperclip-embed | — | 0.3799 |
-| paperclip-engram | — | 0.5165 |
-| paperclip-lattice | — | 0.4962 |
-| paperclip-legion | — | 0.5207 |
-| paperclip-nexus | — | 0.5185 |
-| paperclip-probe | — | 0.4984 |
-| paperclip-prune | — | 0.5128 |
-| paperclip-recall | — | 0.5267 |
-| paperclip-scribe-2 | — | 0.5042 |
-| paperclip-sentinel-2 | — | 0.5211 |
-| paperclip-tempo | — | 0.4450 |
-| paperclip-weaver | — | 0.5129 |
+| task-tracker-armor | — | 0.4304 |
+| task-tracker-axiom | — | 0.4512 |
+| task-tracker-cipher | — | 0.4610 |
+| task-tracker-codex | — | 0.5472 |
+| task-tracker-cortex | — | 0.5163 |
+| task-tracker-embed | — | 0.3799 |
+| task-tracker-engram | — | 0.5165 |
+| task-tracker-lattice | — | 0.4962 |
+| task-tracker-legion | — | 0.5207 |
+| task-tracker-nexus | — | 0.5185 |
+| task-tracker-probe | — | 0.4984 |
+| task-tracker-prune | — | 0.5128 |
+| task-tracker-recall | — | 0.5267 |
+| task-tracker-scribe-2 | — | 0.5042 |
+| task-tracker-sentinel-2 | — | 0.5211 |
+| task-tracker-tempo | — | 0.4450 |
+| task-tracker-weaver | — | 0.5129 |
 | unknown | — | 0.1681 |
 
 ### Hermes vs Hippocampus Subspace Overlap
@@ -338,11 +338,11 @@ Low mean correlation (< 0.05) suggests near-orthogonal PCs (expected). Tensor pr
 
 1. **Project to 159d basis**: All QCR algorithms should operate in the effective 159-PC subspace. Pre-compute and store the PCA projection matrix (768 → 159) as `pca_projection.npy` and transform all embeddings at ingest. This gives a 23x speedup on matrix operations.
 
-2. **Phase interference ([COS-380](/COS/issues/COS-380))**: Phase angles should be computed in the reduced 159d basis. Interference patterns are more distinct in the reduced space because noise dimensions (PCs 160–768) are eliminated.
+2. **Phase interference ()**: Phase angles should be computed in the reduced 159d basis. Interference patterns are more distinct in the reduced space because noise dimensions (PCs 160–768) are eliminated.
 
-3. **Amplitude scoring ([COS-383](/COS/issues/COS-383))**: Gaussian amplitude kernels should use the Mahalanobis distance in the reduced PCA space (eigenvalue-normalized). This naturally weights each PC by its variance.
+3. **Amplitude scoring ()**: Gaussian amplitude kernels should use the Mahalanobis distance in the reduced PCA space (eigenvalue-normalized). This naturally weights each PC by its variance.
 
-4. **Entanglement structure ([COS-382](/COS/issues/COS-382))**: Agent subspace alignment analysis shows overlapping subspaces for hermes and hippocampus (cosine sim = 0.3733). The entanglement Hamiltonian should be parameterized by centroid overlap in the reduced space.
+4. **Entanglement structure ()**: Agent subspace alignment analysis shows overlapping subspaces for hermes and hippocampus (cosine sim = 0.3733). The entanglement Hamiltonian should be parameterized by centroid overlap in the reduced space.
 
 5. **Tensor product structure**: The test suggests no strong tensor product structure. Best candidate factorization: `16x48`. If rank-1 ratios are low, the full 768d space does not factor cleanly — quantum gates must be applied in the full PC basis, not factored form.
 
@@ -358,4 +358,4 @@ Low mean correlation (< 0.05) suggests near-orthogonal PCs (expected). Tensor pr
 
 ---
 
-*Generated by Hilbert (agent 85e1c837) — COS-395*
+*Generated by Hilbert (agent 85e1c837) — internal-ref*

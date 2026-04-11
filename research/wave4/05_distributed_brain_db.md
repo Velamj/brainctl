@@ -1,10 +1,10 @@
 # Distributed brain.db — Federated Memory Architecture at Scale
-## Research Report — COS-181
+## Research Report — internal-ref
 
 **Researcher:** Bedrock (Platform Engineer)
 **Date:** 2026-03-28
-**Issue:** [COS-181](/COS/issues/COS-181)
-**Builds on:** [COS-122](/COS/issues/COS-122) write contention analysis, Wave 3 synthesis
+**Issue:** 
+**Builds on:**  write contention analysis, Wave 3 synthesis
 **Method:** Empirical analysis of live brain.db (26 active agents), scaling projection to 178–200 agents, architecture comparison
 
 ---
@@ -74,11 +74,11 @@ Top writers (all-time):
 | Agent | Event Writes | % of total |
 |---|---|---|
 | hermes | 51 | 13.4% |
-| paperclip-recall | 51 | 13.4% |
-| paperclip-sentinel-2 | 37 | 9.7% |
-| paperclip-cortex | 36 | 9.4% |
-| paperclip-legion | 34 | 8.9% |
-| paperclip-weaver | 25 | 6.6% |
+| task-tracker-recall | 51 | 13.4% |
+| task-tracker-sentinel-2 | 37 | 9.7% |
+| task-tracker-cortex | 36 | 9.4% |
+| task-tracker-legion | 34 | 8.9% |
+| task-tracker-weaver | 25 | 6.6% |
 | openclaw | 24 | 6.3% |
 | hippocampus | 18 | 4.7% |
 
@@ -88,7 +88,7 @@ Top 8 agents → 70% of all writes. The write distribution is heavy-tailed — a
 
 | Scope | Active Memories |
 |---|---|
-| project:costclock-ai | 58 (47%) |
+| project:example-app | 58 (47%) |
 | project:agentmemory | 47 (38%) |
 | global | 14 (11%) |
 | other | 4 (3%) |
@@ -177,7 +177,7 @@ Four architectures evaluated against the constraints: SQLite locked in, brainctl
 - At 178 agents, `brainctl search` must open and query 178 SQLite files simultaneously
 - Cross-agent reads scale as O(agents²) for scatter-gather
 - Each shard is tiny (<1MB), but file handle limits and OS overhead become real
-- Memory Event Bus (MEB, COS-232) must fan out to 178 shard files
+- Memory Event Bus (MEB, internal-ref) must fan out to 178 shard files
 - Global FTS5 searches impossible — cross-shard FTS requires full-text index per shard + merge
 
 **Verdict:** Technically correct but operationally unmanageable. Per-agent isolation is the right model only at the team level.
@@ -204,14 +204,14 @@ Four architectures evaluated against the constraints: SQLite locked in, brainctl
 
 ### Option D: Team-Sharded SQLite Federation (Recommended)
 
-**What:** One SQLite per organizational team, plus a global shard for cross-team promoted memories. Teams are derived from the Paperclip chain-of-command hierarchy.
+**What:** One SQLite per organizational team, plus a global shard for cross-team promoted memories. Teams are derived from the task-tracker chain-of-command hierarchy.
 
 **Shard map (at 178-agent scale, estimated):**
 
 | Shard | Agents | Write Load | File |
 |---|---|---|---|
 | `brain_platform.db` | Bedrock, Kernel, Core, Hippocampus, etc. | ~18% | Platform team |
-| `brain_product.db` | Hermes, OpenClaw-affiliated agents | ~20% | Product team |
+| `brain_product.db` | Hermes, agent-framework-affiliated agents | ~20% | Product team |
 | `brain_research.db` | Recall, Cortex, Engram, Weaver, Sentinel, Prune, Epoch | ~35% | Research team |
 | `brain_ops.db` | Legion, Stratos, Vertex, etc. | ~12% | Ops/leadership |
 | `brain_external.db` | openclaw, external integrations | ~15% | External |
@@ -235,7 +235,7 @@ Four architectures evaluated against the constraints: SQLite locked in, brainctl
 - Read path for common case (own team + global) is only 2 files — faster than today for cross-team queries
 - Natural organizational alignment: team writes stay within team shard
 - Schema identical to current — zero migration complexity for each individual shard
-- MEB (COS-232) propagates per-shard, keeping fan-out bounded
+- MEB  propagates per-shard, keeping fan-out bounded
 
 **Cons:**
 - brainctl needs a routing layer (AgentID → team shard lookup)
@@ -255,7 +255,7 @@ Four architectures evaluated against the constraints: SQLite locked in, brainctl
 ├── brain_global.db           # Cross-team promoted memories + global-scope writes
 ├── brain_research.db         # Research team agents
 ├── brain_platform.db         # Platform/backend agents
-├── brain_product.db          # Product + Hermes + OpenClaw
+├── brain_product.db          # Product + Hermes + agent-framework
 ├── brain_ops.db              # Ops, leadership, coordination agents
 └── brain_external.db         # External integrations, openclaw adapters
 ```
@@ -270,30 +270,30 @@ A new `brain_router.py` module in brainctl:
 TEAM_SHARD_MAP = {
     # Team assignments by agent_id prefix or exact match
     # Research team
-    "paperclip-recall":     "research",
-    "paperclip-cortex":     "research",
-    "paperclip-engram":     "research",
-    "paperclip-weaver":     "research",
-    "paperclip-sentinel":   "research",
-    "paperclip-prune":      "research",
+    "task-tracker-recall":     "research",
+    "task-tracker-cortex":     "research",
+    "task-tracker-engram":     "research",
+    "task-tracker-weaver":     "research",
+    "task-tracker-sentinel":   "research",
+    "task-tracker-prune":      "research",
     "epoch":                "research",
-    "paperclip-scribe":     "research",
+    "task-tracker-scribe":     "research",
     # Platform team
     "bedrock":              "platform",
     "kernel":               "platform",
     "hippocampus":          "platform",
-    "paperclip-embed":      "platform",
-    "paperclip-lattice":    "platform",
-    "paperclip-probe":      "platform",
+    "task-tracker-embed":      "platform",
+    "task-tracker-lattice":    "platform",
+    "task-tracker-probe":      "platform",
     # Product team
     "hermes":               "product",
     "openclaw":             "product",
-    "paperclip-nexus":      "product",
+    "task-tracker-nexus":      "product",
     # Ops/leadership
-    "paperclip-legion":     "ops",
-    "paperclip-stratos":    "ops",
-    "paperclip-vertex":     "ops",
-    "paperclip-kokoro":     "ops",
+    "task-tracker-legion":     "ops",
+    "task-tracker-stratos":    "ops",
+    "task-tracker-vertex":     "ops",
+    "task-tracker-kokoro":     "ops",
 }
 
 def shard_for_agent(agent_id: str, scope: str = "global") -> str:
@@ -316,9 +316,9 @@ def db_path_for_shard(shard: str) -> Path:
 ### 4.3 Write Path
 
 ```
-brainctl memory write --agent-id paperclip-recall --scope "project:agentmemory" ...
+brainctl memory write --agent-id task-tracker-recall --scope "project:agentmemory" ...
     ↓
-router.shard_for_agent("paperclip-recall", "project:agentmemory")
+router.shard_for_agent("task-tracker-recall", "project:agentmemory")
     → "research"
     ↓
 connect to brain_research.db
@@ -333,7 +333,7 @@ INSERT INTO memories ...
 
 **Standard search (most common — 95% of queries):**
 ```
-brainctl search "checkout error handling" --agent-id paperclip-recall
+brainctl search "checkout error handling" --agent-id task-tracker-recall
     ↓
 shard = "research"
     ↓
@@ -375,7 +375,7 @@ return top-K
 
 **Cross-team eventual consistency delay:** The consolidation cycle runs at cadence (~hourly via Hippocampus). Cross-team memory promotion happens during each cycle. Maximum staleness window for cross-team memories: ~1 hour.
 
-**This is acceptable for organizational memory.** The Memory Event Bus (MEB, COS-232) provides sub-500ms notification of new team-shard writes. Cross-team eventual consistency at ~1hr is the appropriate model for knowledge (vs. tasks, which need strong consistency and use Paperclip, not brain.db).
+**This is acceptable for organizational memory.** The Memory Event Bus (MEB, internal-ref) provides sub-500ms notification of new team-shard writes. Cross-team eventual consistency at ~1hr is the appropriate model for knowledge (vs. tasks, which need strong consistency and use task-tracker, not brain.db).
 
 **Categories requiring strong cross-team consistency:**
 - `environment` / `identity` → write directly to `brain_global.db`
@@ -437,10 +437,10 @@ Content deduplication matters because the global shard may contain promoted copi
 
 ### 5.3 Shard-Aware MEB
 
-The Memory Event Bus (COS-232) uses SQLite triggers on the `memories` table. In the federated model, each shard has its own MEB trigger table (`meb_events`). Agents subscribe to their team shard + global:
+The Memory Event Bus  uses SQLite triggers on the `memories` table. In the federated model, each shard has its own MEB trigger table (`meb_events`). Agents subscribe to their team shard + global:
 
 ```
-Agent paperclip-recall subscribes to:
+Agent task-tracker-recall subscribes to:
   - brain_research.db::meb_events  (team writes)
   - brain_global.db::meb_events    (cross-team promotions)
 ```
@@ -518,7 +518,7 @@ Every brainctl write command already requires `--agent-id`. The routing layer us
 ```bash
 # This call is unchanged — router silently directs to brain_research.db
 brainctl memory write \
-  --agent-id paperclip-recall \
+  --agent-id task-tracker-recall \
   --category lesson \
   --scope "project:agentmemory" \
   --content "..."
@@ -553,16 +553,16 @@ If a consolidation job needs to atomically move a memory from `brain_research.db
 
 ### 8.3 The Recall Problem
 
-This report addresses write scalability. The 97.6% zero-recall rate ([COS-229](/COS/issues/COS-229)) is a separate problem (the `recalled_count` field is never updated). Federation does not help or hurt recall rates — that fix belongs in `brainctl search`.
+This report addresses write scalability. The 97.6% zero-recall rate () is a separate problem (the `recalled_count` field is never updated). Federation does not help or hurt recall rates — that fix belongs in `brainctl search`.
 
 ---
 
 ## 9. Implementation Dependencies
 
 ```
-[COS-122] version column + CAS (done ✅)
+[internal-ref] version column + CAS (done ✅)
     ↓
-[COS-232] Memory Event Bus (done ✅)
+[internal-ref] Memory Event Bus (done ✅)
     ↓
 [THIS] Federation routing layer in brainctl (NEW)
     ├── brain_router.py module
@@ -574,7 +574,7 @@ This report addresses write scalability. The 97.6% zero-recall rate ([COS-229](/
     └── brainctl consolidate --promote-to-global
 ```
 
-**Prerequisites already done:** COS-122 (version column, CAS writes) and COS-232 (MEB) are both complete. The federation layer can be built immediately.
+**Prerequisites already done:** internal-ref (version column, CAS writes) and internal-ref (MEB) are both complete. The federation layer can be built immediately.
 
 **New work needed:**
 - `brain_router.py`: ~200 LOC
@@ -602,4 +602,4 @@ Total: ~500 LOC addition to brainctl, zero schema changes, zero breaking changes
 
 ---
 
-*Deliverable for [COS-181](/COS/issues/COS-181). Cross-references: [COS-122](/COS/issues/COS-122) (write contention), [COS-232](/COS/issues/COS-232) (MEB), [COS-229](/COS/issues/COS-229) (recall rate). Architecture ready for implementation review.*
+*Deliverable for . Cross-references:  (write contention),  (MEB),  (recall rate). Architecture ready for implementation review.*

@@ -1,5 +1,5 @@
 # Phase Inference Implementation Summary
-## COS-392: Inferring confidence_phase from Co-Retrieval Data
+## internal-ref: Inferring confidence_phase from Co-Retrieval Data
 
 **Date**: 2026-03-28  
 **Agent**: Phase (Quantum Interference Engineer)  
@@ -11,7 +11,7 @@
 
 Develop a formal method to infer `confidence_phase` for memory amplitudes in brain.db.
 
-The quantum model (COS-379) requires:
+The quantum model  requires:
 ```
 α_i = √(confidence) × exp(i × confidence_phase)
 ```
@@ -117,9 +117,9 @@ The system exhibits:
 
 ## Integration Points
 
-### Unblocks COS-383
+### Unblocks internal-ref
 
-[COS-383](/COS/issues/COS-383) (Amplitude Scorer) has been waiting for phase inference.
+ (Amplitude Scorer) has been waiting for phase inference.
 This work provides:
 - Complete phase assignments for all memories
 - Phase-aware scoring algorithm (v2)
@@ -127,12 +127,12 @@ This work provides:
 
 ### Depends On
 
-- [COS-379](/COS/issues/COS-379) (Foundations) — Quantum formalism
-- [COS-380](/COS/issues/COS-380) (Interference) — Interference theory
+-  (Foundations) — Quantum formalism
+-  (Interference) — Interference theory
 
 ### Feeds Into
 
-- [COS-383](/COS/issues/COS-383) (Amplitude Scorer) — Phase-aware retrieval
+-  (Amplitude Scorer) — Phase-aware retrieval
 - Future work: Phase learning, contradiction resolution, decoherence modeling
 
 ---
@@ -179,13 +179,13 @@ Based on theoretical analysis and initial results:
 | With online learning | Convergent | +15-20% |
 | Full quantum walk | Advanced | +20-25% (potential) |
 
-**Current target**: >20% P@5 improvement for COS-383.
+**Current target**: >20% P@5 improvement for internal-ref.
 
 ---
 
 ## Next Steps
 
-### Immediate (for COS-383 Integration)
+### Immediate (for internal-ref Integration)
 
 1. **Benchmark phase-aware scoring**
    - Run retrieval tests on new scorer (v2)

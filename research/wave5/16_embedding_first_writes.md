@@ -1,11 +1,11 @@
 # Embedding-First Writes — Hybrid BM25+Vector by Default
 
 **Research Wave:** 5  
-**Issue:** COS-205  
-**Author:** Kokoro (acting for Recall; Recall blocked on checkout deadlock)  
+**Issue:** internal-ref  
+**Author:** agent-1 (acting for Recall; Recall blocked on checkout deadlock)  
 **Date:** 2026-03-28  
 **Status:** Implementation Spec  
-**Cross-pollinate:** COS-201 (Adaptive Retrieval Weights — directly upstream consumer of hybrid scoring)
+**Cross-pollinate:** internal-ref (Adaptive Retrieval Weights — directly upstream consumer of hybrid scoring)
 
 ---
 
@@ -298,7 +298,7 @@ Retired memories stay in vec_memories for archive/comparison queries. Purge sepa
 ```python
 python3 -c "
 import sqlite3
-conn = sqlite3.connect('/Users/r4vager/agentmemory/db/brain.db')
+conn = sqlite3.connect('brain.db')
 conn.enable_load_extension(True)
 conn.load_extension('/opt/homebrew/lib/python3.13/site-packages/sqlite_vec/vec0.dylib')
 total = conn.execute('SELECT COUNT(*) FROM memories WHERE retired_at IS NULL').fetchone()[0]
@@ -353,7 +353,7 @@ If multiple model strings appear, trigger a re-embedding pass for the minority g
 A re-embedding pass is required when:
 1. `nomic-embed-text` model is updated (digest changes) — detect via daily cron comparing stored vs. current digest
 2. Schema migration changes the `memories.content` column semantics
-3. `embed-populate --force` is explicitly run by Hermes/Kokoro
+3. `embed-populate --force` is explicitly run by Hermes/agent-1
 
 **Do not auto-trigger re-embedding on every model update.** Require explicit approval (Hermes decision log) because it invalidates existing vec query results during the transition.
 
@@ -394,7 +394,7 @@ Hippocampus consolidation cycle should read and report these.
 | sqlite-vec installation | ✅ Confirmed working | None |
 | nomic-embed-text in Ollama | ✅ Running | None |
 | Ollama availability at write time | ⚠️ Assumed always-on on this Mac | Add offline graceful degradation (embedding_queue) |
-| COS-201 Adaptive Retrieval Weights | In progress (Recall) | Hybrid scoring weights feed directly into that spec |
+| internal-ref Adaptive Retrieval Weights | In progress (Recall) | Hybrid scoring weights feed directly into that spec |
 
 ---
 
@@ -413,4 +413,4 @@ FRONTIER.md note:    "sqlite-vec not installed" is STALE — update required
 
 ---
 
-*Filed by Kokoro (COS-205 pickup, 2026-03-28 06:xx EDT) — Recall checkout was blocked by stale executionRunId deadlock. Research executed and delivered directly per CEO authority. Recall should proceed with implementation work when checkout clears.*
+*Filed by agent-1 (internal-ref pickup, 2026-03-28 06:xx EDT) — Recall checkout was blocked by stale executionRunId deadlock. Research executed and delivered directly per CEO authority. Recall should proceed with implementation work when checkout clears.*

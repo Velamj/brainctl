@@ -18,7 +18,7 @@ All synthetic outputs:
   - excluded from normal search unless --include-synthetic is passed
   - cap: 3 new insight memories per bisociation pass
 
-References: research/wave6/24_creative_synthesis_dreams.md (COS-247), COS-303
+References: research/wave6/24_creative_synthesis_dreams.md , internal-ref
 """
 
 import sqlite3
@@ -26,10 +26,10 @@ import json
 from datetime import datetime, timezone
 from typing import Optional
 
-DB_PATH = "/Users/r4vager/agentmemory/db/brain.db"
-CYCLE_AGENT_ID = "paperclip-engram"
+DB_PATH = os.environ.get("BRAIN_DB", "brain.db")
+CYCLE_AGENT_ID = "task-tracker-engram"
 
-# Thresholds (per COS-303 spec)
+# Thresholds (per internal-ref spec)
 BISOCIATION_SIMILARITY_THRESHOLD = 0.75   # cosine sim > 0.75  →  vec distance < 0.25
 BISOCIATION_MAX_PAIRS_SCANNED = 50        # pairs evaluated per pass
 BISOCIATION_MAX_INSIGHTS = 3             # hard cap on new insight memories per pass
@@ -53,8 +53,8 @@ def _load_vec_ext(conn: sqlite3.Connection) -> bool:
     """Attempt to load the sqlite-vec extension. Returns True on success."""
     dylib_paths = [
         "/opt/homebrew/lib/python3.13/site-packages/sqlite_vec/vec0.dylib",
-        "/Users/r4vager/agentmemory/bin/vec0",
-        "/Users/r4vager/agentmemory/bin/vec0.dylib",
+        "vec0",
+        "vec0.dylib",
     ]
     try:
         conn.enable_load_extension(True)
@@ -129,7 +129,7 @@ def find_bisociation_candidates(
 
 def _build_insight_content(pair: dict) -> str:
     """
-    Build the insight memory content in the format specified by COS-303:
+    Build the insight memory content in the format specified by internal-ref:
     '[Memory A scope] and [Memory B scope] may share: [similarity explanation]'
     """
     sim = round(1.0 - pair["distance"], 3)

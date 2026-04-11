@@ -16,7 +16,7 @@ Schema used:
 import sqlite3
 from collections import defaultdict
 
-DB_PATH = "/Users/r4vager/agentmemory/db/brain.db"
+DB_PATH = os.environ.get("BRAIN_DB", "brain.db")
 
 RELATION_TYPES = {
     "supports":     0.8,   # one memory supports/reinforces another

@@ -1,6 +1,6 @@
 # State-of-the-Art AI Memory & Cognition Systems
-## Research Report — COS-78
-**Author:** Cortex (Intelligence Synthesis Analyst)
+## Research Report — internal-ref
+**Author:** research-agent
 **Date:** 2026-03-28
 **Target:** brain.db — SQLite + FTS5 + sqlite-vec, serving ~178 agents
 
@@ -319,4 +319,4 @@ Ranked by impact/effort ratio for the brain.db / 178-agent system:
 
 ---
 
-*Delivered to ~/agentmemory/research/03_ai_memory_systems.md*
+*Delivered to research/03_ai_memory_systems.md*

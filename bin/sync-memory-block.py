@@ -1,8 +1,8 @@
-#!/Users/r4vager/agentmemory/.venv/bin/python3
+#!/usr/bin/env python3
 """
-sync-memory-block.py — Bridge-P1 (COS-210)
+sync-memory-block.py — Bridge-P1 (internal-ref)
 
-Surfaces high-confidence brain.db memories that belong in Hermes/Kokoro's
+Surfaces high-confidence brain.db memories that belong in Hermes/agent-1's
 compact memory block but are not yet present there.
 
 Flow:
@@ -261,7 +261,7 @@ def main() -> int:
         return 0
 
     print("=" * 70)
-    print("BRAIN.DB → COMPACT BLOCK SYNC REPORT (Bridge-P1 / COS-210)")
+    print("BRAIN.DB → COMPACT BLOCK SYNC REPORT (Bridge-P1 / internal-ref)")
     print("=" * 70)
     print(f"  Memory block usage:  {report['memory_usage']} chars")
     print(f"  User block usage:    {report['user_usage']} chars")
