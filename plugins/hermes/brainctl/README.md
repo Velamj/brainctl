@@ -7,19 +7,49 @@ recall, a knowledge graph, affect tracking, and session handoffs.
 
 ## Install
 
-1. Install brainctl:
+> **Important:** Hermes loads third-party memory providers from
+> `~/.hermes/plugins/<name>` (the general user-plugin directory), **not** from
+> `~/.hermes/plugins/memory/<name>`. Installing into `plugins/memory/` will
+> silently fail to register with current Hermes builds — see the discovery
+> workaround below.
+
+1. Install brainctl into the **Hermes Python environment**. Hermes runs under
+   its own interpreter, so any package it imports at runtime (including
+   `brainctl` and its deps) must live in Hermes's venv, not in your shell's
+   default `pip`:
    ```bash
+   # Activate the venv Hermes was installed with, then:
    pip install 'brainctl>=1.1.2'
    # Optional vector recall (requires Ollama running locally):
    pip install 'brainctl[vec]'
    ```
-2. Drop this plugin into Hermes:
+   If you installed Hermes from source, this is typically the venv in
+   `~/.hermes/venv` or the one you created for `hermes-agent`. Running
+   `pip install brainctl` outside that venv will leave Hermes unable to import
+   the provider even after the plugin files are in place.
+2. Drop this plugin into the Hermes user-plugin directory:
    ```bash
-   cp -r plugins/hermes/brainctl $HERMES_HOME/plugins/memory/brainctl
-   # or symlink if developing locally
-   ln -s $(pwd)/plugins/hermes/brainctl $HERMES_HOME/plugins/memory/brainctl
+   # Intended install path (matches Hermes's general user-plugin docs):
+   cp -r plugins/hermes/brainctl ~/.hermes/plugins/brainctl
+   # or symlink if developing locally:
+   ln -s "$(pwd)/plugins/hermes/brainctl" ~/.hermes/plugins/brainctl
    ```
-3. Activate it:
+   Do **not** copy into `~/.hermes/plugins/memory/brainctl` — that path is not
+   scanned for user plugins and the provider will not be detected.
+3. **Workaround for Hermes memory-provider discovery bug** (hermes-agent#4956):
+   current Hermes versions only scan the bundled source-tree
+   `plugins/memory/` directory when running `hermes memory setup` /
+   `hermes memory status`, so a user-space plugin in `~/.hermes/plugins/` is
+   not seen. Until that is fixed upstream, also symlink the plugin into the
+   bundled memory-plugin directory so Hermes finds it:
+   ```bash
+   mkdir -p ~/.hermes/hermes-agent/plugins/memory
+   ln -s ~/.hermes/plugins/brainctl \
+         ~/.hermes/hermes-agent/plugins/memory/brainctl
+   ```
+   After that, `hermes memory status` should list brainctl as installed and
+   available.
+4. Activate it:
    ```bash
    hermes memory setup
    # choose: brainctl
