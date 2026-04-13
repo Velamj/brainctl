@@ -1,0 +1,69 @@
+<!--
+  brainctl memory instructions for Codex CLI.
+  Drop this into the AGENTS.md at your project root (or append to an existing one).
+  Codex auto-loads AGENTS.md from the project root on every session.
+-->
+
+## Persistent memory (brainctl)
+
+This project uses [brainctl](https://github.com/TSchonleber/brainctl) for persistent
+memory across Codex sessions. brainctl is available as an MCP server — its tools
+are prefixed with `mcp__brainctl__` in your tool list.
+
+### On session start
+
+Before taking any other action, orient yourself:
+
+1. Call `mcp__brainctl__agent_orient` with a brief summary of the task you're
+   about to work on. This returns the latest handoff packet, recent events,
+   and task-relevant memories from previous sessions.
+2. Use `mcp__brainctl__search` with keywords from the task to pull additional
+   context if the orient snapshot isn't enough.
+
+Treat the orient output as authoritative context. If it conflicts with what
+you think you know, trust the brain and flag the discrepancy.
+
+### During work
+
+As durable information surfaces, write it back:
+
+- `mcp__brainctl__memory_add` — store a long-term fact. Pick a category:
+  `convention`, `decision`, `environment`, `integration`, `lesson`,
+  `preference`, `project`, or `user`. Add tags for discoverability.
+- `mcp__brainctl__decision_add` — record a decision with its rationale.
+  Future-you (and the next agent) will need to know *why*, not just *what*.
+- `mcp__brainctl__event_add` — append to the structured event stream for
+  notable things: test results, errors, observations, completed tasks.
+- `mcp__brainctl__entity_create` / `_observe` / `_relate` — build up the
+  knowledge graph when you encounter named things (services, people, files).
+
+Skip writes for ephemeral chatter, intermediate scratchwork, and anything
+that's already obvious from reading the code.
+
+### Search strategy
+
+- `mcp__brainctl__search` — general-purpose recall. Start here.
+- `mcp__brainctl__memory_search` — FTS5 full-text over stored memories only.
+- `mcp__brainctl__think` — spreading-activation recall across the knowledge
+  graph. Use when you want related concepts, not just literal string matches.
+
+### On session end
+
+Call `mcp__brainctl__agent_wrap_up` with a short packet covering:
+
+- **goal**: what you were trying to accomplish
+- **current_state**: where things stand now
+- **open_loops**: unfinished work, known issues, pending questions
+- **next_step**: the single most useful thing the next session should do first
+
+This handoff is the *only* thing the next session will see before it calls
+`agent_orient`. Make it tight, honest, and actionable.
+
+### Do not
+
+- Store secrets, API keys, passwords, or credentials in memory — brain.db
+  is plaintext SQLite.
+- Mirror transient build output or test logs as memories. Use `event_add`
+  for those instead.
+- Duplicate facts that are already in the code. Memory is for things git
+  blame can't tell you.

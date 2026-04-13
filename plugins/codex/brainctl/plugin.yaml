@@ -1,0 +1,7 @@
+name: brainctl
+version: 0.1.0
+description: "Codex CLI persistent memory via brainctl MCP server. Installs [mcp_servers.brainctl] into ~/.codex/config.toml and ships an AGENTS.md template for session bookends."
+pip_dependencies:
+  - "brainctl[mcp]>=1.3.0"
+requires_env:
+  - BRAIN_DB   # optional — defaults to ~/agentmemory/db/brain.db

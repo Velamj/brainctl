@@ -3,6 +3,24 @@
 All notable changes to **brainctl** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.4.0] — 2026-04-13
+
+### Added
+- **Codex CLI plugin** — `plugins/codex/brainctl/` gives [OpenAI Codex CLI](https://github.com/openai/codex)
+  persistent memory via the brainctl MCP server. Ships:
+  - `install.py` — idempotent, sentinel-wrapped merge of `[mcp_servers.brainctl]`
+    into `~/.codex/config.toml`. Supports `--dry`, `--print`, `--uninstall`
+    with automatic backup. Leaves other MCP servers and config untouched.
+  - `AGENTS.md.template` — session-lifecycle instructions (orient on start,
+    wrap up on end) that users drop into their project's `AGENTS.md` so Codex
+    auto-loads the brainctl memory protocol on every session.
+  - `README.md` — install + usage + troubleshooting.
+  - `plugin.yaml` — metadata with `brainctl[mcp]>=1.3.0` as the pip floor
+    (MCP extra required for the `brainctl-mcp` server entry point).
+  Once installed, Codex gets the full brainctl tool surface (196 tools)
+  including the native `agent_orient` / `agent_wrap_up` session bookends
+  shipped in v1.3.0.
+
 ## [1.3.0] — 2026-04-13
 
 ### Added
