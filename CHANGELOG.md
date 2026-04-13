@@ -3,6 +3,48 @@
 All notable changes to **brainctl** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3.0] — 2026-04-13
+
+### Added
+- **Eliza plugin** — `plugins/eliza/brainctl/` ships `@brainctl/eliza-plugin`, a
+  TypeScript plugin that gives Eliza agents persistent memory via the brainctl
+  MCP server. Six actions (`BRAINCTL_REMEMBER` / `SEARCH` / `ORIENT` / `WRAP_UP`
+  / `DECIDE` / `LOG`) plus an auto-recall memory provider that injects context
+  before every message. Spawns `brainctl-mcp` as a stdio subprocess via
+  `@modelcontextprotocol/sdk`. (#67)
+- **Claude Code plugin** — `plugins/claude-code/brainctl/` hooks into Claude
+  Code's `session_start`, `session_end`, `user_prompt_submit`, and
+  `post_tool_use` events. Adds `brainctl orient` / `brainctl wrap_up` CLI
+  commands for manual bookends and `<private>` redaction for sensitive
+  content in memories.
+- **Freqtrade plugin** — `plugins/freqtrade/brainctl/` — strategy mixin that
+  gives Freqtrade strategies persistent memory across backtests and live
+  runs. (#68)
+- **Jesse plugin** — `plugins/jesse/brainctl/` — strategy mixin for the
+  [Jesse](https://jesse.trade) algotrading framework, same shape as the
+  Freqtrade plugin. (#69)
+- **Native `agent_orient` / `agent_wrap_up` MCP tools** — session-lifecycle
+  primitives are now first-class MCP tools instead of being composed
+  client-side from `handoff_latest` / `handoff_add` / `event_search`. Plugins
+  that want session bookends can call them directly. Tool count: 196. (#70)
+
+### Changed
+- **Lazy shared sqlite3 connection per `Brain` instance** — opens a single
+  shared connection on first use instead of churning a new one per operation.
+  (#62)
+- **Schema rebase** — `init_schema.sql` rebased, 6 dead tables dropped, archive
+  safety net added so historical rows survive schema migrations. (#63)
+- **MCP helper consolidation** — duplicate helpers across MCP tool modules
+  consolidated into `agentmemory.lib.mcp_helpers`. No behavior change. (#64)
+
+### Docs
+- Hermes plugin install path clarified: user-plugin dir is
+  `~/.hermes/plugins/brainctl`, and any Python deps must be installed into
+  Hermes's venv (not the shell's default pip). Workaround for the Hermes
+  memory-provider discovery mismatch documented. (See also:
+  [NousResearch/hermes-agent#9246](https://github.com/NousResearch/hermes-agent/pull/9246)
+  which lands brainctl in-tree and removes the workaround entirely.)
+
 ## [1.2.0] — 2026-04-13
 
 ### Added

@@ -3,7 +3,7 @@
 ## What This Is
 Unified agent memory system. SQLite-backed (brain.db) with FTS5, vector embeddings (sqlite-vec + Ollama nomic-embed-text), knowledge graph, affect tracking, belief collapse mechanics, and AGM conflict resolution.
 
-Published as `brainctl` on PyPI (v1.1.2).
+Published as `brainctl` on PyPI (v1.3.0).
 
 ## Key Paths
 - **DB:** `db/brain.db` (WAL mode, foreign keys ON)
