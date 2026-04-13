@@ -1,0 +1,10 @@
+name: brainctl
+version: 1.0.0
+description: "brainctl — SQLite-backed agent memory with FTS5, vector recall, knowledge graph, affect tracking, and session handoffs."
+pip_dependencies:
+  - "brainctl>=1.1.2"
+requires_env: []
+hooks:
+  - on_session_end
+  - on_pre_compress
+  - on_memory_write
