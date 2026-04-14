@@ -3,6 +3,21 @@
 All notable changes to **brainctl** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.5.2] — 2026-04-14
+
+### Fixed
+- **`brainctl version` reported the wrong version.** `src/agentmemory/_impl.py`
+  hard-coded `VERSION = "1.1.2"` — a separate string from `__version__` in
+  `agentmemory/__init__.py` — that nobody had been bumping across releases.
+  Users on v1.2.0 through v1.5.1 ran `brainctl version` and saw `"version":
+  "1.1.2"`. No functional impact (pyproject metadata, pip install, and the
+  Python API all read the correct `__version__`), but misleading and likely
+  caused at least one user to think they were running a much older build
+  than they actually had installed.
+  Fix: `_impl.py` now imports `VERSION` directly from
+  `agentmemory.__version__`, so the CLI version string is pinned to the
+  same source of truth as pip metadata. Can't drift again.
+
 ## [1.5.1] — 2026-04-13
 
 ### Fixed — `status_verbose` heuristic false negatives

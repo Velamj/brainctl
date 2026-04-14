@@ -96,7 +96,11 @@ except Exception:
 DB_PATH = get_db_path()
 BLOBS_DIR = get_blobs_dir()
 BACKUPS_DIR = get_backups_dir()
-VERSION = "1.1.2"
+# Single source of truth lives in agentmemory/__init__.py. Importing it here
+# means `brainctl version` can never drift out of sync with the pip metadata
+# across releases — prior versions hard-coded a string that silently rotted
+# whenever pyproject/__init__ were bumped without updating this file too.
+from agentmemory import __version__ as VERSION  # noqa: E402
 
 VALID_MEMORY_CATEGORIES = {
     "identity", "user", "environment", "convention",
