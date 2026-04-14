@@ -53,6 +53,62 @@ except ImportError:
 _INIT_SQL_PATH = Path(__file__).parent / "db" / "init_schema.sql"
 _log = logging.getLogger(__name__)
 
+# Dedupe the pending-migrations warning so multiple Brain() constructions in
+# one process don't spam the log. Keyed by resolved db_path so a user running
+# against multiple brains still sees each one warned once.
+_MIGRATION_WARNINGS_EMITTED: set[str] = set()
+
+
+def _warn_if_migrations_pending(db_path: Path) -> None:
+    """Emit a one-shot warning if this brain.db has pending migrations.
+
+    Branches on tracker state so we never tell a virgin-tracker user to
+    blindly run `brainctl migrate` — that would crash on column collisions.
+
+    - No schema_versions rows at all (virgin tracker) + any migrations:
+      advise `brainctl doctor` for diagnosis. Doctor will tell them whether
+      to use `--mark-applied-up-to N` or run migrations directly.
+    - Partial tracker (applied > 0) + pending > 0:
+      advise `brainctl migrate`.
+    - Everything already tracked: silent.
+
+    Gated by env var BRAINCTL_SILENT_MIGRATIONS=1 for CI and tests.
+    """
+    if os.environ.get("BRAINCTL_SILENT_MIGRATIONS"):
+        return
+    key = str(db_path.resolve())
+    if key in _MIGRATION_WARNINGS_EMITTED:
+        return
+
+    try:
+        from agentmemory import migrate as _migrate
+        report = _migrate.status(str(db_path))
+    except Exception:
+        # Migration runner is optional plumbing — never let it break Brain().
+        return
+
+    _MIGRATION_WARNINGS_EMITTED.add(key)
+    pending = report.get("pending", 0)
+    applied = report.get("applied", 0)
+    if pending == 0:
+        return
+
+    if applied == 0:
+        _log.warning(
+            "[brainctl] migration tracking not initialized for %s — "
+            "schema_versions is empty but %d migrations are on disk. "
+            "Run `brainctl doctor` (or `brainctl migrate --status-verbose`) "
+            "before running `brainctl migrate`. Blindly applying can crash "
+            "on pre-existing columns if your db predates the tracker.",
+            db_path, pending,
+        )
+    else:
+        _log.warning(
+            "[brainctl] %d migration(s) pending for %s — run `brainctl migrate` "
+            "to apply, or `brainctl doctor` for details.",
+            pending, db_path,
+        )
+
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
@@ -100,6 +156,8 @@ class Brain:
 
         if not self.db_path.exists():
             self._init_db()
+        else:
+            _warn_if_migrations_pending(self.db_path)
 
     def _init_db(self) -> None:
         """Create a fresh brain.db with the canonical production schema."""

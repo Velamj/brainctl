@@ -3,6 +3,90 @@
 All notable changes to **brainctl** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.5.0] — 2026-04-13
+
+### Safe upgrade path for existing brain.db files
+
+Closes the sharp edge where users upgrading brainctl could silently break
+writes against older `brain.db` schemas. Adds the diagnostic and backfill
+tools needed to safely align a pre-existing `brain.db` with a newer version
+of the package.
+
+### Added
+- **`brainctl migrate --status-verbose`** — per-migration DDL heuristic. Each
+  migration file gets classified as `likely-applied`, `partial`, `pending`,
+  or `unknown` based on whether its expected columns/tables already exist
+  in the schema. Works by regex-parsing `ALTER TABLE ADD COLUMN` and
+  `CREATE TABLE` statements and checking `sqlite_master` / `PRAGMA
+  table_info`. Imperfect but genuinely diagnostic — revealed real partial-
+  apply drift in a test database that ad-hoc inspection had missed.
+- **`brainctl migrate --mark-applied-up-to N`** — backfill `schema_versions`
+  for migrations 1..N as "already applied" without running their SQL. For
+  `brain.db` files that predate the migration tracking framework: their
+  schema already has the effects, but the tracker is virgin, so
+  `brainctl migrate` would try to re-apply everything and crash on column
+  collisions. Rows written with a `(backfilled)` name suffix so they're
+  distinguishable from "really ran" tracking rows.
+  - **Guard**: refuses to go below the current high-water mark (prevents
+    rewriting tracker state you've already committed to). Backfilling
+    *above* the high-water mark is always allowed — this handles the
+    partial-tracker case where a user ran `brainctl migrate`, got a few
+    through, crashed, and now needs to skip the rest.
+  - Supports `--dry-run` for preview.
+  - Duplicate-version migrations (`012_*`, `013_*`, `017_*`, `021_*`,
+    `023_*` each have two files) collapse into one `schema_versions` row.
+- **`Brain()` pending-migrations warning** — `Brain(db_path)` against an
+  existing `brain.db` with pending migrations emits a `logging.warning` with
+  branched advice:
+  - **Virgin tracker** (`applied == 0 AND pending > 0`): "migration tracking
+    not initialized — run `brainctl doctor` for diagnosis." **Never** tells
+    the user to run `brainctl migrate` blindly — that would crash on
+    pre-existing columns.
+  - **Partial tracker** (`applied > 0 AND pending > 0`): "N pending, run
+    `brainctl migrate`."
+  - Deduped per-process per-db via a module-level flag so multiple `Brain()`
+    constructions don't spam the log.
+  - Gated on `BRAINCTL_SILENT_MIGRATIONS=1` for CI and tests.
+- **`brainctl doctor` migrations section** — three-state diagnostic matching
+  the Brain warning, plus a fourth state `virgin-tracker-with-drift`
+  triggered when the tracker is empty but the schema shows ≥2 late-migration
+  marker columns (`write_tier`, `ewc_importance`, `labile_until`,
+  `memory_type`, `protected`). In that state, doctor prints the full
+  4-step recovery workflow:
+  1. `brainctl migrate --status-verbose`
+  2. apply truly-pending migrations manually via `sqlite3`
+  3. `brainctl migrate --mark-applied-up-to N`
+  4. `brainctl migrate`
+- **README `Upgrading` section** — covers the normal upgrade path, the
+  virgin-tracker-with-drift edge case, the full recovery workflow,
+  backup/rollback guidance. Visible right after `Install` so new users
+  encounter it before they pip-upgrade an existing brain.
+
+### Tests
+- 21 new test cases in `tests/test_migrate.py`:
+  - `TestMarkAppliedUpTo` (11): dry-run, real backfill, idempotent re-run,
+    extend above high-water, guard refuses below high-water / above max /
+    N<1, partial tracker extend, duplicate-version collapse, subsequent
+    `migrate run` correctly skips backfilled versions.
+  - `TestStatusVerbose` (5): extends base status, classifies every
+    migration, fresh db shows `likely-applied`, bare db shows `pending`,
+    UPDATE-only migrations land in `unknown`.
+  - `TestBrainMigrationWarning` (5): virgin → doctor advice (never
+    migrate), partial → migrate advice, up-to-date is silent, env var
+    suppression, dedupe across multiple constructions.
+  - `TestDoctorMigrationsCheck` (2): JSON includes migrations section,
+    detects virgin-tracker-with-drift via late-column markers.
+- Full suite: 1369 passing, no regressions.
+
+### Known limitations
+- The migration runner itself is not yet idempotent at the statement
+  level — collisions on `ALTER TABLE ADD COLUMN` still crash the run
+  (stops on first error). The v1.5.0 story is "detect before applying";
+  a DDL-only idempotent runner with savepoints is planned for v1.5.1.
+- `status()` returns `total` (file count) and `applied`/`pending` (version
+  counts), so `total != applied + pending` when duplicate-version
+  migrations are present. Cosmetic; will be cleaned up in v1.5.1.
+
 ## [1.4.0] — 2026-04-13
 
 ### Added

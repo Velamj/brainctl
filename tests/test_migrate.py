@@ -148,3 +148,350 @@ class TestMigrateGetMigrations:
         filenames = [str(p.name) for _, _, p in migrations]
         for f in filenames:
             assert f[0].isdigit(), f"Non-numbered file included: {f}"
+
+
+class TestMarkAppliedUpTo:
+    """Tests for migrate.mark_applied_up_to (backfill command)."""
+
+    def test_virgin_tracker_dry_run(self, bare_db):
+        """Dry-run against empty tracker lists would_mark, writes nothing."""
+        result = migrate.mark_applied_up_to(bare_db, 31, dry_run=True)
+        assert result["ok"] is True
+        assert result["dry_run"] is True
+        assert len(result["would_mark"]) > 0
+        assert all(m["version"] <= 31 for m in result["would_mark"])
+
+        # Dry-run must not persist
+        conn = sqlite3.connect(bare_db)
+        migrate._ensure_schema_versions(conn)
+        rows = conn.execute("SELECT * FROM schema_versions").fetchall()
+        conn.close()
+        assert rows == []
+
+    def test_virgin_tracker_real_backfill(self, bare_db):
+        """Real backfill writes rows with '(backfilled)' name suffix."""
+        result = migrate.mark_applied_up_to(bare_db, 31)
+        assert result["ok"] is True
+        assert result["dry_run"] is False
+        assert len(result["marked"]) > 0
+
+        conn = sqlite3.connect(bare_db)
+        rows = conn.execute(
+            "SELECT version, name FROM schema_versions ORDER BY version"
+        ).fetchall()
+        conn.close()
+        assert len(rows) == len(result["marked"])
+        assert all(version <= 31 for version, _ in rows)
+        assert all("(backfilled)" in name for _, name in rows)
+
+    def test_idempotent_rerun(self, bare_db):
+        """Re-running up to the same N is a no-op."""
+        migrate.mark_applied_up_to(bare_db, 31)
+        result = migrate.mark_applied_up_to(bare_db, 31)
+        assert result["ok"] is True
+        assert result["marked"] == []
+        assert "already at or above" in result.get("message", "")
+
+    def test_extend_above_high_water_mark(self, bare_db):
+        """Backfilling ABOVE current max is allowed and marks only new rows."""
+        migrate.mark_applied_up_to(bare_db, 20)
+        conn = sqlite3.connect(bare_db)
+        first_max = conn.execute(
+            "SELECT MAX(version) FROM schema_versions"
+        ).fetchone()[0]
+        conn.close()
+
+        result = migrate.mark_applied_up_to(bare_db, 32)
+        assert result["ok"] is True
+        assert result["previous_max_tracked"] == first_max
+        new_versions = {m["version"] for m in result["marked"]}
+        assert 32 in new_versions
+        assert 20 not in new_versions  # already tracked, must not re-mark
+
+    def test_guard_refuses_below_high_water_mark(self, bare_db):
+        """Cannot backfill below what's already tracked."""
+        migrate.mark_applied_up_to(bare_db, 32)
+        result = migrate.mark_applied_up_to(bare_db, 10)
+        assert result["ok"] is False
+        assert "guard_error" in result
+        assert "lower than the highest already-tracked" in result["guard_error"]
+        assert result["max_tracked"] == 32
+
+    def test_guard_refuses_above_max_available(self, bare_db):
+        """Cannot backfill past the highest migration file on disk."""
+        result = migrate.mark_applied_up_to(bare_db, 9999)
+        assert result["ok"] is False
+        assert "exceeds highest" in result["guard_error"]
+
+    def test_guard_refuses_zero_or_negative(self, bare_db):
+        """N must be >= 1."""
+        for n in (0, -1, -100):
+            result = migrate.mark_applied_up_to(bare_db, n)
+            assert result["ok"] is False
+            assert "must be >= 1" in result["guard_error"]
+
+    def test_partial_tracker_extends_cleanly(self, bare_db):
+        """User who ran migrate partially (rows 2-5 tracked) can extend up."""
+        conn = sqlite3.connect(bare_db)
+        migrate._ensure_schema_versions(conn)
+        for v in (2, 3, 4, 5):
+            conn.execute(
+                "INSERT INTO schema_versions (version, name, applied_at) "
+                "VALUES (?, ?, ?)",
+                (v, f"partial-{v}", "2026-01-01T00:00:00Z"),
+            )
+        conn.commit()
+        conn.close()
+
+        result = migrate.mark_applied_up_to(bare_db, 30)
+        assert result["ok"] is True
+        marked_versions = {m["version"] for m in result["marked"]}
+        # Already-tracked versions must be skipped
+        assert 2 not in marked_versions
+        assert 5 not in marked_versions
+        # New versions must be added
+        assert 10 in marked_versions
+        assert 30 in marked_versions
+        assert result["previous_max_tracked"] == 5
+
+    def test_partial_tracker_still_refuses_lower_n(self, bare_db):
+        """Even with a partial tracker, going below max_tracked is refused."""
+        conn = sqlite3.connect(bare_db)
+        migrate._ensure_schema_versions(conn)
+        conn.execute(
+            "INSERT INTO schema_versions VALUES (20, 'test-20', '2026-01-01T00:00:00Z')"
+        )
+        conn.commit()
+        conn.close()
+
+        result = migrate.mark_applied_up_to(bare_db, 5)
+        assert result["ok"] is False
+        assert "guard_error" in result
+
+    def test_duplicate_versions_collapsed_to_one_row(self, bare_db):
+        """Migrations with duplicate version numbers (012/013/017/021/023)
+        collapse into one schema_versions row per version, not two."""
+        migrate.mark_applied_up_to(bare_db, 31)
+        conn = sqlite3.connect(bare_db)
+        rows = conn.execute(
+            "SELECT version, COUNT(*) FROM schema_versions "
+            "GROUP BY version HAVING COUNT(*) > 1"
+        ).fetchall()
+        conn.close()
+        assert rows == [], f"duplicate version rows found: {rows}"
+
+    def test_subsequent_migrate_run_skips_backfilled_versions(self, bare_db):
+        """After backfill, `brainctl migrate` must not re-apply tracked versions."""
+        # Virgin tracker + bare db → all migrations are pending
+        before = migrate.status(bare_db)
+        pending_before = before["pending"]
+        assert pending_before > 0
+
+        migrate.mark_applied_up_to(bare_db, 31)
+
+        after = migrate.status(bare_db)
+        # Every migration with version <= 31 should now be tracked
+        pending_versions_after = {m["version"] for m in after["pending_migrations"]}
+        assert all(v > 31 for v in pending_versions_after)
+
+
+class TestStatusVerbose:
+    """Tests for migrate.status_verbose (DDL heuristic)."""
+
+    def test_status_verbose_extends_status(self, fresh_db):
+        """status_verbose contains everything status() does plus migrations_verbose."""
+        base = migrate.status(fresh_db)
+        verbose = migrate.status_verbose(fresh_db)
+        for key in ("total", "applied", "pending", "applied_migrations", "pending_migrations"):
+            assert key in verbose
+        assert "migrations_verbose" in verbose
+        assert verbose["total"] == base["total"]
+
+    def test_status_verbose_classifies_every_migration(self, fresh_db):
+        """Every migration file gets exactly one heuristic bucket."""
+        result = migrate.status_verbose(fresh_db)
+        allowed = {"likely-applied", "partial", "pending", "unknown"}
+        for m in result["migrations_verbose"]:
+            assert m["heuristic"] in allowed
+            assert "ddl_hits" in m
+            assert "version" in m
+            assert "file" in m
+
+    def test_fresh_db_after_init_shows_migrations_as_likely_applied(self, fresh_db):
+        """A fresh db created via Brain() runs init_schema.sql which contains
+        the cumulative effects of all migrations. The heuristic should see
+        most DDL as already present."""
+        result = migrate.status_verbose(fresh_db)
+        buckets: dict[str, int] = {}
+        for m in result["migrations_verbose"]:
+            buckets[m["heuristic"]] = buckets.get(m["heuristic"], 0) + 1
+        # At least SOME migrations should classify as likely-applied on a
+        # Brain()-initialized db. If none do, the heuristic is broken or
+        # init_schema.sql has regressed.
+        assert buckets.get("likely-applied", 0) > 0, f"buckets={buckets}"
+
+    def test_bare_db_shows_migrations_as_pending(self, bare_db):
+        """An empty sqlite file has no tables → DDL-based migrations should
+        classify as 'pending'."""
+        result = migrate.status_verbose(bare_db)
+        buckets: dict[str, int] = {}
+        for m in result["migrations_verbose"]:
+            buckets[m["heuristic"]] = buckets.get(m["heuristic"], 0) + 1
+        # Migrations with introspectable DDL against an empty db should be pending
+        assert buckets.get("pending", 0) > 0, f"buckets={buckets}"
+        # likely-applied should be zero or near-zero
+        assert buckets.get("likely-applied", 0) == 0, f"buckets={buckets}"
+
+    def test_update_only_migrations_classified_as_unknown(self, fresh_db):
+        """Migration 006 (timestamp_normalization) has only UPDATE statements —
+        no DDL to introspect. Should land in 'unknown'."""
+        result = migrate.status_verbose(fresh_db)
+        m006 = next(
+            (m for m in result["migrations_verbose"] if m["version"] == 6),
+            None,
+        )
+        assert m006 is not None, "migration 006 not found"
+        assert m006["heuristic"] == "unknown"
+
+
+class TestBrainMigrationWarning:
+    """Tests for Brain.__init__ pending-migrations warning (T3).
+
+    Branching matters here — virgin tracker vs partial tracker get different
+    advice. Virgin must NOT say "run brainctl migrate" (that's the exact
+    footgun v1.5.0 is closing).
+    """
+
+    def _construct_brain_capturing_warnings(self, db_path, caplog, env=None):
+        """Helper: construct Brain with a fresh dedupe set and capture warnings."""
+        import importlib
+        from agentmemory import brain as brain_module
+        # Reset per-process dedupe so each test starts clean
+        brain_module._MIGRATION_WARNINGS_EMITTED.clear()
+        if env:
+            for k, v in env.items():
+                os.environ[k] = v
+        else:
+            os.environ.pop("BRAINCTL_SILENT_MIGRATIONS", None)
+        caplog.clear()
+        with caplog.at_level("WARNING", logger="agentmemory.brain"):
+            brain_module.Brain(db_path=db_path, agent_id="test")
+        # Clean up env mutation
+        if env:
+            for k in env:
+                os.environ.pop(k, None)
+        return [r for r in caplog.records if r.name == "agentmemory.brain"]
+
+    def test_virgin_tracker_warns_about_doctor_not_migrate(self, bare_db, caplog):
+        """Empty schema_versions + pending migrations → advise `brainctl doctor`,
+        NEVER `brainctl migrate` (would crash on column collisions)."""
+        records = self._construct_brain_capturing_warnings(bare_db, caplog)
+        assert len(records) == 1, f"expected 1 warning, got {len(records)}"
+        msg = records[0].getMessage()
+        assert "not initialized" in msg
+        assert "brainctl doctor" in msg or "status-verbose" in msg
+        # Critical: must NOT tell virgin-tracker users to blindly migrate
+        assert "run `brainctl migrate`" not in msg
+
+    def test_tracked_pending_warns_about_migrate(self, bare_db, caplog):
+        """Partial tracker (applied > 0) + pending > 0 → advise `brainctl migrate`."""
+        # Seed a partial tracker
+        conn = sqlite3.connect(bare_db)
+        migrate._ensure_schema_versions(conn)
+        conn.execute(
+            "INSERT INTO schema_versions VALUES (2, 'seed', '2026-01-01T00:00:00Z')"
+        )
+        conn.commit()
+        conn.close()
+
+        records = self._construct_brain_capturing_warnings(bare_db, caplog)
+        assert len(records) == 1
+        msg = records[0].getMessage()
+        assert "pending" in msg
+        assert "brainctl migrate" in msg
+
+    def test_up_to_date_is_silent(self, bare_db, caplog):
+        """No pending migrations → no warning."""
+        # Mark every migration as applied
+        conn = sqlite3.connect(bare_db)
+        migrate._ensure_schema_versions(conn)
+        for v, n, _ in migrate._get_migrations():
+            conn.execute(
+                "INSERT OR IGNORE INTO schema_versions VALUES (?, ?, '2026-01-01T00:00:00Z')",
+                (v, n),
+            )
+        conn.commit()
+        conn.close()
+
+        records = self._construct_brain_capturing_warnings(bare_db, caplog)
+        assert records == [], f"expected silence, got {[r.getMessage() for r in records]}"
+
+    def test_silent_env_var_suppresses_warning(self, bare_db, caplog):
+        """BRAINCTL_SILENT_MIGRATIONS=1 gags the warning for CI/tests."""
+        records = self._construct_brain_capturing_warnings(
+            bare_db, caplog, env={"BRAINCTL_SILENT_MIGRATIONS": "1"}
+        )
+        assert records == []
+
+    def test_dedupe_across_multiple_constructions(self, bare_db, caplog):
+        """Multiple Brain() constructions for the same db only warn once."""
+        from agentmemory import brain as brain_module
+        brain_module._MIGRATION_WARNINGS_EMITTED.clear()
+        os.environ.pop("BRAINCTL_SILENT_MIGRATIONS", None)
+
+        with caplog.at_level("WARNING", logger="agentmemory.brain"):
+            brain_module.Brain(db_path=bare_db, agent_id="t1")
+            brain_module.Brain(db_path=bare_db, agent_id="t2")
+            brain_module.Brain(db_path=bare_db, agent_id="t3")
+
+        records = [r for r in caplog.records if r.name == "agentmemory.brain"]
+        assert len(records) == 1, f"expected 1 (deduped), got {len(records)}"
+
+
+class TestDoctorMigrationsCheck:
+    """Tests for the migrations section of `brainctl doctor` (T4)."""
+
+    def test_doctor_json_includes_migrations_section(self, fresh_db, monkeypatch, capsys):
+        """JSON output must include a 'migrations' key with state info."""
+        import argparse
+        from agentmemory import _impl
+        # Point _impl at our test db
+        monkeypatch.setattr(_impl, "DB_PATH", Path(fresh_db))
+        # Doctor uses get_db() which reads module-level DB_PATH
+        monkeypatch.setattr(_impl, "get_db",
+                            lambda *a, **k: sqlite3.connect(fresh_db))
+
+        args = argparse.Namespace(json=True)
+        _impl.cmd_doctor(args)
+        out = capsys.readouterr().out
+        data = json.loads(out)
+        assert "migrations" in data
+        assert "state" in data["migrations"]
+        assert data["migrations"]["state"] in (
+            "up-to-date", "pending", "virgin-tracker-clean", "virgin-tracker-with-drift"
+        )
+
+    def test_doctor_detects_virgin_tracker_with_drift(self, tmp_path, monkeypatch, capsys):
+        """A fresh-init brain.db has late-migration columns (via init_schema.sql)
+        but virgin schema_versions → should flag as virgin-tracker-with-drift."""
+        import argparse
+        from agentmemory import _impl
+        from agentmemory.brain import Brain
+
+        db = tmp_path / "drift.db"
+        os.environ["BRAINCTL_SILENT_MIGRATIONS"] = "1"
+        Brain(str(db))  # init_schema.sql has write_tier, ewc_importance, etc.
+        os.environ.pop("BRAINCTL_SILENT_MIGRATIONS", None)
+
+        monkeypatch.setattr(_impl, "DB_PATH", db)
+        monkeypatch.setattr(_impl, "get_db",
+                            lambda *a, **k: sqlite3.connect(str(db)))
+
+        args = argparse.Namespace(json=True)
+        _impl.cmd_doctor(args)
+        out = capsys.readouterr().out
+        data = json.loads(out)
+        # init_schema.sql has the cumulative effects, so virgin tracker +
+        # late columns → drift state
+        assert data["migrations"]["state"] == "virgin-tracker-with-drift"
+        assert data["migrations"].get("ad_hoc_hits", 0) >= 2

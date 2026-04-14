@@ -38,6 +38,66 @@ pip install brainctl[vec]         # vector similarity search (sqlite-vec + Ollam
 pip install brainctl[all]         # everything
 ```
 
+## Upgrading
+
+**Fresh installs**: nothing to do. `pip install brainctl` and your first `Brain()` call creates a `brain.db` with the full current schema.
+
+**Upgrading an existing `brain.db`**: brainctl tracks schema migrations in a `schema_versions` table. After upgrading:
+
+```bash
+cp $BRAIN_DB $BRAIN_DB.pre-upgrade     # always back up first
+brainctl doctor                         # diagnose migration state
+brainctl migrate                        # apply anything pending
+```
+
+If `brainctl doctor` reports everything green, you're done.
+
+### Predating the tracker — "virgin tracker + schema drift"
+
+If your `brain.db` existed before the migration tracking framework was introduced, `schema_versions` will be empty but your schema already has the effects of many migrations. Running `brainctl migrate` blindly in that state will **crash** on the first `ALTER TABLE ADD COLUMN` that collides with an existing column — SQLite has no `IF NOT EXISTS` for column adds.
+
+`brainctl doctor` detects this state and prints:
+
+```
+  migrations: virgin tracker + 5 ad-hoc schema hits — DANGEROUS to run `brainctl migrate` directly
+    1. brainctl migrate --status-verbose   (see which migrations are truly pending)
+    2. apply truly-pending ones manually via sqlite3
+    3. brainctl migrate --mark-applied-up-to N (backfill the rest)
+    4. brainctl migrate   (run anything above N)
+```
+
+**Full recovery workflow:**
+
+```bash
+# 1. Back up. Always.
+cp $BRAIN_DB $BRAIN_DB.pre-migrate
+
+# 2. Get a per-migration heuristic report.
+#    Each migration is classified as:
+#      likely-applied → all expected columns/tables exist
+#      partial        → some DDL applied, some missing (actual drift)
+#      pending        → none of its DDL exists (genuinely needs to run)
+#      unknown        → no introspectable DDL (UPDATE-only or DROP-only)
+brainctl migrate --status-verbose
+
+# 3. For each migration in 'pending' or 'partial', apply it manually.
+#    This is the safe path because you see exactly what each statement does.
+sqlite3 $BRAIN_DB < db/migrations/024_confidence_alpha_beta_wiring.sql
+sqlite3 $BRAIN_DB < db/migrations/028_memory_quarantine.sql
+# ... etc
+
+# 4. Backfill the tracker so future `brainctl migrate` runs skip
+#    what's already applied. Pick N = highest version you've verified.
+brainctl migrate --mark-applied-up-to 31
+
+# 5. Run anything above N (e.g. migration 032 drops dead tables)
+brainctl migrate
+```
+
+**`--mark-applied-up-to N`** writes rows to `schema_versions` with a `(backfilled)` suffix on the name so you can tell them apart from "really ran" rows. It refuses to go **below** the current high-water mark (guards against rewriting tracker state you've already committed to).
+
+**Rollback**: if a migration run breaks something, `cp $BRAIN_DB.pre-migrate $BRAIN_DB` gets you back. `brain.db` is a single SQLite file — no out-of-band state to worry about.
+
 ## Quick Start
 
 ### Python API

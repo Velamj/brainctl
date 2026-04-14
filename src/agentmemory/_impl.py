@@ -5670,6 +5670,95 @@ def cmd_doctor(args):
         if not getattr(args, "json", False):
             print(info("  Ollama: not reachable (optional — needed for vector search)"))
 
+    # Migrations — three states:
+    #   up-to-date              → all tracked, no pending
+    #   pending (tracked)       → applied > 0 AND pending > 0
+    #   virgin tracker          → applied == 0 AND schema has "late" columns
+    #                             (predates the tracking framework — advise --mark-applied-up-to)
+    migrations_status: Dict[str, Any] = {"ok": True, "state": "up-to-date"}
+    try:
+        from agentmemory.migrate import status as _mig_status
+        mig = _mig_status(str(DB_PATH))
+        total = mig.get("total", 0)
+        applied = mig.get("applied", 0)
+        pending = mig.get("pending", 0)
+        migrations_status = {
+            "ok": True,
+            "total": total,
+            "applied": applied,
+            "pending": pending,
+        }
+
+        if pending == 0:
+            migrations_status["state"] = "up-to-date"
+            if not getattr(args, "json", False):
+                print(ok(f"  migrations: up to date ({applied}/{total} tracked)"))
+        elif applied > 0:
+            migrations_status["state"] = "pending"
+            issues.append(f"{pending} migration(s) pending — run `brainctl migrate`")
+            if not getattr(args, "json", False):
+                print(info(
+                    f"  migrations: {pending} pending "
+                    f"({applied}/{total} tracked) — run `brainctl migrate`"
+                ))
+        else:
+            # applied == 0 AND pending > 0. Virgin tracker. Check whether
+            # the schema already has any "late" columns from migrations
+            # that weren't tracked — heuristic for the predates-tracker case.
+            late_markers = [
+                ("memories", "write_tier"),      # migration 031
+                ("memories", "ewc_importance"),  # migration 018
+                ("memories", "labile_until"),    # reconsolidation window
+                ("memories", "memory_type"),     # migration 009
+                ("memories", "protected"),       # migration 013
+            ]
+            ad_hoc_hits = 0
+            for table, col in late_markers:
+                try:
+                    cols = {r[1] for r in db.execute(f"PRAGMA table_info({table})").fetchall()}
+                    if col in cols:
+                        ad_hoc_hits += 1
+                except Exception:
+                    pass
+
+            if ad_hoc_hits >= 2:
+                migrations_status["state"] = "virgin-tracker-with-drift"
+                migrations_status["ad_hoc_hits"] = ad_hoc_hits
+                issues.append(
+                    "migration tracker is empty but schema has late-migration columns — "
+                    "use `brainctl migrate --status-verbose` then `--mark-applied-up-to N`"
+                )
+                if not getattr(args, "json", False):
+                    print(fail(
+                        f"  migrations: virgin tracker + {ad_hoc_hits} ad-hoc schema hits — "
+                        f"DANGEROUS to run `brainctl migrate` directly"
+                    ))
+                    print(info(
+                        f"    1. brainctl migrate --status-verbose   "
+                        f"(see which migrations are truly pending)"
+                    ))
+                    print(info(
+                        f"    2. apply truly-pending ones manually via sqlite3"
+                    ))
+                    print(info(
+                        f"    3. brainctl migrate --mark-applied-up-to N "
+                        f"(backfill the rest)"
+                    ))
+                    print(info(
+                        f"    4. brainctl migrate   (run anything above N)"
+                    ))
+            else:
+                migrations_status["state"] = "virgin-tracker-clean"
+                if not getattr(args, "json", False):
+                    print(info(
+                        f"  migrations: tracker empty, {pending} pending — "
+                        f"run `brainctl migrate` (schema looks clean)"
+                    ))
+    except Exception as exc:
+        migrations_status = {"ok": False, "error": str(exc)}
+        if not getattr(args, "json", False):
+            print(info(f"  migrations: check failed ({exc})"))
+
     # Verdict
     if not getattr(args, "json", False):
         if issues:
@@ -5687,6 +5776,7 @@ def cmd_doctor(args):
             "db_path": str(DB_PATH),
             "db_size_mb": db_size,
             "vec_available": vec_available,
+            "migrations": migrations_status,
         })
 
 
@@ -13399,8 +13489,22 @@ def build_parser():
     # --- migrate ---
     p_migrate = sub.add_parser("migrate", help="Apply pending database migrations")
     p_migrate.add_argument("--status", action="store_true", help="Show migration status without applying")
+    p_migrate.add_argument("--status-verbose", action="store_true",
+                           help="Show per-migration DDL heuristic — whether expected columns/tables already exist")
     p_migrate.add_argument("--dry-run", action="store_true", help="Show what would be applied without writing")
     p_migrate.add_argument("--path", help="Path to brain.db (default: from env/config)")
+    p_migrate.add_argument(
+        "--mark-applied-up-to",
+        type=int,
+        metavar="N",
+        help=(
+            "Backfill schema_versions for migrations 1..N as 'already applied' "
+            "without running them. For brain.db files that predate the tracking "
+            "framework — their schema already has the effects, but the tracker "
+            "is virgin. Use `brainctl migrate --status-verbose` to pick N safely. "
+            "Refuses to go BELOW the current high-water mark."
+        ),
+    )
 
     # --- archive-dead-tables (Phase 2a safety net) ---
     p_archive = sub.add_parser(
@@ -13546,17 +13650,29 @@ def cmd_config(args):
 
 
 def cmd_migrate(args):
-    from agentmemory.migrate import run as migrate_run, status as migrate_status
+    from agentmemory.migrate import (
+        run as migrate_run,
+        status as migrate_status,
+        status_verbose as migrate_status_verbose,
+        mark_applied_up_to as migrate_mark_applied,
+    )
     db = str(getattr(args, 'path', None) or DB_PATH)
+    dry_run = getattr(args, 'dry_run', False)
 
-    if args.status:
-        result = migrate_status(db)
-        json_out(result)
+    if getattr(args, 'status_verbose', False):
+        json_out(migrate_status_verbose(db))
         return
 
-    dry_run = getattr(args, 'dry_run', False)
-    result = migrate_run(db, dry_run=dry_run)
-    json_out(result)
+    if args.status:
+        json_out(migrate_status(db))
+        return
+
+    up_to = getattr(args, 'mark_applied_up_to', None)
+    if up_to is not None:
+        json_out(migrate_mark_applied(db, up_to, dry_run=dry_run))
+        return
+
+    json_out(migrate_run(db, dry_run=dry_run))
 
 
 # ---------------------------------------------------------------------------
