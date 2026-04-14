@@ -353,6 +353,103 @@ class TestStatusVerbose:
         assert m006 is not None, "migration 006 not found"
         assert m006["heuristic"] == "unknown"
 
+    def test_generated_virtual_columns_detected(self, tmp_path):
+        """Migration 024 adds confidence_alpha/beta as generated virtual
+        columns via `ALTER TABLE ... ADD COLUMN ... GENERATED ALWAYS AS (...)
+        VIRTUAL`. PRAGMA table_info HIDES these columns; PRAGMA table_xinfo
+        reveals them. If status_verbose uses the wrong pragma, v24 will
+        false-negative as 'pending' even on a db that has the columns.
+
+        Regression test for a bug discovered in production: a brain.db that
+        had been through a fresh Brain() init (which runs init_schema.sql
+        containing the cumulative generated columns) was misdiagnosed as
+        needing migration 024. Walking the recovery workflow crashed on
+        'duplicate column name: confidence_alpha' because the columns did
+        in fact exist — invisible to the heuristic's table_info query.
+        """
+        db = str(tmp_path / "gen.db")
+        conn = sqlite3.connect(db)
+        # Minimal memories-like table with the generated virtual columns
+        # that migration 024 adds. status_verbose must see them.
+        conn.executescript(
+            """
+            CREATE TABLE memories (
+                id INTEGER PRIMARY KEY,
+                alpha REAL NOT NULL DEFAULT 1.0,
+                beta  REAL NOT NULL DEFAULT 1.0
+            );
+            ALTER TABLE memories ADD COLUMN
+                confidence_alpha REAL GENERATED ALWAYS AS (alpha) VIRTUAL;
+            ALTER TABLE memories ADD COLUMN
+                confidence_beta  REAL GENERATED ALWAYS AS (beta)  VIRTUAL;
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        result = migrate.status_verbose(db)
+        m024 = next(
+            (m for m in result["migrations_verbose"] if m["version"] == 24),
+            None,
+        )
+        assert m024 is not None, "migration 024 not found"
+        # Both columns exist → should classify as likely-applied (2/2)
+        assert m024["heuristic"] == "likely-applied", (
+            f"expected likely-applied, got {m024['heuristic']} ({m024['ddl_hits']}) — "
+            f"status_verbose is probably using PRAGMA table_info which hides "
+            f"generated virtual columns; must use table_xinfo"
+        )
+        assert m024["ddl_hits"] == "2/2"
+
+    def test_add_column_if_not_exists_regex(self, tmp_path):
+        """Migration 023 uses `ALTER TABLE access_log ADD COLUMN IF NOT EXISTS
+        tokens_consumed` — the heuristic's regex must tolerate the IF NOT
+        EXISTS modifier and capture `tokens_consumed`, not `IF`, as the
+        column name. Regression test for a bug where v23 showed 7/8 even
+        on a db with all 8 columns present.
+        """
+        db = str(tmp_path / "ifnotexists.db")
+        conn = sqlite3.connect(db)
+        # Create access_log with tokens_consumed so the heuristic sees it.
+        # Also create agent_uncertainty_log with all 7 columns from v23.
+        conn.executescript(
+            """
+            CREATE TABLE access_log (
+                id INTEGER PRIMARY KEY,
+                tokens_consumed INTEGER
+            );
+            CREATE TABLE agent_uncertainty_log (
+                id INTEGER PRIMARY KEY,
+                domain TEXT,
+                query TEXT,
+                result_count INTEGER,
+                avg_confidence REAL,
+                retrieved_at DATETIME,
+                temporal_class TEXT,
+                ttl_days INTEGER
+            );
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        result = migrate.status_verbose(db)
+        m023 = [m for m in result["migrations_verbose"] if m["version"] == 23]
+        uncertainty = next(
+            (m for m in m023 if "uncertainty" in m["name"]),
+            None,
+        )
+        assert uncertainty is not None, (
+            "migration 023 uncertainty_log_search_columns not found"
+        )
+        # All 8 columns present → should be 8/8, not 7/8
+        assert uncertainty["ddl_hits"] == "8/8", (
+            f"expected 8/8, got {uncertainty['ddl_hits']} — regex is "
+            f"probably capturing 'IF' as the column name from "
+            f"`ADD COLUMN IF NOT EXISTS tokens_consumed`"
+        )
+        assert uncertainty["heuristic"] == "likely-applied"
+
 
 class TestBrainMigrationWarning:
     """Tests for Brain.__init__ pending-migrations warning (T3).

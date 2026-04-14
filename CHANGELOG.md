@@ -3,6 +3,44 @@
 All notable changes to **brainctl** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.5.1] — 2026-04-13
+
+### Fixed — `status_verbose` heuristic false negatives
+
+Both bugs were discovered live while walking a production `brain.db`
+through the v1.5.0 recovery workflow. Neither corrupted data, but both
+caused the diagnostic to mis-classify already-applied migrations as
+`partial` or `pending`, which would have led a less-cautious user to
+re-run migrations and clobber state.
+
+- **Generated virtual columns were invisible.** `status_verbose` used
+  `PRAGMA table_info` which hides columns added via
+  `ALTER TABLE ... ADD COLUMN ... GENERATED ALWAYS AS (...) VIRTUAL`.
+  Migration 024 (confidence_alpha/beta) classified as `pending (0/2)`
+  on a db that already had both columns, and attempting to re-apply
+  crashed with `duplicate column name`. Fix: switch to
+  `PRAGMA table_xinfo` which reveals hidden and generated columns.
+- **`ADD COLUMN IF NOT EXISTS` regex mis-capture.** The ADD COLUMN
+  pattern was
+  `ALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+(\w+)` — on migration 023's
+  `ALTER TABLE access_log ADD COLUMN IF NOT EXISTS tokens_consumed`
+  that captured `IF` as the column name and searched for a column
+  named `IF` on `access_log`, producing a false `partial (7/8)`
+  reading. Fix: tolerate an optional `IF NOT EXISTS` between `COLUMN`
+  and the identifier:
+  `ALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)`.
+
+### Added — regression tests
+- `test_generated_virtual_columns_detected` — builds a fixture db with
+  `GENERATED ALWAYS AS (...) VIRTUAL` columns and asserts migration 024
+  classifies as `likely-applied (2/2)`.
+- `test_add_column_if_not_exists_regex` — builds a fixture db with
+  every column migration 023 expects and asserts the result is
+  `likely-applied (8/8)`, not `partial (7/8)`.
+
+Both tests would fail against v1.5.0's heuristic and pass against
+v1.5.1's.
+
 ## [1.5.0] — 2026-04-13
 
 ### Safe upgrade path for existing brain.db files

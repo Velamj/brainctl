@@ -258,19 +258,32 @@ def status_verbose(db_path: str) -> dict:
     look like this migration has run?
 
     The heuristic is cheap and best-effort: for each migration file, parse
-    ADD COLUMN statements and CREATE TABLE statements, then check sqlite_master
-    / PRAGMA table_info to see if those columns/tables exist. If everything
-    the migration would create already exists, mark it "likely-applied".
-    If nothing exists, mark it "pending". Mixed state → "partial".
+    ADD COLUMN statements and CREATE TABLE statements, then check
+    sqlite_master / PRAGMA table_xinfo to see if those columns/tables
+    exist. If everything the migration would create already exists, mark it
+    "likely-applied". If nothing exists, mark it "pending". Mixed state →
+    "partial".
 
-    Used by `brainctl doctor` and `brainctl migrate --status-verbose` to help
-    users pick a safe value for `--mark-applied-up-to N`.
+    Uses PRAGMA table_xinfo (not table_info) so generated virtual columns
+    added via `ALTER TABLE ... ADD COLUMN ... GENERATED ALWAYS AS (...)
+    VIRTUAL` are detected — table_info hides them.
+
+    The ADD COLUMN regex tolerates `IF NOT EXISTS` between COLUMN and the
+    column name, so migrations like
+    `ALTER TABLE access_log ADD COLUMN IF NOT EXISTS tokens_consumed`
+    don't get mis-classified with `IF` as the column name.
+
+    Used by `brainctl doctor` and `brainctl migrate --status-verbose` to
+    help users pick a safe value for `--mark-applied-up-to N`.
     """
     base = status(db_path)
     conn = sqlite3.connect(db_path, timeout=10)
     conn.row_factory = sqlite3.Row
 
-    # Cheap helpers: collect existing tables and (table → columns)
+    # Cheap helpers: collect existing tables and (table → columns).
+    # table_xinfo includes hidden + generated virtual columns; table_info
+    # hides them. Migration 024 (confidence_alpha/beta) was invisible to
+    # table_info and would false-negative here otherwise.
     existing_tables = {
         r["name"] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
@@ -279,15 +292,18 @@ def status_verbose(db_path: str) -> dict:
     table_columns: dict[str, set[str]] = {}
     for t in existing_tables:
         try:
-            cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({t})").fetchall()}
+            cols = {r["name"] for r in conn.execute(f"PRAGMA table_xinfo({t})").fetchall()}
             table_columns[t] = cols
         except sqlite3.OperationalError:
             table_columns[t] = set()
     conn.close()
 
-    # Regex the SQL files — imperfect but good enough for a hint
+    # Regex the SQL files — imperfect but good enough for a hint.
+    # ADD COLUMN pattern tolerates `IF NOT EXISTS` between COLUMN and the
+    # identifier so migration 023's `ALTER TABLE access_log ADD COLUMN IF
+    # NOT EXISTS tokens_consumed` doesn't capture `IF` as the column name.
     add_col_re = re.compile(
-        r"ALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+(\w+)",
+        r"ALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)",
         re.IGNORECASE,
     )
     create_tbl_re = re.compile(
