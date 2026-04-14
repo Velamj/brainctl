@@ -7,6 +7,18 @@ recall, a knowledge graph, affect tracking, and session handoffs.
 
 ## Install
 
+> **Preferred path — bundled install via upstream PR**
+>
+> [NousResearch/hermes-agent#9246](https://github.com/NousResearch/hermes-agent/pull/9246)
+> lands this plugin in-tree under `plugins/memory/brainctl/`. Once that PR
+> merges, the entire user-plugin-path workaround below becomes unnecessary:
+> you'll be able to `pip install 'brainctl[mcp]>=1.3.0'` into Hermes's venv
+> and run `hermes memory setup` to select brainctl directly. The steps below
+> are the **manual install** path for Hermes builds that don't yet include
+> the PR.
+
+### Manual install (pre-PR)
+
 > **Important:** Hermes loads third-party memory providers from
 > `~/.hermes/plugins/<name>` (the general user-plugin directory), **not** from
 > `~/.hermes/plugins/memory/<name>`. Installing into `plugins/memory/` will
@@ -19,7 +31,7 @@ recall, a knowledge graph, affect tracking, and session handoffs.
    default `pip`:
    ```bash
    # Activate the venv Hermes was installed with, then:
-   pip install 'brainctl>=1.1.2'
+   pip install 'brainctl>=1.3.0'
    # Optional vector recall (requires Ollama running locally):
    pip install 'brainctl[vec]'
    ```

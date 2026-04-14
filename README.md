@@ -201,6 +201,26 @@ crew = Crew(
 
 All crew memory goes to a single brain.db. FTS5 search out of the box, optional vector search with `pip install brainctl[vec]`.
 
+### Agent harness plugins
+
+First-party plugins that drop brainctl into agent-runner environments as persistent memory:
+
+| Plugin | Target | What it does | Install |
+|---|---|---|---|
+| [`plugins/claude-code/brainctl/`](plugins/claude-code/brainctl/) | [Claude Code](https://claude.com/product/claude-code) | Hooks into `SessionStart` / `UserPromptSubmit` / `PostToolUse` / `SessionEnd` — orient on start, wrap_up on end, capture events during work | `python3 plugins/claude-code/brainctl/install.py` |
+| [`plugins/codex/brainctl/`](plugins/codex/brainctl/) | [OpenAI Codex CLI](https://github.com/openai/codex) | Idempotent merge of `[mcp_servers.brainctl]` into `~/.codex/config.toml` + `AGENTS.md.template` for session bookends. Exposes the full 196-tool surface | `python3 plugins/codex/brainctl/install.py` |
+| [`plugins/hermes/brainctl/`](plugins/hermes/brainctl/) | [Hermes Agent](https://hermes-agent.nousresearch.com) | Full `MemoryProvider` with auto-recall, auto-retain, `orient`/`wrap_up` bookends, and `MEMORY.md`/`USER.md` mirroring. Upstream bundling: [NousResearch/hermes-agent#9246](https://github.com/NousResearch/hermes-agent/pull/9246) | `hermes memory setup → brainctl` |
+| [`plugins/eliza/brainctl/`](plugins/eliza/brainctl/) | [Eliza](https://github.com/elizaos/eliza) | TypeScript plugin (`@brainctl/eliza-plugin`) — spawns `brainctl-mcp` as a subprocess, exposes six actions (`BRAINCTL_REMEMBER` / `SEARCH` / `ORIENT` / `WRAP_UP` / `DECIDE` / `LOG`) plus an auto-recall memory provider | `npm install @brainctl/eliza-plugin` |
+
+### Trading-strategy plugins
+
+Strategy-mixin plugins that give algorithmic trading frameworks persistent memory across backtests and live runs:
+
+| Plugin | Target | What it does |
+|---|---|---|
+| [`plugins/freqtrade/brainctl/`](plugins/freqtrade/brainctl/) | [Freqtrade](https://www.freqtrade.io) | `StrategyBrain` mixin — remembers indicator states, logs trade decisions, correlates backtest vs live outcomes |
+| [`plugins/jesse/brainctl/`](plugins/jesse/brainctl/) | [Jesse](https://jesse.trade) | Same shape as the Freqtrade plugin, adapted to Jesse's strategy API |
+
 ## Python API (21 methods)
 
 | Method | What it does |
