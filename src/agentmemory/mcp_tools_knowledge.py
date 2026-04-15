@@ -908,6 +908,286 @@ TOOLS: list[Tool] = [
 ]
 
 # ---------------------------------------------------------------------------
+# Entity compile / tier / alias tools (migrations 033-035)
+# ---------------------------------------------------------------------------
+#
+# These wrap the corresponding _impl.cmd_entity_* handlers so MCP clients
+# can manage compiled_truth synthesis, enrichment tiering, and aliases
+# without shelling out to the CLI. The logic lives in _impl.py; this
+# module just exposes it via the MCP Tool surface.
+
+
+def _lookup_entity_row(conn: sqlite3.Connection, identifier: str):
+    if identifier is None:
+        return None
+    if str(identifier).isdigit():
+        return conn.execute(
+            "SELECT * FROM entities WHERE id = ? AND retired_at IS NULL",
+            (int(identifier),),
+        ).fetchone()
+    return conn.execute(
+        "SELECT * FROM entities WHERE name = ? AND retired_at IS NULL",
+        (identifier,),
+    ).fetchone()
+
+
+def tool_entity_compile(
+    identifier: str | None = None,
+    all: bool = False,
+    agent_id: str | None = None,
+) -> dict:
+    """Rebuild entities.compiled_truth from current evidence.
+
+    With ``all=True``, rebuilds every active entity — used by the
+    consolidation cycle. Otherwise, rebuilds a single entity by name or
+    numeric ID and returns the synthesised paragraph.
+    """
+    from agentmemory import _impl
+    conn = _db()
+    try:
+        if not _impl._column_exists(conn, "entities", "compiled_truth"):
+            return {
+                "ok": False,
+                "error": "entities.compiled_truth missing — run `brainctl migrate` "
+                         "to apply migration 033.",
+            }
+
+        if all:
+            rows = conn.execute(
+                "SELECT * FROM entities WHERE retired_at IS NULL"
+            ).fetchall()
+            updated = 0
+            for r in rows:
+                result = _impl.compile_entity_truth(conn, r)
+                conn.execute(
+                    "UPDATE entities SET compiled_truth = ?, "
+                    "compiled_truth_updated_at = ?, compiled_truth_source = ? "
+                    "WHERE id = ?",
+                    (result["text"], _now(), json.dumps(result["sources"]), r["id"]),
+                )
+                updated += 1
+            conn.commit()
+            return {"ok": True, "updated": updated}
+
+        row = _lookup_entity_row(conn, identifier)
+        if not row:
+            return {"ok": False, "error": f"Entity not found: {identifier}"}
+        result = _impl.compile_entity_truth(conn, row)
+        conn.execute(
+            "UPDATE entities SET compiled_truth = ?, "
+            "compiled_truth_updated_at = ?, compiled_truth_source = ? "
+            "WHERE id = ?",
+            (result["text"], _now(), json.dumps(result["sources"]), row["id"]),
+        )
+        conn.commit()
+        return {
+            "ok": True,
+            "id": row["id"],
+            "name": row["name"],
+            "compiled_truth": result["text"],
+            "sources": result["sources"],
+            "source_count": result["source_count"],
+        }
+    finally:
+        conn.close()
+
+
+def tool_entity_tier(
+    identifier: str | None = None,
+    refresh: bool = False,
+    agent_id: str | None = None,
+) -> dict:
+    """Show or refresh entities.enrichment_tier (migration 034)."""
+    from agentmemory import _impl
+    conn = _db()
+    try:
+        if not _impl._column_exists(conn, "entities", "enrichment_tier"):
+            return {
+                "ok": False,
+                "error": "entities.enrichment_tier missing — run `brainctl migrate` "
+                         "to apply migration 034.",
+            }
+
+        if refresh:
+            rows = conn.execute(
+                "SELECT * FROM entities WHERE retired_at IS NULL"
+            ).fetchall()
+            dist = {1: 0, 2: 0, 3: 0}
+            now = _now()
+            for r in rows:
+                tier, _signals = _impl.compute_entity_tier(conn, r)
+                conn.execute(
+                    "UPDATE entities SET enrichment_tier = ?, last_enriched_at = ? WHERE id = ?",
+                    (tier, now, r["id"]),
+                )
+                dist[tier] = dist.get(tier, 0) + 1
+            conn.commit()
+            return {"ok": True, "refreshed": sum(dist.values()), "distribution": dist}
+
+        row = _lookup_entity_row(conn, identifier)
+        if not row:
+            return {"ok": False, "error": f"Entity not found: {identifier}"}
+        tier, signals = _impl.compute_entity_tier(conn, row)
+        return {
+            "ok": True,
+            "id": row["id"],
+            "name": row["name"],
+            "current_tier": row["enrichment_tier"],
+            "computed_tier": tier,
+            "signals": signals,
+            "last_enriched_at": row["last_enriched_at"],
+        }
+    finally:
+        conn.close()
+
+
+def tool_entity_alias(
+    action: str,
+    identifier: str,
+    values: list[str] | None = None,
+    agent_id: str | None = None,
+) -> dict:
+    """List, add, or remove entity aliases (migration 035).
+
+    ``action`` is one of ``list``, ``add``, ``remove``. ``values`` is
+    ignored for ``list``.
+    """
+    from agentmemory import _impl
+    conn = _db()
+    try:
+        if not _impl._column_exists(conn, "entities", "aliases"):
+            return {
+                "ok": False,
+                "error": "entities.aliases missing — run `brainctl migrate` "
+                         "to apply migration 035.",
+            }
+        row = _lookup_entity_row(conn, identifier)
+        if not row:
+            return {"ok": False, "error": f"Entity not found: {identifier}"}
+        aliases = _impl._load_aliases(row)
+        if action == "list":
+            return {"ok": True, "id": row["id"], "name": row["name"], "aliases": aliases}
+
+        values = values or []
+        changed: list[str] = []
+        if action == "add":
+            for v in values:
+                v = v.strip()
+                if v and v not in aliases:
+                    aliases.append(v)
+                    changed.append(v)
+        elif action == "remove":
+            for v in values:
+                v = v.strip()
+                if v in aliases:
+                    aliases.remove(v)
+                    changed.append(v)
+        else:
+            return {"ok": False, "error": f"Unknown alias action: {action!r}"}
+
+        conn.execute(
+            "UPDATE entities SET aliases = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(aliases), _now(), row["id"]),
+        )
+        conn.commit()
+        return {
+            "ok": True,
+            "id": row["id"],
+            "name": row["name"],
+            "action": action,
+            "changed": changed,
+            "aliases": aliases,
+        }
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Tool definitions
+# ---------------------------------------------------------------------------
+
+_COMPILED_TRUTH_TOOL = Tool(
+    name="entity_compile",
+    description=(
+        "Rebuild an entity's compiled_truth synthesis from observations + "
+        "linked memories + linked events. Pass all=true to rewrite every "
+        "active entity (used by the consolidation cycle)."
+    ),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "agent_id": {"type": "string", "description": "Calling agent ID"},
+            "identifier": {
+                "type": "string",
+                "description": "Entity name or numeric ID (omit when all=true)",
+            },
+            "all": {
+                "type": "boolean",
+                "description": "Rewrite compiled_truth for every active entity",
+                "default": False,
+            },
+        },
+    },
+)
+
+_TIER_TOOL = Tool(
+    name="entity_tier",
+    description=(
+        "Show or recompute entities.enrichment_tier. Tier 1 entities get "
+        "full synthesis during consolidation, Tier 2 gets compiled_truth "
+        "refresh, Tier 3 is observation-only. Pass refresh=true to "
+        "recompute for every entity."
+    ),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "agent_id": {"type": "string", "description": "Calling agent ID"},
+            "identifier": {
+                "type": "string",
+                "description": "Entity name or numeric ID (omit when refresh=true)",
+            },
+            "refresh": {
+                "type": "boolean",
+                "description": "Recompute enrichment_tier for every active entity",
+                "default": False,
+            },
+        },
+    },
+)
+
+_ALIAS_TOOL = Tool(
+    name="entity_alias",
+    description=(
+        "Manage canonical-name aliases on an entity. Used by the merger "
+        "as a cheap duplicate pre-check before semantic dedup."
+    ),
+    inputSchema={
+        "type": "object",
+        "properties": {
+            "agent_id": {"type": "string", "description": "Calling agent ID"},
+            "action": {
+                "type": "string",
+                "description": "list | add | remove",
+                "enum": ["list", "add", "remove"],
+            },
+            "identifier": {
+                "type": "string",
+                "description": "Entity name or numeric ID",
+            },
+            "values": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Aliases to add/remove (ignored for list)",
+            },
+        },
+        "required": ["action", "identifier"],
+    },
+)
+
+TOOLS.extend([_COMPILED_TRUTH_TOOL, _TIER_TOOL, _ALIAS_TOOL])
+
+
+# ---------------------------------------------------------------------------
 # Dispatch table (tool name -> callable)
 # ---------------------------------------------------------------------------
 
@@ -917,4 +1197,7 @@ DISPATCH: dict = {
     "distill": tool_distill,
     "promote": tool_promote,
     "dreams": tool_dreams,
+    "entity_compile": tool_entity_compile,
+    "entity_tier": tool_entity_tier,
+    "entity_alias": tool_entity_alias,
 }

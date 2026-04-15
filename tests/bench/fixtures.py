@@ -1,0 +1,319 @@
+"""Deterministic synthetic fixtures for the search-quality benchmark.
+
+A small corpus of ~30 memories + ~10 entities + ~10 events covering a mix
+of entity, procedural, decision, historical/timeline, and troubleshooting
+content.
+
+Queries are graded 3 (primary answer), 2 (strongly related), 1 (tangential).
+The grading is per-memory ID; scores default to 0 for unmentioned rows so
+nDCG_at_k can treat them as irrelevant. Relevance maps use stable
+`content_key` strings rather than integer IDs so the runner can reseed and
+still resolve them after inserts.
+
+Nothing in this file imports agentmemory; it's a pure data module so the
+runner can be imported cheaply in tests and in `bin/brainctl-bench`.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Dict, List
+
+
+@dataclass
+class Memory:
+    key: str                          # stable slug, used for relevance lookup
+    content: str
+    category: str = "project"
+    confidence: float = 0.9
+
+
+@dataclass
+class Event:
+    key: str
+    summary: str
+    event_type: str = "observation"
+    project: str = "bench"
+    importance: float = 0.5
+
+
+@dataclass
+class EntityFixture:
+    name: str
+    entity_type: str
+    observations: List[str] = field(default_factory=list)
+
+
+@dataclass
+class Query:
+    text: str
+    category: str                     # entity|temporal|procedural|decision|troubleshooting|negative
+    # Map of {"mem:<key>" | "evt:<key>" | "ent:<name>": relevance grade 1-3}
+    relevance: Dict[str, int] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Corpus
+# ---------------------------------------------------------------------------
+
+MEMORIES: List[Memory] = [
+    # --- User preferences (entity/preference queries) ----------------------
+    Memory("pref-dark-mode",
+           "Alice prefers dark mode in all UIs and tools she uses daily.",
+           category="preference"),
+    Memory("pref-tabs",
+           "Bob uses four-space indentation and dislikes tabs for Python code.",
+           category="preference"),
+    Memory("pref-coffee",
+           "Carol drinks decaf coffee after 3pm and never soda in meetings.",
+           category="preference"),
+
+    # --- Project facts -----------------------------------------------------
+    Memory("proj-python-version",
+           "The brainctl project runs on Python 3.12 with strict type hints.",
+           category="project"),
+    Memory("proj-db-engine",
+           "brainctl stores all memories in SQLite with FTS5 and sqlite-vec.",
+           category="project"),
+    Memory("proj-embedding",
+           "Embeddings come from Ollama nomic-embed-text at 768 dimensions.",
+           category="project"),
+    Memory("proj-agents",
+           "The system supports per-agent scopes identified by agent_id strings.",
+           category="project"),
+
+    # --- Conventions / how-tos (procedural queries) ------------------------
+    Memory("how-deploy",
+           "To deploy to staging, run make deploy-staging after passing tests.",
+           category="convention"),
+    Memory("how-rollback",
+           "Rollback procedure: git revert the merge commit then re-run deploy.",
+           category="convention"),
+    Memory("how-migrate",
+           "Apply pending migrations with brainctl migrate before rebooting services.",
+           category="convention"),
+    Memory("how-test",
+           "Run the test suite with pytest -xvs from the repo root.",
+           category="convention"),
+
+    # --- Decisions (decision queries) --------------------------------------
+    Memory("dec-sqlite",
+           "We chose SQLite over Postgres because it ships with Python and needs zero ops.",
+           category="decision"),
+    Memory("dec-rrf",
+           "We picked Reciprocal Rank Fusion for hybrid search because it beat weighted sums on our corpus.",
+           category="decision"),
+    Memory("dec-wm-gate",
+           "The W(m) worthiness gate exists to prevent low-surprise memories from bloating the corpus.",
+           category="decision"),
+    Memory("dec-nomic",
+           "We standardized on nomic-embed-text for local embeddings because it fits 768-dim vectors in RAM.",
+           category="decision"),
+
+    # --- Lessons / troubleshooting (error queries) -------------------------
+    Memory("lesson-fts-escape",
+           "FTS5 MATCH queries fail on unescaped punctuation; sanitize with _sanitize_fts_query before searching.",
+           category="lesson"),
+    Memory("lesson-vec-ext",
+           "If sqlite-vec extension is missing, vector search silently falls back to FTS5 only.",
+           category="lesson"),
+    Memory("lesson-wal",
+           "SQLite WAL mode is mandatory for concurrent reads during consolidation cycles.",
+           category="lesson"),
+    Memory("lesson-ollama",
+           "When Ollama is not running, embedding calls hang indefinitely unless a timeout is set.",
+           category="lesson"),
+
+    # --- Identity / user background ----------------------------------------
+    Memory("user-alice-role",
+           "Alice is the primary maintainer of the retrieval pipeline.",
+           category="user"),
+    Memory("user-bob-role",
+           "Bob owns the consolidation daemon and dream cycles.",
+           category="user"),
+    Memory("user-carol-role",
+           "Carol is the security reviewer and approves PII-touching changes.",
+           category="user"),
+
+    # --- Environment / integration -----------------------------------------
+    Memory("env-ollama-port",
+           "Ollama runs on localhost port 11434 by default.",
+           category="environment"),
+    Memory("env-brain-db-path",
+           "The active brain.db path is resolved via $BRAIN_DB or get_db_path().",
+           category="environment"),
+    Memory("int-mcp-stdio",
+           "MCP server uses stdio transport and is started with python3 bin/brainctl-mcp.",
+           category="integration"),
+    Memory("int-langchain",
+           "LangChain retriever adapter lives under src/agentmemory/integrations.",
+           category="integration"),
+
+    # --- Distractors (improve recall discriminability) ---------------------
+    Memory("distract-1",
+           "The office kitchen restocks snacks every Monday morning.",
+           category="environment", confidence=0.4),
+    Memory("distract-2",
+           "Yesterday the rain delayed the bus but nobody missed standup.",
+           category="environment", confidence=0.3),
+    Memory("distract-3",
+           "A quick brown fox jumps over the lazy dog repeatedly.",
+           category="lesson", confidence=0.2),
+    Memory("distract-4",
+           "Lorem ipsum dolor sit amet consectetur adipiscing elit.",
+           category="lesson", confidence=0.2),
+]
+
+
+EVENTS: List[Event] = [
+    Event("evt-deploy-v1", "Deployed brainctl v1.0 to staging after green CI",
+          event_type="artifact", project="brainctl"),
+    Event("evt-deploy-v2", "Deployed brainctl v2.0 with the hybrid search rollout",
+          event_type="artifact", project="brainctl"),
+    Event("evt-migration-031", "Applied migration 031_dmem_write_tiers in production",
+          event_type="artifact", project="brainctl"),
+    Event("evt-rollback", "Rolled back bad release by reverting merge commit 0xdead",
+          event_type="warning", project="brainctl"),
+    Event("evt-error-fts",
+          "Hit sqlite3.OperationalError: fts5 syntax error near '.' during search",
+          event_type="error", project="brainctl"),
+    Event("evt-ollama-outage",
+          "Ollama container crashed overnight and blocked all embeddings",
+          event_type="error", project="brainctl"),
+    Event("evt-handoff",
+          "Alice handed off retrieval reranking work to Bob before vacation",
+          event_type="handoff", project="brainctl"),
+    Event("evt-decision-rrf",
+          "Team agreed to adopt Reciprocal Rank Fusion after benchmarks",
+          event_type="decision", project="brainctl"),
+]
+
+
+ENTITIES: List[EntityFixture] = [
+    EntityFixture("Alice", "person", ["Owns retrieval pipeline", "Prefers dark mode"]),
+    EntityFixture("Bob",   "person", ["Owns consolidation daemon", "Writes Python"]),
+    EntityFixture("Carol", "person", ["Security reviewer", "PII gatekeeper"]),
+    EntityFixture("brainctl", "project", ["SQLite-backed agent memory system"]),
+    EntityFixture("Ollama", "service", ["Local embedding provider on 11434"]),
+    EntityFixture("SQLite", "tool",   ["Embedded relational database"]),
+]
+
+
+# ---------------------------------------------------------------------------
+# Graded query set
+# ---------------------------------------------------------------------------
+# Grades: 3 = primary answer, 2 = strongly related, 1 = tangential.
+# Keys are prefixed "mem:", "evt:", or "ent:" to disambiguate.
+
+QUERIES: List[Query] = [
+    # Entity / preference lookups
+    Query("What does Alice prefer?", "entity", {
+        "mem:pref-dark-mode": 3,
+        "mem:user-alice-role": 2,
+        "ent:Alice": 2,
+    }),
+    Query("Who owns the consolidation daemon?", "entity", {
+        "mem:user-bob-role": 3,
+        "ent:Bob": 2,
+    }),
+    Query("Who is the security reviewer?", "entity", {
+        "mem:user-carol-role": 3,
+        "ent:Carol": 2,
+        "mem:pref-coffee": 1,
+    }),
+    Query("What does Bob use for indentation?", "entity", {
+        "mem:pref-tabs": 3,
+        "mem:user-bob-role": 1,
+    }),
+
+    # Project facts
+    Query("What Python version does brainctl use?", "entity", {
+        "mem:proj-python-version": 3,
+    }),
+    Query("What embedding model do we use?", "entity", {
+        "mem:proj-embedding": 3,
+        "mem:dec-nomic": 3,
+        "mem:env-ollama-port": 1,
+    }),
+    Query("Where is memory data stored?", "entity", {
+        "mem:proj-db-engine": 3,
+        "mem:dec-sqlite": 2,
+        "mem:env-brain-db-path": 2,
+    }),
+
+    # Procedural / how-to
+    Query("How do I deploy to staging?", "procedural", {
+        "mem:how-deploy": 3,
+        "evt:evt-deploy-v1": 1,
+    }),
+    Query("How do I roll back a bad release?", "procedural", {
+        "mem:how-rollback": 3,
+        "evt:evt-rollback": 2,
+    }),
+    Query("How do I run the tests?", "procedural", {
+        "mem:how-test": 3,
+    }),
+    Query("How do I apply migrations?", "procedural", {
+        "mem:how-migrate": 3,
+        "evt:evt-migration-031": 2,
+    }),
+
+    # Decision rationale
+    Query("Why did we choose SQLite?", "decision", {
+        "mem:dec-sqlite": 3,
+        "mem:proj-db-engine": 2,
+    }),
+    Query("Why do we use RRF for search?", "decision", {
+        "mem:dec-rrf": 3,
+        "evt:evt-decision-rrf": 2,
+    }),
+    Query("Why does the W(m) gate exist?", "decision", {
+        "mem:dec-wm-gate": 3,
+    }),
+
+    # Temporal / historical
+    Query("When did we deploy v2.0?", "temporal", {
+        "evt:evt-deploy-v2": 3,
+        "evt:evt-deploy-v1": 1,
+    }),
+    Query("When did Ollama crash?", "temporal", {
+        "evt:evt-ollama-outage": 3,
+        "mem:lesson-ollama": 2,
+    }),
+
+    # Troubleshooting
+    Query("FTS5 syntax error on punctuation", "troubleshooting", {
+        "mem:lesson-fts-escape": 3,
+        "evt:evt-error-fts": 3,
+    }),
+    Query("sqlite-vec extension missing fallback", "troubleshooting", {
+        "mem:lesson-vec-ext": 3,
+    }),
+
+    # Negative control — nothing in the corpus should match
+    Query("Summary of yesterday's basketball game", "negative", {}),
+
+    # Ambiguous — multiple tangential results, no single primary
+    Query("dark mode indentation coffee", "ambiguous", {
+        "mem:pref-dark-mode": 1,
+        "mem:pref-tabs": 1,
+        "mem:pref-coffee": 1,
+    }),
+]
+
+
+def key_for_result(result: dict) -> str:
+    """Translate a search result dict into the stable fixture key.
+
+    Runner embeds the fixture key into `content` / `summary` as a trailing
+    marker of the form `[key=foo-bar]` so we can re-derive it after FTS5
+    roundtrip. Falls back to None when the marker is missing.
+    """
+    text = (result.get("content") or result.get("summary") or result.get("name") or "")
+    if "[key=" in text:
+        tail = text.split("[key=", 1)[1]
+        return tail.split("]", 1)[0].strip()
+    # Entity-name results have no marker
+    if result.get("type") == "entity" and result.get("name"):
+        return f"ent:{result['name']}"
+    return ""

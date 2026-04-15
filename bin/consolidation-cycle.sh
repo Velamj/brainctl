@@ -107,13 +107,39 @@ if [ -x "$BRAINCTL" ] && [ "$DRY_RUN" = "False" ]; then
   fi
 fi
 
-# ── Metacognition gap scan (internal-ref) ─────────────────────────────────────────
+# ── Metacognition gap scan ───────────────────────────────────────────────────────
+# Includes self-healing scans from migration 036: orphan_memory,
+# broken_edge, and unreferenced_entity. Pre-036 DBs silently skip the new
+# scans via the CHECK-constraint guard in _log_gap_safe.
 BRAINCTL="${AGENTMEMORY}/bin/brainctl"
 if [ -x "$BRAINCTL" ]; then
   GAP_JSON="$("$BRAINCTL" gaps scan 2>/dev/null)" || true
   if [ -n "$GAP_JSON" ]; then
     TOTAL_GAPS=$(echo "$GAP_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('total_gaps',0))" 2>/dev/null || echo "?")
-    echo "[Metacognition] Gap scan complete: ${TOTAL_GAPS} new gaps logged" >&2
+    ORPHANS=$(echo "$GAP_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('orphan_memories',[])))" 2>/dev/null || echo "?")
+    BROKEN=$(echo "$GAP_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('broken_edges',[])))" 2>/dev/null || echo "?")
+    UNREF=$(echo "$GAP_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('unreferenced_entities',[])))" 2>/dev/null || echo "?")
+    echo "[Metacognition] Gap scan complete: ${TOTAL_GAPS} gaps (orphans=${ORPHANS} broken_edges=${BROKEN} unrefd_entities=${UNREF})" >&2
+  fi
+fi
+
+# ── Entity enrichment tier refresh + compiled_truth rebuild ──────────────────────
+# Reclassify every entity into T1/T2/T3 from updated recall + edge signals,
+# then rebuild compiled_truth for every active entity so MCP readers land on
+# a current synthesis. Both passes are pure SQLite — fast enough to run
+# every consolidation cycle.
+BRAINCTL="${AGENTMEMORY}/bin/brainctl"
+if [ -x "$BRAINCTL" ] && [ "$DRY_RUN" = "False" ]; then
+  TIER_JSON="$("$BRAINCTL" entity tier --refresh 2>/dev/null)" || true
+  if [ -n "$TIER_JSON" ]; then
+    TIER1=$(echo "$TIER_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('distribution',{}).get('1',0))" 2>/dev/null || echo "?")
+    TIER2=$(echo "$TIER_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('distribution',{}).get('2',0))" 2>/dev/null || echo "?")
+    echo "[Entity] Tier refresh: T1=${TIER1} T2=${TIER2}" >&2
+  fi
+  COMPILE_JSON="$("$BRAINCTL" entity compile --all 2>/dev/null)" || true
+  if [ -n "$COMPILE_JSON" ]; then
+    UPDATED=$(echo "$COMPILE_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('updated',0))" 2>/dev/null || echo "?")
+    echo "[Entity] Compiled-truth refresh: ${UPDATED} entities" >&2
   fi
 fi
 

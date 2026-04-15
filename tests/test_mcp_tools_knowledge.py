@@ -83,12 +83,14 @@ def _insert_memory(db_file: Path, agent_id: str, content: str,
 class TestModuleInterface:
     def test_tools_is_list(self, tmp_path):
         assert isinstance(mod.TOOLS, list)
-        assert len(mod.TOOLS) == 5
+        # 5 legacy tools + 3 entity-synthesis tools added for migrations 033-035
+        assert len(mod.TOOLS) == 8
 
     def test_dispatch_is_dict(self, tmp_path):
         assert isinstance(mod.DISPATCH, dict)
         assert set(mod.DISPATCH.keys()) == {
-            "knowledge_index", "knowledge_report", "distill", "promote", "dreams"
+            "knowledge_index", "knowledge_report", "distill", "promote", "dreams",
+            "entity_compile", "entity_tier", "entity_alias",
         }
 
     def test_tool_names_match_dispatch(self, tmp_path):

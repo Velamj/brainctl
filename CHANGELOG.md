@@ -3,6 +3,70 @@
 All notable changes to **brainctl** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added — retrieval quality instrumentation
+- **Deterministic search-quality benchmark harness.** `tests/bench/`
+  seeds a 29-memory / 8-event / 6-entity corpus with 20 graded queries
+  (entity / procedural / decision / temporal / troubleshooting / negative /
+  ambiguous), runs them through either `Brain.search` or the full
+  `cmd_search` hybrid pipeline, and reports P@1 / P@5 / Recall@5 / MRR /
+  nDCG@5. Committed baseline at `tests/bench/baselines/search_quality.json`;
+  pytest regression gate in `tests/test_search_quality_bench.py` fails on
+  any >2% drop on a headline metric. `bin/brainctl-bench` is the
+  first-class CLI wrapper.
+- **Query-intent taxonomy normalization in `cmd_search`.** The regex
+  classifier in `bin/intent_classifier.py` produces 10 labels; downstream
+  rerank branches only checked 6. Added `_INTENT_ALIAS` mapping so every
+  classifier output reaches a concrete rerank profile
+  (`historical_timeline`/`task_status`/`troubleshooting`/`orientation` →
+  `event_lookup`, `decision_rationale` → `decision_lookup`, `how_to`/
+  `research_concept` → `procedural`, `cross_reference` → `entity_lookup`,
+  `factual_lookup` → `general`). Effective rerank branch is surfaced as
+  `metacognition.rerank_branch` on every search response.
+
+### Added — entity synthesis surface
+- **Migration 033 — `entities.compiled_truth`.** Adds a rewriteable
+  "current best understanding" block to each entity, populated from
+  observations + linked memories + linked events. CLI:
+  `brainctl entity compile [--all]`, `brainctl entity get ID --compiled`.
+  MCP tool: `entity_compile`.
+- **Migration 034 — `entities.enrichment_tier`.** Auto-classifies entities
+  into Tier 1 (critical) / Tier 2 (notable) / Tier 3 (minor) from recall
+  count, knowledge-edge degree, and event-link count. CLI: `brainctl entity
+  tier [--refresh]`. MCP tool: `entity_tier`.
+- **Migration 035 — `entities.aliases`.** First-class canonical-name list
+  used by the merger as a pre-check before semantic dedup. CLI:
+  `brainctl entity alias (list|add|remove) ID [values...]`. Helper
+  `find_entity_by_alias()` for the merger. MCP tool: `entity_alias`.
+- `bin/consolidation-cycle.sh` now runs `entity tier --refresh` and
+  `entity compile --all` after the gap scan.
+
+### Added — self-healing gap scans
+- **Migration 036 — `knowledge_gaps` CHECK expansion.** Adds three
+  gap types: `orphan_memory` (no edges + no recalls + old),
+  `broken_edge` (`knowledge_edges` pointing at deleted rows),
+  `unreferenced_entity` (no edges, no observations, old). Rebuilt via
+  temp-table round-trip so the schema stays byte-identical to a fresh
+  install. `brainctl gaps scan` now reports all three (with
+  `--skip-self-healing` for fast mode).
+- Latent schema bug fixed along the way: the `recent_belief_collapses`
+  view referenced a non-existent `belief_collapse_events_old` table,
+  which would have crashed any future DDL touching the schema. Rebuilt
+  to point at the real `belief_collapse_events` table in init_schema.sql
+  and migration 036.
+
+### Fixed — natural-language query regressions in `cmd_search`
+- `_FTS5_SPECIAL` regex was missing `?`, `!`, `'`, `` ` ``, `,`, `;`, `:`,
+  causing `fts5: syntax error near "?"` on common natural-language
+  queries. Extended the character class.
+- `cmd_search` passed the space-separated sanitized query directly to
+  FTS5 MATCH, which FTS5 treats as implicit AND. Natural-language
+  queries ("What does Alice prefer?") silently returned zero results
+  because FTS5 demanded every token match. Added
+  `_build_fts_match_expression` that drops stopwords and joins meaningful
+  tokens with `OR`, restoring parity with `Brain.search` behavior.
+
 ## [1.5.2] — 2026-04-14
 
 ### Fixed

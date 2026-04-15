@@ -542,10 +542,14 @@ CREATE INDEX idx_coverage_density ON knowledge_coverage(coverage_density DESC);
 CREATE TABLE knowledge_gaps (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     gap_type TEXT NOT NULL CHECK(gap_type IN (
-        'coverage_hole',      -- no memories in scope at all
-        'staleness_hole',     -- memories exist but all too old
-        'confidence_hole',    -- memories exist but avg confidence too low
-        'contradiction_hole'  -- memories contradict each other
+        'coverage_hole',         -- no memories in scope at all
+        'staleness_hole',        -- memories exist but all too old
+        'confidence_hole',       -- memories exist but avg confidence too low
+        'contradiction_hole',    -- memories contradict each other
+        -- Migration 036 self-healing scan types
+        'orphan_memory',         -- memory with no edges + no recalls + old
+        'broken_edge',           -- knowledge_edges row points at deleted row
+        'unreferenced_entity'    -- entity with nothing linking to it
     )),
     scope TEXT NOT NULL,
     detected_at TEXT NOT NULL,
@@ -1340,7 +1344,16 @@ CREATE TABLE entities (
     scope TEXT NOT NULL DEFAULT 'global',          -- 'global', 'project:<name>', 'agent:<id>'
     retired_at TEXT,                               -- soft delete
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    -- Migration 033: compiled-truth synthesis surface
+    compiled_truth TEXT,
+    compiled_truth_updated_at TEXT,
+    compiled_truth_source TEXT,
+    -- Migration 034: enrichment tier (T1 critical / T2 notable / T3 minor)
+    enrichment_tier INTEGER NOT NULL DEFAULT 3,
+    last_enriched_at TEXT,
+    -- Migration 035: aliases JSON list for canonical-name dedup
+    aliases TEXT
 );
 
 CREATE UNIQUE INDEX uq_entities_name_scope ON entities(name, scope) WHERE retired_at IS NULL;
@@ -1352,6 +1365,11 @@ CREATE INDEX idx_entities_agent ON entities(agent_id);
 CREATE INDEX idx_entities_scope ON entities(scope);
 
 CREATE INDEX idx_entities_active ON entities(retired_at) WHERE retired_at IS NULL;
+
+CREATE INDEX idx_entities_compiled_truth_updated_at ON entities(compiled_truth_updated_at);
+
+CREATE INDEX idx_entities_tier_enriched ON entities(enrichment_tier, last_enriched_at)
+    WHERE retired_at IS NULL AND enrichment_tier < 3;
 
 CREATE VIRTUAL TABLE entities_fts USING fts5(
     name,
@@ -1408,7 +1426,7 @@ CREATE VIEW decoherent_memories AS
 CREATE VIEW recent_belief_collapses AS
             SELECT bce.id, bce.agent_id, bce.belief_id, bce.collapsed_state,
                    bce.collapse_type, bce.collapse_fidelity, bce.created_at
-            FROM "belief_collapse_events_old" bce
+            FROM belief_collapse_events bce
             WHERE bce.created_at > datetime('now', '-7 days')
             ORDER BY bce.created_at DESC;
 

@@ -21,6 +21,7 @@ import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 from agentmemory.lib.mcp_helpers import days_since as _days_since
 from agentmemory.paths import get_backups_dir, get_blobs_dir, get_brain_home, get_db_path
@@ -117,18 +118,56 @@ VALID_PRIORITIES = {"critical", "high", "medium", "low"}
 
 # FTS5 special characters that cause sqlite3.OperationalError when unescaped.
 # Strip them before passing any user query to a MATCH clause.
-_FTS5_SPECIAL = re.compile(r'[.&|*"()\-@^]')
+#
+# Includes `?` and `!` — natural-language queries from agents and humans
+# contain these constantly ("What does X prefer?") and used to crash
+# cmd_search with "fts5: syntax error near ?". Also includes common ASCII
+# punctuation (`,;:`) that has no operator meaning in FTS5 but still breaks
+# tokenisation when glued to a word.
+_FTS5_SPECIAL = re.compile(r'[.&|*"\'`()\-@^?!,;:]')
 
 
 def _sanitize_fts_query(query: str) -> str:
     """Remove FTS5 special characters to prevent syntax errors.
 
-    Strips: . & | * \" ( ) - @ ^
+    Strips: . & | * \" ' ` ( ) - @ ^ ? ! , ; :
     Then collapses extra whitespace.  Returns an empty string if nothing
     remains so callers can skip the MATCH clause gracefully.
     """
     cleaned = _FTS5_SPECIAL.sub(" ", query or "")
     return re.sub(r"\s+", " ", cleaned).strip()
+
+
+# Short words that shouldn't be OR'd into FTS5 expressions — they'd match
+# almost every row and drown useful signal. Matches the built-in English
+# stopword list brain.search would prefer to use if FTS5 supported one.
+_FTS_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "do", "does", "for",
+    "from", "has", "have", "how", "i", "in", "is", "it", "its", "of",
+    "on", "or", "that", "the", "to", "was", "we", "what", "when", "where",
+    "which", "who", "why", "will", "with", "you",
+}
+
+
+def _build_fts_match_expression(sanitized: str) -> str:
+    """Turn a sanitized space-separated query into an FTS5 OR expression.
+
+    FTS5 defaults to implicit-AND semantics when multiple bare tokens are
+    passed via MATCH — "what does Alice prefer" would demand that every
+    token appear in the same row. For natural-language queries that's too
+    strict: we instead join meaningful tokens with ``OR``. Short
+    stopwords are dropped; if that leaves us with nothing we fall back to
+    the raw (AND) form so single-word queries still work.
+    """
+    if not sanitized:
+        return ""
+    tokens = [tok for tok in sanitized.split() if tok]
+    if len(tokens) <= 1:
+        return sanitized
+    meaningful = [t for t in tokens if t.lower() not in _FTS_STOPWORDS and len(t) > 1]
+    if not meaningful:
+        meaningful = tokens
+    return " OR ".join(meaningful)
 
 # Temporal recency decay constants (lambda) — configurable per scope
 # half-life: global ~70d, project ~23d, agent ~14d
@@ -555,6 +594,21 @@ def cmd_entity_get(args):
     entity["properties"] = json.loads(entity["properties"])
     entity["observations"] = json.loads(entity["observations"])
 
+    # --compiled: return only the compiled-truth block for lightweight reads.
+    # This is the "current best understanding" surface added in migration 033,
+    # rewritten by `brainctl entity compile` or the consolidation cycle.
+    if getattr(args, "compiled", False):
+        json_out({
+            "ok": True,
+            "id": entity["id"],
+            "name": entity["name"],
+            "entity_type": entity["entity_type"],
+            "compiled_truth": entity.get("compiled_truth"),
+            "compiled_truth_updated_at": entity.get("compiled_truth_updated_at"),
+            "compiled_truth_source": entity.get("compiled_truth_source"),
+        })
+        return
+
     # Fetch relations via knowledge_edges
     relations = []
     edges = db.execute(
@@ -809,6 +863,424 @@ def cmd_entity_delete(args):
     log_access(db, agent_id, "write", "entities", row["id"])
     db.commit()
     json_out({"ok": True, "retired_id": row["id"], "name": row["name"]})
+
+
+# ---------------------------------------------------------------------------
+# Entity compiled-truth synthesis (migration 033)
+# ---------------------------------------------------------------------------
+#
+# Turns an entity + its observations + linked memories/events into a single
+# "current best understanding" paragraph. Kept deliberately simple: no LLM
+# calls. The compiler concatenates the strongest evidence, ranked by
+# confidence and recency, bounded by `max_chars`. Agents or downstream
+# tooling can replace it with an LLM-backed rewrite by monkey-patching
+# `compile_entity_truth`; this ships a deterministic fallback that always
+# works without network access.
+
+_COMPILED_TRUTH_MAX_CHARS = 800
+_COMPILED_TRUTH_MAX_SOURCES = 8
+
+
+def _column_exists(db, table: str, column: str) -> bool:
+    try:
+        rows = db.execute(f"PRAGMA table_info({table})").fetchall()
+        return any(row[1] == column for row in rows)
+    except Exception:
+        return False
+
+
+def _fetch_entity_row(db, identifier: str):
+    if identifier.isdigit():
+        return db.execute(
+            "SELECT * FROM entities WHERE id = ? AND retired_at IS NULL",
+            (int(identifier),),
+        ).fetchone()
+    return db.execute(
+        "SELECT * FROM entities WHERE name = ? AND retired_at IS NULL",
+        (identifier,),
+    ).fetchone()
+
+
+def compile_entity_truth(db, entity_row,
+                         max_chars: int = _COMPILED_TRUTH_MAX_CHARS,
+                         max_sources: int = _COMPILED_TRUTH_MAX_SOURCES) -> dict:
+    """Return a dict with ``text`` and ``sources`` for the given entity row.
+
+    Strategy:
+      1. Start with the entity's own observations (strongest evidence — the
+         agent recorded them directly about this entity).
+      2. Append linked memory content pulled via knowledge_edges when the
+         edge points ``entities -> memories``, highest-confidence first.
+      3. Append event summaries linked the same way.
+      4. Truncate to ``max_chars`` on sentence boundaries where possible.
+
+    Returns ``{"text": str, "sources": list[str], "source_count": int}``.
+    """
+    if entity_row is None:
+        return {"text": "", "sources": [], "source_count": 0}
+
+    ent = dict(entity_row)
+    pieces: List[Tuple[float, str, str]] = []  # (score, text, source_key)
+
+    # Observations first — treat as ground truth from the agent itself.
+    try:
+        observations = json.loads(ent.get("observations") or "[]")
+    except Exception:
+        observations = []
+    for idx, obs in enumerate(observations):
+        if not obs:
+            continue
+        pieces.append((1.0, str(obs).strip(), f"obs:{ent['id']}:{idx}"))
+
+    # Linked memories via knowledge_edges (entities -> memories).
+    try:
+        rows = db.execute(
+            "SELECT m.id, m.content, m.confidence, m.created_at "
+            "FROM knowledge_edges e "
+            "JOIN memories m ON m.id = e.target_id "
+            "WHERE e.source_table = 'entities' AND e.source_id = ? "
+            "  AND e.target_table = 'memories' AND m.retired_at IS NULL "
+            "ORDER BY m.confidence DESC, m.created_at DESC",
+            (ent["id"],),
+        ).fetchall()
+    except Exception:
+        rows = []
+    for r in rows:
+        conf = float(r["confidence"] or 0.5)
+        pieces.append((conf, str(r["content"]).strip(), f"mem:{r['id']}"))
+
+    # Linked events — usually lower confidence but useful for timeline context.
+    try:
+        rows = db.execute(
+            "SELECT e2.id, e2.summary, e2.importance "
+            "FROM knowledge_edges e "
+            "JOIN events e2 ON e2.id = e.target_id "
+            "WHERE e.source_table = 'entities' AND e.source_id = ? "
+            "  AND e.target_table = 'events' "
+            "ORDER BY e2.created_at DESC",
+            (ent["id"],),
+        ).fetchall()
+    except Exception:
+        rows = []
+    for r in rows:
+        imp = float(r["importance"] or 0.5)
+        pieces.append((imp * 0.9, str(r["summary"]).strip(), f"evt:{r['id']}"))
+
+    # Sort by score desc and build the output.
+    pieces.sort(key=lambda tup: tup[0], reverse=True)
+    seen: set = set()
+    chunks: List[str] = []
+    sources: List[str] = []
+    total_chars = 0
+    for _score, text, source_key in pieces:
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        if total_chars + len(text) + 2 > max_chars and chunks:
+            break
+        chunks.append(text)
+        sources.append(source_key)
+        total_chars += len(text) + 2
+        if len(sources) >= max_sources:
+            break
+
+    # Final sentence: always mention the entity's type so the paragraph is
+    # coherent on its own.
+    header = f"{ent.get('name', 'Entity')} ({ent.get('entity_type', '?')}):"
+    body = " ".join(chunks).strip()
+    text = f"{header} {body}".strip() if body else f"{header} (no evidence yet)"
+    return {"text": text[:max_chars], "sources": sources, "source_count": len(sources)}
+
+
+def cmd_entity_compile(args):
+    """Rewrite an entity's compiled_truth field from current evidence."""
+    db = get_db()
+    if not _column_exists(db, "entities", "compiled_truth"):
+        json_out({
+            "ok": False,
+            "error": "entities.compiled_truth column missing — run `brainctl migrate` "
+                     "to apply migration 033_entity_compiled_truth.",
+        })
+        return
+
+    # --all: batch-rewrite every entity (used by the consolidation cycle).
+    if getattr(args, "all", False):
+        rows = db.execute(
+            "SELECT id, name FROM entities WHERE retired_at IS NULL"
+        ).fetchall()
+        updated = 0
+        for r in rows:
+            full = db.execute(
+                "SELECT * FROM entities WHERE id = ?", (r["id"],)
+            ).fetchone()
+            result = compile_entity_truth(db, full)
+            db.execute(
+                "UPDATE entities SET compiled_truth = ?, "
+                "compiled_truth_updated_at = ?, compiled_truth_source = ? "
+                "WHERE id = ?",
+                (result["text"], _now_ts(), json.dumps(result["sources"]), r["id"]),
+            )
+            updated += 1
+        db.commit()
+        json_out({"ok": True, "updated": updated})
+        return
+
+    # Single entity by identifier (name or numeric ID).
+    row = _fetch_entity_row(db, args.identifier)
+    if not row:
+        json_out({"ok": False, "error": f"Entity not found: {args.identifier}"})
+        return
+
+    result = compile_entity_truth(db, row)
+    db.execute(
+        "UPDATE entities SET compiled_truth = ?, "
+        "compiled_truth_updated_at = ?, compiled_truth_source = ? "
+        "WHERE id = ?",
+        (result["text"], _now_ts(), json.dumps(result["sources"]), row["id"]),
+    )
+    db.commit()
+    json_out({
+        "ok": True,
+        "id": row["id"],
+        "name": row["name"],
+        "compiled_truth": result["text"],
+        "sources": result["sources"],
+        "source_count": result["source_count"],
+    })
+
+
+# ---------------------------------------------------------------------------
+# Entity enrichment tier (migration 034)
+# ---------------------------------------------------------------------------
+
+# Tier thresholds — tuned against the access_log signal so popular entities
+# automatically bubble up to Tier 1 without the user declaring anything.
+# Units: Tier 1 at >=25 effective mentions, Tier 2 at >=8, Tier 3 otherwise.
+_TIER_1_SCORE = 25.0
+_TIER_2_SCORE = 8.0
+
+
+def compute_entity_tier(db, entity_row) -> Tuple[int, Dict[str, float]]:
+    """Return (tier, signals) for an entity row.
+
+    Signals combine:
+      * recalled_count from linked memories (Bayesian recall)
+      * knowledge_edges degree (centrality proxy)
+      * event-link count (appears in timeline)
+      * recency of last related activity
+    """
+    if entity_row is None:
+        return 3, {}
+
+    ent_id = entity_row["id"]
+
+    # Count linked memories + their recall signal.
+    mem_row = db.execute(
+        "SELECT COALESCE(SUM(m.recalled_count), 0) AS recalls, COUNT(*) AS n "
+        "FROM knowledge_edges e "
+        "JOIN memories m ON m.id = e.target_id "
+        "WHERE e.source_table = 'entities' AND e.source_id = ? "
+        "  AND e.target_table = 'memories' AND m.retired_at IS NULL",
+        (ent_id,),
+    ).fetchone()
+    mem_recalls = float(mem_row["recalls"] or 0)
+    mem_count = int(mem_row["n"] or 0)
+
+    # knowledge_edges degree (in + out).
+    edge_row = db.execute(
+        "SELECT COUNT(*) AS n FROM knowledge_edges "
+        "WHERE (source_table = 'entities' AND source_id = ?) "
+        "   OR (target_table = 'entities' AND target_id = ?)",
+        (ent_id, ent_id),
+    ).fetchone()
+    edge_degree = int(edge_row["n"] or 0)
+
+    # Event-link count.
+    evt_row = db.execute(
+        "SELECT COUNT(*) AS n FROM knowledge_edges "
+        "WHERE source_table = 'entities' AND source_id = ? "
+        "  AND target_table = 'events'",
+        (ent_id,),
+    ).fetchone()
+    evt_count = int(evt_row["n"] or 0)
+
+    # Combine — weights chosen so Tier 1 requires a sustained pattern,
+    # not a single burst.
+    score = (
+        1.5 * mem_recalls
+        + 1.0 * mem_count
+        + 0.75 * edge_degree
+        + 0.5 * evt_count
+    )
+
+    if score >= _TIER_1_SCORE:
+        tier = 1
+    elif score >= _TIER_2_SCORE:
+        tier = 2
+    else:
+        tier = 3
+
+    return tier, {
+        "score": round(score, 3),
+        "mem_recalls": mem_recalls,
+        "mem_count": mem_count,
+        "edge_degree": edge_degree,
+        "evt_count": evt_count,
+    }
+
+
+def cmd_entity_tier(args):
+    """Show or refresh enrichment_tier for entities (migration 034)."""
+    db = get_db()
+    if not _column_exists(db, "entities", "enrichment_tier"):
+        json_out({
+            "ok": False,
+            "error": "entities.enrichment_tier column missing — run `brainctl migrate` "
+                     "to apply migration 034_entity_enrichment_tier.",
+        })
+        return
+
+    if getattr(args, "refresh", False):
+        rows = db.execute(
+            "SELECT * FROM entities WHERE retired_at IS NULL"
+        ).fetchall()
+        counts = {1: 0, 2: 0, 3: 0}
+        now = _now_ts()
+        for r in rows:
+            tier, _signals = compute_entity_tier(db, r)
+            db.execute(
+                "UPDATE entities SET enrichment_tier = ?, last_enriched_at = ? WHERE id = ?",
+                (tier, now, r["id"]),
+            )
+            counts[tier] = counts.get(tier, 0) + 1
+        db.commit()
+        json_out({"ok": True, "refreshed": sum(counts.values()), "distribution": counts})
+        return
+
+    row = _fetch_entity_row(db, args.identifier)
+    if not row:
+        json_out({"ok": False, "error": f"Entity not found: {args.identifier}"})
+        return
+
+    tier, signals = compute_entity_tier(db, row)
+    json_out({
+        "ok": True,
+        "id": row["id"],
+        "name": row["name"],
+        "current_tier": row["enrichment_tier"] if "enrichment_tier" in row.keys() else None,
+        "computed_tier": tier,
+        "signals": signals,
+        "last_enriched_at": row["last_enriched_at"] if "last_enriched_at" in row.keys() else None,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Entity aliases (migration 035)
+# ---------------------------------------------------------------------------
+
+def _load_aliases(row) -> list:
+    if not row:
+        return []
+    try:
+        raw = row["aliases"] if "aliases" in row.keys() else None
+    except Exception:
+        raw = None
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return []
+    return data if isinstance(data, list) else []
+
+
+def cmd_entity_alias(args):
+    """Manage the aliases JSON list for an entity (migration 035)."""
+    db = get_db()
+    if not _column_exists(db, "entities", "aliases"):
+        json_out({
+            "ok": False,
+            "error": "entities.aliases column missing — run `brainctl migrate` "
+                     "to apply migration 035_entity_aliases.",
+        })
+        return
+
+    row = _fetch_entity_row(db, args.identifier)
+    if not row:
+        json_out({"ok": False, "error": f"Entity not found: {args.identifier}"})
+        return
+
+    aliases = _load_aliases(row)
+    action = getattr(args, "alias_action", "list")
+
+    if action == "list":
+        json_out({"ok": True, "id": row["id"], "name": row["name"], "aliases": aliases})
+        return
+
+    if action == "add":
+        for candidate in (args.values or []):
+            candidate = candidate.strip()
+            if candidate and candidate not in aliases:
+                aliases.append(candidate)
+        db.execute(
+            "UPDATE entities SET aliases = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(aliases), _now_ts(), row["id"]),
+        )
+        db.commit()
+        json_out({"ok": True, "id": row["id"], "name": row["name"], "aliases": aliases})
+        return
+
+    if action == "remove":
+        removed = []
+        for candidate in (args.values or []):
+            candidate = candidate.strip()
+            if candidate in aliases:
+                aliases.remove(candidate)
+                removed.append(candidate)
+        db.execute(
+            "UPDATE entities SET aliases = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(aliases), _now_ts(), row["id"]),
+        )
+        db.commit()
+        json_out({
+            "ok": True, "id": row["id"], "name": row["name"],
+            "removed": removed, "aliases": aliases,
+        })
+        return
+
+    json_out({"ok": False, "error": f"Unknown alias action: {action}"})
+
+
+def find_entity_by_alias(db, candidate: str):
+    """Return the first entity row whose name OR aliases contains ``candidate``.
+
+    Used by the merger as a cheap pre-check before spending an embedding on
+    semantic dedup. Matches are case-insensitive and trimmed.
+    """
+    if not candidate:
+        return None
+    candidate = candidate.strip().lower()
+
+    # Exact name match first — fastest.
+    row = db.execute(
+        "SELECT * FROM entities WHERE LOWER(name) = ? AND retired_at IS NULL",
+        (candidate,),
+    ).fetchone()
+    if row:
+        return row
+
+    # aliases column may not exist on older DBs.
+    if not _column_exists(db, "entities", "aliases"):
+        return None
+
+    rows = db.execute(
+        "SELECT * FROM entities WHERE aliases IS NOT NULL AND retired_at IS NULL"
+    ).fetchall()
+    for r in rows:
+        for alias in _load_aliases(r):
+            if alias and alias.strip().lower() == candidate:
+                return r
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -3925,7 +4397,14 @@ def cmd_search(args):
         tables = list(set(tables) | {"memories", "events", "context"})
     base_fetch = limit * 5 if not no_recency else limit * 3
     fetch_limit = max(limit, round(base_fetch * _nm_breadth))
-    fts_query = _sanitize_fts_query(query)
+    # Build an OR-expanded FTS5 MATCH expression so natural-language queries
+    # (e.g. "What does Alice prefer?") retrieve memories that match any token,
+    # not only memories that contain every word. The simple Brain.search path
+    # has always done this via _safe_fts; cmd_search used to pass the
+    # space-separated sanitized form directly to FTS5, which FTS5 treated as
+    # implicit AND and silently starved natural-language queries. The bench
+    # harness surfaced the gap.
+    fts_query = _build_fts_match_expression(_sanitize_fts_query(query))
 
     # Try to load vec extension for hybrid mode (non-fatal)
     db_vec = _try_get_db_with_vec()
@@ -4239,9 +4718,48 @@ def cmd_search(args):
             trimmed.extend(graph)
         results["context"] = trimmed
 
-    # Intent-based result weighting and decision search
+    # Intent-based result weighting and decision search.
+    #
+    # cmd_search accepts two intent taxonomies:
+    #   1. The inline _builtin_classify_intent labels (entity_lookup,
+    #      event_lookup, procedural, decision_lookup, graph_traversal, general)
+    #   2. The richer bin/intent_classifier.py labels (cross_reference,
+    #      troubleshooting, task_status, entity_lookup, historical_timeline,
+    #      how_to, decision_rationale, research_concept, orientation,
+    #      factual_lookup)
+    #
+    # Older code only handled taxonomy (1), which meant that when the
+    # external classifier loaded, most queries fell into one of its
+    # labels with no matching rerank branch and got the default path.
+    # We now normalize (2) -> (1) so every classifier output reaches a
+    # concrete reranking profile. The benchmark regression test ensures
+    # this mapping doesn't silently regress any query class.
+    _INTENT_ALIAS = {
+        # Historical/temporal queries promote events to the top
+        "historical_timeline":  "event_lookup",
+        "task_status":          "event_lookup",
+        # Decision-rationale queries open up the decisions table
+        "decision_rationale":   "decision_lookup",
+        # How-to / procedural / research queries keep memories-first ordering;
+        # map to the procedural label so downstream code (metacognition tier,
+        # downstream consumers) can branch on a stable name.
+        "how_to":               "procedural",
+        "research_concept":     "procedural",
+        # Troubleshooting is like event_lookup but error events first.
+        "troubleshooting":      "event_lookup",
+        # Orientation leans on recent memories + events — same effect as
+        # event_lookup reranking.
+        "orientation":          "event_lookup",
+        # Cross-reference (ticket IDs) behaves like entity_lookup — boost
+        # direct name/ID hits.
+        "cross_reference":      "entity_lookup",
+        # Factual lookup and general both fall through to default ranking.
+        "factual_lookup":       "general",
+    }
+
     if _intent_result and _intent_result.intent != "general":
-        _intent = _intent_result.intent
+        _intent_raw = _intent_result.intent
+        _intent = _INTENT_ALIAS.get(_intent_raw, _intent_raw)
         # entity_lookup → boost entities/entity results 2x via final_score
         if _intent == "entity_lookup":
             for r in results.get("events", []):
@@ -4443,6 +4961,15 @@ def cmd_search(args):
             "intent_rule": _intent_result.matched_rule,
             "format_hint": _intent_result.format_hint,
         }
+        # Surface the effective rerank branch so downstream tooling and
+        # the bench harness can tell which profile was actually applied
+        # after taxonomy normalization.
+        try:
+            _intent_meta["rerank_branch"] = _INTENT_ALIAS.get(
+                _intent_result.intent, _intent_result.intent
+            )
+        except NameError:
+            pass
     # Prospective memory trigger check — surface any matching triggers
     _triggered = []
     try:
@@ -11216,13 +11743,163 @@ def cmd_gaps_scan(args):
             "severity": severity,
         })
 
+    # ------------------------------------------------------------------
+    # Self-healing scans (migration 036): orphan memories, broken edges,
+    # unreferenced entities. Each is skipped gracefully when the CHECK
+    # constraint on knowledge_gaps is still on the older migration.
+    # ------------------------------------------------------------------
+    report["orphan_memories"] = []
+    report["broken_edges"] = []
+    report["unreferenced_entities"] = []
+    scan_self_healing = not getattr(args, "skip_self_healing", False)
+    if scan_self_healing:
+        _scan_orphan_memories(db, report)
+        _scan_broken_edges(db, report)
+        _scan_unreferenced_entities(db, report)
+
     db.commit()
     report["total_gaps"] = (
         len(report["coverage_holes"]) +
         len(report["staleness_holes"]) +
-        len(report["confidence_holes"])
+        len(report["confidence_holes"]) +
+        len(report["orphan_memories"]) +
+        len(report["broken_edges"]) +
+        len(report["unreferenced_entities"])
     )
     json_out(report)
+
+
+# Self-healing thresholds (kept near the top of the module for easy tuning).
+_ORPHAN_MEMORY_AGE_DAYS = 30     # memory never recalled and older than this
+_UNREFERENCED_ENTITY_AGE_DAYS = 30
+
+
+def _log_gap_safe(db, gap_type: str, scope: str, severity: float, triggered_by: str):
+    """Wrap _log_gap so legacy DBs (pre-036 CHECK constraint) don't crash
+    the entire scan when a new gap_type is inserted."""
+    try:
+        _log_gap(db, gap_type, scope, severity, triggered_by=triggered_by)
+    except sqlite3.IntegrityError:
+        # Older CHECK constraint — migration 036 not applied yet.
+        pass
+
+
+def _scan_orphan_memories(db, report) -> None:
+    """Flag memories with zero knowledge_edges AND zero recalls in N days."""
+    try:
+        rows = db.execute(
+            """
+            SELECT m.id, m.scope, m.category, m.created_at, m.last_recalled_at
+            FROM memories m
+            LEFT JOIN knowledge_edges e1
+              ON e1.source_table = 'memories' AND e1.source_id = m.id
+            LEFT JOIN knowledge_edges e2
+              ON e2.target_table = 'memories' AND e2.target_id = m.id
+            WHERE m.retired_at IS NULL
+              AND e1.id IS NULL AND e2.id IS NULL
+              AND (m.recalled_count IS NULL OR m.recalled_count = 0)
+              AND (julianday('now') - julianday(m.created_at)) > ?
+            LIMIT 200
+            """,
+            (_ORPHAN_MEMORY_AGE_DAYS,),
+        ).fetchall()
+    except Exception:
+        rows = []
+
+    for row in rows:
+        age = _days_since(row["created_at"])
+        # Severity scales with age beyond the threshold, capping at 1.0.
+        severity = round(min(1.0, (age - _ORPHAN_MEMORY_AGE_DAYS) / 60.0), 4)
+        scope = row["scope"] or f"memory:{row['id']}"
+        _log_gap_safe(db, "orphan_memory", scope, max(severity, 0.1), "gap-scan")
+        report["orphan_memories"].append({
+            "id": row["id"],
+            "category": row["category"],
+            "scope": scope,
+            "age_days": round(age, 1),
+            "severity": severity,
+        })
+
+
+def _scan_broken_edges(db, report) -> None:
+    """Flag knowledge_edges rows whose source or target no longer exists."""
+    # Handle memories + entities + events targets — the three live tables
+    # we realistically link to. Any others stay out of scope.
+    queries = [
+        ("memories", "SELECT e.id, e.source_table, e.source_id, e.target_table, e.target_id, e.relation_type "
+                     "FROM knowledge_edges e "
+                     "LEFT JOIN memories m ON m.id = e.target_id "
+                     "WHERE e.target_table = 'memories' AND m.id IS NULL LIMIT 100"),
+        ("entities", "SELECT e.id, e.source_table, e.source_id, e.target_table, e.target_id, e.relation_type "
+                     "FROM knowledge_edges e "
+                     "LEFT JOIN entities t ON t.id = e.target_id "
+                     "WHERE e.target_table = 'entities' AND t.id IS NULL LIMIT 100"),
+        ("events",   "SELECT e.id, e.source_table, e.source_id, e.target_table, e.target_id, e.relation_type "
+                     "FROM knowledge_edges e "
+                     "LEFT JOIN events ev ON ev.id = e.target_id "
+                     "WHERE e.target_table = 'events' AND ev.id IS NULL LIMIT 100"),
+    ]
+    for _label, sql in queries:
+        try:
+            rows = db.execute(sql).fetchall()
+        except Exception:
+            rows = []
+        for row in rows:
+            scope = f"edge:{row['id']}"
+            _log_gap_safe(db, "broken_edge", scope, 0.7, "gap-scan")
+            report["broken_edges"].append({
+                "edge_id": row["id"],
+                "source_table": row["source_table"],
+                "source_id": row["source_id"],
+                "target_table": row["target_table"],
+                "target_id": row["target_id"],
+                "relation_type": row["relation_type"],
+            })
+
+
+def _scan_unreferenced_entities(db, report) -> None:
+    """Flag entities with no incoming/outgoing edges and no observations."""
+    try:
+        rows = db.execute(
+            """
+            SELECT e.id, e.name, e.entity_type, e.created_at, e.observations
+            FROM entities e
+            LEFT JOIN knowledge_edges k1
+              ON k1.source_table = 'entities' AND k1.source_id = e.id
+            LEFT JOIN knowledge_edges k2
+              ON k2.target_table = 'entities' AND k2.target_id = e.id
+            WHERE e.retired_at IS NULL
+              AND k1.id IS NULL AND k2.id IS NULL
+              AND (julianday('now') - julianday(e.created_at)) > ?
+            LIMIT 200
+            """,
+            (_UNREFERENCED_ENTITY_AGE_DAYS,),
+        ).fetchall()
+    except Exception:
+        rows = []
+
+    for row in rows:
+        # Drop entities that at least have observations — they have some
+        # recorded evidence even if nothing links to them yet.
+        obs_count = 0
+        try:
+            obs_count = len(json.loads(row["observations"] or "[]"))
+        except Exception:
+            pass
+        if obs_count >= 2:
+            continue
+        age = _days_since(row["created_at"])
+        severity = round(min(1.0, (age - _UNREFERENCED_ENTITY_AGE_DAYS) / 60.0), 4)
+        scope = f"entity:{row['id']}"
+        _log_gap_safe(db, "unreferenced_entity", scope, max(severity, 0.1), "gap-scan")
+        report["unreferenced_entities"].append({
+            "id": row["id"],
+            "name": row["name"],
+            "entity_type": row["entity_type"],
+            "age_days": round(age, 1),
+            "observation_count": obs_count,
+            "severity": severity,
+        })
 
 
 def _run_refresh_inline(db, now):
@@ -12386,6 +13063,9 @@ def build_parser():
 
     ent_get = ent_sub.add_parser("get", help="Get entity by name or ID (includes relations)")
     ent_get.add_argument("identifier", help="Entity name or numeric ID")
+    ent_get.add_argument("--compiled", action="store_true",
+                         help="Return only the compiled_truth synthesis block "
+                              "(see migration 033).")
 
     ent_search = ent_sub.add_parser("search", help="Search entities (FTS5)")
     ent_search.add_argument("query", help="Search query")
@@ -12415,6 +13095,37 @@ def build_parser():
 
     ent_delete = ent_sub.add_parser("delete", help="Soft-delete an entity")
     ent_delete.add_argument("identifier", help="Entity name or numeric ID")
+
+    # --- compiled-truth synthesis (migration 033) -----------------------
+    ent_compile = ent_sub.add_parser(
+        "compile",
+        help="Rebuild entities.compiled_truth from current observations + linked memories/events",
+    )
+    ent_compile.add_argument("identifier", nargs="?",
+                             help="Entity name or numeric ID (omit with --all)")
+    ent_compile.add_argument("--all", action="store_true",
+                             help="Rebuild compiled_truth for every active entity")
+
+    # --- enrichment tier (migration 034) --------------------------------
+    ent_tier = ent_sub.add_parser(
+        "tier",
+        help="Show or refresh entities.enrichment_tier (T1/T2/T3)",
+    )
+    ent_tier.add_argument("identifier", nargs="?",
+                          help="Entity name or numeric ID (omit with --refresh)")
+    ent_tier.add_argument("--refresh", action="store_true",
+                          help="Recompute enrichment_tier for every active entity")
+
+    # --- aliases (migration 035) ----------------------------------------
+    ent_alias = ent_sub.add_parser(
+        "alias",
+        help="List / add / remove aliases on an entity (canonical-name helpers)",
+    )
+    ent_alias.add_argument("alias_action", choices=("list", "add", "remove"),
+                           help="Which alias action to perform")
+    ent_alias.add_argument("identifier", help="Entity name or numeric ID")
+    ent_alias.add_argument("values", nargs="*",
+                           help="Aliases to add or remove (ignored for list)")
 
     # --- trigger ---  (prospective memory)
     trg = sub.add_parser("trigger", help="Prospective memory triggers — conditional future recall")
@@ -12960,11 +13671,23 @@ def build_parser():
 
     gps_sub.add_parser("refresh", help="Recompute knowledge_coverage stats from current memories")
 
-    gps_sub.add_parser("scan", help="Detect coverage, staleness, and confidence holes; write to knowledge_gaps")
+    gps_scan = gps_sub.add_parser(
+        "scan",
+        help="Detect coverage/staleness/confidence holes AND self-healing gaps "
+             "(orphan_memory, broken_edge, unreferenced_entity); writes to knowledge_gaps",
+    )
+    gps_scan.add_argument(
+        "--skip-self-healing", action="store_true",
+        help="Skip the orphan_memory/broken_edge/unreferenced_entity scans (fast mode)",
+    )
 
     gps_list = gps_sub.add_parser("list", help="List unresolved knowledge gaps sorted by severity")
     gps_list.add_argument("--limit", "-l", type=int, default=50, help="Max results (default: 50)")
-    gps_list.add_argument("--type", help="Filter by gap_type: coverage_hole|staleness_hole|confidence_hole|contradiction_hole")
+    gps_list.add_argument(
+        "--type",
+        help="Filter by gap_type: coverage_hole|staleness_hole|confidence_hole|"
+             "contradiction_hole|orphan_memory|broken_edge|unreferenced_entity",
+    )
 
     gps_resolve = gps_sub.add_parser("resolve", help="Mark a gap as resolved")
     gps_resolve.add_argument("id", type=int, help="Gap ID to resolve")
@@ -14038,6 +14761,9 @@ def main():
             "create": cmd_entity_create, "get": cmd_entity_get, "search": cmd_entity_search,
             "list": cmd_entity_list, "update": cmd_entity_update, "observe": cmd_entity_observe,
             "relate": cmd_entity_relate, "delete": cmd_entity_delete,
+            "compile": cmd_entity_compile,
+            "tier": cmd_entity_tier,
+            "alias": cmd_entity_alias,
         }
         fn = dispatch.get(args.ent_cmd)
     elif args.command == "trigger":

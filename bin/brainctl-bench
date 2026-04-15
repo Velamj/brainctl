@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+"""brainctl-bench — run the retrieval eval harness.
+
+Thin wrapper that delegates to `tests.bench.run`. Purpose: give the benchmark
+a first-class binary so it shows up in `bin/` next to `brainctl` and
+`brainctl-mcp`, and can be invoked with the same ergonomic surface as the
+rest of the CLI tree.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+# Repo root discovery: this file lives in <repo>/bin, so parent.parent == repo.
+_REPO = Path(__file__).resolve().parent.parent
+_SRC = _REPO / "src"
+for p in (str(_REPO), str(_SRC)):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+# Suppress the one-shot migration warning during benchmark runs — a throwaway
+# temp DB never has pending migrations against the production schema, and
+# printing the warning would pollute the JSON report on stdout.
+os.environ.setdefault("BRAINCTL_SILENT_MIGRATIONS", "1")
+
+from tests.bench.run import main  # noqa: E402
+
+if __name__ == "__main__":
+    raise SystemExit(main())

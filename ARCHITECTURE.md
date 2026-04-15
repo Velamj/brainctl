@@ -84,7 +84,24 @@ works without them — you just lose vector search.
 ### FTS5 (always available)
 
 Full-text search via SQLite FTS5 with porter + unicode61 tokenizers. Covers
-memories, events, entities, and context. Accessed via `brainctl search`.
+memories, events, entities, and context. Accessed via `brainctl search` and
+`Brain.search()`. Queries are sanitized to strip FTS5 operator characters
+(`. & | * " ' \` ( ) - @ ^ ? ! , ; :`) and then OR-expanded token-by-token so
+natural-language queries ("what does Alice prefer?") match memories that
+contain *any* meaningful term, not only memories that contain every word.
+Stopwords are dropped before OR expansion.
+
+### Hybrid Search + Reciprocal Rank Fusion
+
+`cmd_search` merges FTS5 and sqlite-vec results with Reciprocal Rank Fusion
+(`rrf_score = 1/(60 + rank)`), applies temporal decay, category half-life,
+and adaptive salience weighting, then runs a regex-based query intent
+classifier (`bin/intent_classifier.py`) whose output is normalized inside
+`cmd_search` onto six rerank profiles: `entity_lookup`, `event_lookup`,
+`decision_lookup`, `graph_traversal`, `procedural`, `general`. The
+classifier covers ~80% of real agent queries with zero latency; the
+rerank branch applied to the blend is reported in the
+`metacognition.rerank_branch` field of every response.
 
 ### Vector Search (optional)
 
@@ -93,17 +110,42 @@ Semantic search via sqlite-vec using cosine similarity (KNN). Requires:
 - Ollama running locally with an embedding model (e.g., `nomic-embed-text`)
 - Embeddings populated via `embed-populate`
 
-Accessed via `brainctl vsearch`. Supports hybrid mode (FTS5 + vector,
-alpha-weighted) or pure vector mode.
+Accessed via `brainctl vsearch` or transparently inside `cmd_search` when
+available. Supports hybrid mode (FTS5 + vector via RRF) or pure vector
+mode.
 
 ### Graph Traversal
 
 Multi-hop neighbor queries across the knowledge graph via `brainctl graph`.
 
+### Retrieval Regression Gate
+
+`tests/bench/` ships a deterministic search-quality harness: 29 synthetic
+memories + 8 events + 6 entities + 20 graded queries (3=primary, 2=related,
+1=tangential) across seven query classes (entity / procedural / decision /
+temporal / troubleshooting / negative / ambiguous). The runner reports
+P@1, P@5, Recall@5, MRR, nDCG@5 against a committed baseline at
+`tests/bench/baselines/search_quality.json`. Any >2% drop on a headline
+metric fails the `test_search_quality_bench.py` pytest regression test.
+Run with `python3 -m tests.bench.run` or `bin/brainctl-bench`.
+
 ## Knowledge Graph
 
-The `entities` table stores typed, named entities. The `knowledge_edges` table
-connects any two records across any tables with typed, weighted edges:
+The `entities` table stores typed, named entities. Every entity carries:
+
+- `compiled_truth` — a rewriteable "current best understanding" synthesis of
+  the entity, drawn from observations + linked memories + linked events.
+  Refreshed by `brainctl entity compile` or by the nightly consolidation
+  cycle. Reads can return just the synthesis via `brainctl entity get ID --compiled`.
+- `enrichment_tier` — 1 (critical) / 2 (notable) / 3 (minor), computed from
+  recall count, knowledge-edge degree, and event-link count. Tier 1 entities
+  get full re-synthesis during consolidation; Tier 3 get observation touch-ups.
+- `aliases` — a JSON list of canonical-name variants (misspellings, nicknames,
+  emails, handles). Used by the merger as a cheap pre-check before spending
+  an embedding on semantic dedup. CLI: `brainctl entity alias add|remove|list`.
+
+The `knowledge_edges` table connects any two records across any tables with
+typed, weighted edges:
 
 ```
 source_table, source_id  -->  target_table, target_id
@@ -121,6 +163,20 @@ Edges are created by:
 - `embed-populate --graph-edges` (semantic similarity edges)
 - Any agent manually via `brainctl graph add-edge`
 
+### Self-Healing Gap Scans
+
+`brainctl gaps scan` detects both metacognitive holes (coverage, staleness,
+confidence, contradiction) and knowledge-graph rot:
+
+| gap_type | Detects |
+|-----------|---------|
+| `orphan_memory` | memory with zero edges + zero recalls + older than 30 days |
+| `broken_edge` | `knowledge_edges` row pointing at a deleted memory / entity / event |
+| `unreferenced_entity` | entity with no edges, no observations, older than 30 days |
+
+Runs as part of the nightly consolidation cycle; results surface in
+`knowledge_gaps` and can be listed via `brainctl gaps list`.
+
 ## Consolidation Engine (hippocampus)
 
 `bin/hippocampus.py` runs periodic maintenance on the memory store:
@@ -132,7 +188,15 @@ Edges are created by:
 | **Dream** | Synthesizes new hypotheses from loosely connected memories |
 | **Hebbian** | Strengthens edges between frequently co-accessed records |
 
-Run manually with `python bin/hippocampus.py` or schedule it via cron.
+`bin/consolidation-cycle.sh` chains the hippocampus passes with:
+
+- `brainctl gaps scan` (coverage + self-healing scans)
+- `brainctl entity tier --refresh` (T1/T2/T3 promotion across all entities)
+- `brainctl entity compile --all` (compiled_truth rewrite for every entity)
+- `brainctl trust decay`, global workspace salience pass, health SLO snapshot
+
+Run manually with `bash bin/consolidation-cycle.sh` (or `--dry-run`) or
+schedule it via cron.
 
 ## Concurrency Model
 

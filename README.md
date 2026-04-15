@@ -127,8 +127,13 @@ brainctl memory add "Auth uses JWT with 24h expiry" -c convention
 brainctl search "auth"
 brainctl entity create "Alice" -t person -o "Engineer"
 brainctl entity relate Alice works_at Acme
+brainctl entity compile Alice           # rebuild compiled_truth synthesis for an entity
+brainctl entity get Alice --compiled    # return just the synthesis block
+brainctl entity tier --refresh          # recompute T1/T2/T3 enrichment tiers
+brainctl entity alias add Alice alicec  # canonical-name dedup hint
 brainctl event add "Deployed v2.0" -t result -p myproject
 brainctl trigger create "deploy issue" -k deploy,failure -a "Check rollback"
+brainctl gaps scan                      # coverage + orphan-memory + broken-edge + unref-entity scans
 brainctl stats
 ```
 
@@ -144,7 +149,7 @@ brainctl stats
 }
 ```
 
-196 tools available. See [MCP_SERVER.md](MCP_SERVER.md) for the full list and a decision tree showing which tools to use when.
+199 tools available. See [MCP_SERVER.md](MCP_SERVER.md) for the full list and a decision tree showing which tools to use when.
 
 ## The Drop-In Pattern
 
@@ -208,7 +213,7 @@ First-party plugins that drop brainctl into agent-runner environments as persist
 | Plugin | Target | What it does | Install |
 |---|---|---|---|
 | [`plugins/claude-code/brainctl/`](plugins/claude-code/brainctl/) | [Claude Code](https://claude.com/product/claude-code) | Hooks into `SessionStart` / `UserPromptSubmit` / `PostToolUse` / `SessionEnd` — orient on start, wrap_up on end, capture events during work | `python3 plugins/claude-code/brainctl/install.py` |
-| [`plugins/codex/brainctl/`](plugins/codex/brainctl/) | [OpenAI Codex CLI](https://github.com/openai/codex) | Idempotent merge of `[mcp_servers.brainctl]` into `~/.codex/config.toml` + `AGENTS.md.template` for session bookends. Exposes the full 196-tool surface | `python3 plugins/codex/brainctl/install.py` |
+| [`plugins/codex/brainctl/`](plugins/codex/brainctl/) | [OpenAI Codex CLI](https://github.com/openai/codex) | Idempotent merge of `[mcp_servers.brainctl]` into `~/.codex/config.toml` + `AGENTS.md.template` for session bookends. Exposes the full 199-tool surface | `python3 plugins/codex/brainctl/install.py` |
 | [`plugins/hermes/brainctl/`](plugins/hermes/brainctl/) | [Hermes Agent](https://hermes-agent.nousresearch.com) | Full `MemoryProvider` with auto-recall, auto-retain, `orient`/`wrap_up` bookends, and `MEMORY.md`/`USER.md` mirroring. Upstream bundling: [NousResearch/hermes-agent#9246](https://github.com/NousResearch/hermes-agent/pull/9246) | `hermes memory setup → brainctl` |
 | [`plugins/eliza/brainctl/`](plugins/eliza/brainctl/) | [Eliza](https://github.com/elizaos/eliza) | TypeScript plugin (`@brainctl/eliza-plugin`) — spawns `brainctl-mcp` as a subprocess, exposes six actions (`BRAINCTL_REMEMBER` / `SEARCH` / `ORIENT` / `WRAP_UP` / `DECIDE` / `LOG`) plus an auto-recall memory provider | `npm install @brainctl/eliza-plugin` |
 
@@ -371,7 +376,21 @@ brainctl stats    # database overview
 brainctl lint     # quality issues (low confidence, duplicates, orphans)
 brainctl lint --fix  # auto-fix safe issues
 brainctl cost     # token usage dashboard
+brainctl gaps scan   # coverage holes + orphan memories + broken edges + unreferenced entities
 ```
+
+## Retrieval Quality Benchmark
+
+brainctl ships a deterministic search-quality harness so changes to the hybrid FTS5+vec blend, intent classifier, or reranking profiles can be measured rather than guessed at.
+
+```bash
+python3 -m tests.bench.run                # JSON report: P@1 / P@5 / Recall@5 / MRR / nDCG@5
+python3 -m tests.bench.run --check        # compare against committed baseline, fail on >2% regression
+python3 -m tests.bench.run --update-baseline   # refresh the baseline after an intentional improvement
+bin/brainctl-bench                        # first-class CLI wrapper (identical output)
+```
+
+Fixtures live under `tests/bench/fixtures.py`: 29 synthetic memories + 8 events + 6 entities + 20 graded queries across entity / procedural / decision / temporal / troubleshooting / negative / ambiguous classes. The regression gate runs in CI via `tests/test_search_quality_bench.py` and any >2% drop on a headline metric fails the build.
 
 ## Token Cost Optimization
 
@@ -406,7 +425,7 @@ docker run -v ./data:/data brainctl brainctl stats     # CLI
 |-----|---------------|
 | [Agent Onboarding Guide](docs/AGENT_ONBOARDING.md) | Step-by-step integration for agents |
 | [Agent Instructions](docs/AGENT_INSTRUCTIONS.md) | Copy-paste blocks for MCP, CLI, Python agents |
-| [MCP Server Reference](MCP_SERVER.md) | 196 tools with decision tree |
+| [MCP Server Reference](MCP_SERVER.md) | 199 tools with decision tree |
 | [Architecture](ARCHITECTURE.md) | Technical deep-dive |
 | [Cognitive Protocol](COGNITIVE_PROTOCOL.md) | The Orient-Work-Record pattern |
 | [Examples](examples/) | Runnable scripts (quickstart, lifecycle, multi-agent) |
