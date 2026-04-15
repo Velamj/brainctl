@@ -633,18 +633,15 @@ def route_memories_hybrid(
             r["method"] = "fts_fallback"
         return results
 
-    # Step 1: vector KNN (fetch 3x for re-ranking)
     vec_results = route_memories_vec(conn, query_blob, top_k=top_k * 3,
                                      scope=scope, weights=adaptive_weights)
     vec_map = {r["id"]: r for r in vec_results}
 
-    # Step 2: FTS results (different candidates possible)
     fts_results = route_memories_fts(conn, query, agent_id=agent_id,
                                      scope=scope, top_k=top_k * 3,
                                      min_salience=0.0, weights=adaptive_weights)
     fts_map = {r["id"]: r for r in fts_results}
 
-    # Step 3: merge candidate pools
     all_ids = list({**vec_map, **fts_map}.keys())
 
     if not all_ids:

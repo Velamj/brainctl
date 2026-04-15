@@ -91,7 +91,6 @@ def tool_belief_conflicts_scan(
             if len(beliefs) < 2:
                 continue
 
-            # Check if there are at least 2 distinct belief contents
             unique_contents = {b["belief_content"] for b in beliefs}
             if len(unique_contents) < 2:
                 continue
@@ -315,7 +314,6 @@ def tool_belief_propagate(
                 "error": "Theory of Mind tables not found. Apply migration 012_theory_of_mind.sql.",
             }
 
-        # Get the source belief
         source_belief = conn.execute(
             """
             SELECT id, belief_content, confidence

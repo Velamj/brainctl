@@ -4591,7 +4591,6 @@ def cmd_vsearch(args):
     candidate_limit = limit * 3 if graph_boost else limit
 
     def _vsearch_table(vec_table, src_table, text_col, extra_cols, fts_table):
-        # Step 1: vector KNN search (fetch 3x limit for re-ranking)
         fetch_n = limit * 3
         vec_rows = db.execute(
             f"SELECT rowid, distance FROM {vec_table} WHERE embedding MATCH ? AND k=?",
@@ -4621,7 +4620,6 @@ def cmd_vsearch(args):
             out.sort(key=lambda r: r["distance"])
             return out[:candidate_limit]
 
-        # Step 2: hybrid — also fetch FTS5 scores
         _fts_q = _sanitize_fts_query(query)
         if _fts_q:
             fts_rows = db.execute(
@@ -5216,11 +5214,9 @@ def _graph_pagerank(db, damping=0.85, max_iter=50, tol=1e-6, force=False):
     n = len(node_list)
     idx = {node: i for i, node in enumerate(node_list)}
 
-    # Initialize uniform scores
     scores = [1.0 / n] * n
 
-    # Build out-degree weighted adjacency for directed PageRank
-    # (treat edges as undirected, split weight evenly)
+    # Directed PageRank: treat edges as undirected, split weight evenly
     out_weight = [0.0] * n
     for node in node_list:
         i = idx[node]
@@ -5289,7 +5285,6 @@ def _graph_communities(db, seed=42, max_iter=30, force=False):
     node_list = list(nodes)
     _random.seed(seed)
 
-    # Initialize each node with its own unique label (index)
     labels = {node: i for i, node in enumerate(node_list)}
 
     for iteration in range(max_iter):

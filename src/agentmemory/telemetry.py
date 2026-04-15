@@ -160,7 +160,6 @@ def _entities_section(conn: sqlite3.Connection, agent_id: str | None) -> tuple[d
 
 
 def _decisions_section(conn: sqlite3.Connection, agent_id: str | None) -> tuple[dict, float]:
-    """Decision count."""
     if not _table_exists(conn, "decisions"):
         return {"count": 0}, 0.5
 

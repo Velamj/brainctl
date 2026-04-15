@@ -360,7 +360,6 @@ def tool_consolidation_run(
     try:
         db = _db()
 
-        # Step 1: Fetch replay queue
         where_parts = ["retired_at IS NULL", "replay_priority >= ?"]
         params: list = [min_priority]
         if scope:
@@ -376,7 +375,7 @@ def tool_consolidation_run(
 
         processed_ids = [r["id"] for r in rows]
 
-        # Step 2: Promote episodic → semantic
+        # Promote episodic → semantic for memories exceeding ripple + confidence thresholds
         promotion_ids: list[int] = []
         for r in rows:
             if (
@@ -394,7 +393,6 @@ def tool_consolidation_run(
                     (now, mid),
                 )
 
-        # Step 3: Zero out replay_priority for all processed memories
         if processed_ids:
             placeholders = ",".join("?" * len(processed_ids))
             db.execute(
@@ -404,18 +402,16 @@ def tool_consolidation_run(
 
         db.commit()
 
-        # Step 4: Mine causal chains
         causal_stats: dict = {"events_scanned": 0, "edges_created": 0, "edges_updated": 0}
         if run_causal_mining:
             from .hippocampus import mine_causal_chains
             causal_stats = mine_causal_chains(db)
             db.commit()
 
-        # Step 5: Transitive KG inference (compositional replay, issue #7).
-        # For each processed memory, find its entity relations, then compose 2-hop
-        # paths A→B→C into derived edges A→(rel1+rel2)→C.
-        # Score = confidence(A→B) × confidence(B→C). Prune if score < 0.3.
-        # Store as knowledge_edges with source='compositional_replay'.
+        # Transitive KG inference (compositional replay, issue #7): compose 2-hop
+        # entity-relation paths A→B→C into derived edges A→(rel1+rel2)→C.
+        # Score = confidence(A→B) × confidence(B→C); prune if score < 0.3.
+        # Stored as knowledge_edges with source='compositional_replay'.
         transitive_stats: dict = {"paths_scanned": 0, "edges_derived": 0}
         if run_transitive_inference and processed_ids:
             try:
@@ -423,7 +419,6 @@ def tool_consolidation_run(
                 paths_scanned = 0
                 edges_derived = 0
 
-                # For each entity that appears in knowledge_edges, walk 2-hop paths
                 # Extract entities linked to processed memories (via entity_relations or knowledge_edges)
                 placeholder = ",".join("?" * len(processed_ids))
                 linked_entities = db.execute(
