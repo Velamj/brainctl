@@ -21,9 +21,10 @@ from pathlib import Path
 
 from mcp.types import Tool
 
+from agentmemory.paths import get_db_path
 from agentmemory.lib.mcp_helpers import open_db
 
-DB_PATH = Path(os.environ.get("BRAIN_DB", str(Path.home() / "agentmemory" / "db" / "brain.db")))
+DB_PATH: Path = get_db_path()
 OLLAMA_EMBED_URL = os.environ.get("BRAINCTL_OLLAMA_URL", "http://localhost:11434/api/embed")
 EMBED_MODEL = os.environ.get("BRAINCTL_EMBED_MODEL", "nomic-embed-text")
 EMBED_DIMENSIONS = int(os.environ.get("BRAINCTL_EMBED_DIMENSIONS", "768"))

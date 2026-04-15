@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from textwrap import dedent
 
+from agentmemory.lib.mcp_helpers import days_since as _days_since
 from agentmemory.paths import get_backups_dir, get_blobs_dir, get_brain_home, get_db_path
 
 logger = logging.getLogger(__name__)
@@ -189,33 +190,7 @@ def _now_ts() -> str:
     return _utc_now_iso()
 
 
-def _days_since(created_at_str):
-    """Return float days elapsed since the given SQLite/ISO timestamp."""
-    if not created_at_str:
-        return 0.0
-    try:
-        ts = created_at_str.strip()
-        if ts.endswith("Z"):
-            ts = ts[:-1] + "+00:00"
-        try:
-            dt = datetime.fromisoformat(ts)
-        except ValueError:
-            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
-                try:
-                    dt = datetime.strptime(ts, fmt)
-                    break
-                except ValueError:
-                    continue
-            else:
-                return 0.0
-        if dt.tzinfo is not None:
-            now = datetime.now(timezone.utc)
-            dt = dt.astimezone(timezone.utc)
-        else:
-            now = datetime.now(timezone.utc).replace(tzinfo=None)
-        return max(0.0, (now - dt).total_seconds() / 86400.0)
-    except Exception:
-        return 0.0
+# _days_since imported from agentmemory.lib.mcp_helpers at top of module.
 
 def _temporal_weight(created_at_str, scope=None):
     """Return recency weight in (0, 1] using exponential decay."""

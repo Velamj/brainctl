@@ -19,9 +19,10 @@ from pathlib import Path
 
 from mcp.types import Tool
 
+from agentmemory.paths import get_db_path
 from agentmemory.lib.mcp_helpers import open_db
 
-DB_PATH = Path(os.environ.get("BRAIN_DB", str(Path.home() / "agentmemory" / "db" / "brain.db")))
+DB_PATH: Path = get_db_path()
 
 # NOTE: local _now uses naive strftime format (no 'Z' suffix), which differs
 # from agentmemory.lib.mcp_helpers.now_iso. Kept local to preserve timestamp

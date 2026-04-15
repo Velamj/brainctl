@@ -18,9 +18,10 @@ from pathlib import Path
 
 from mcp.types import Tool
 
+from agentmemory.paths import get_db_path
 from agentmemory.lib.mcp_helpers import now_iso, open_db
 
-DB_PATH = Path(os.environ.get("BRAIN_DB", str(Path.home() / "agentmemory" / "db" / "brain.db")))
+DB_PATH: Path = get_db_path()
 
 _LABILITY_MINUTES = 20
 _LABILITY_THRESHOLD = 0.35   # cosine distance above which lability opens

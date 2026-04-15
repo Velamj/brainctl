@@ -8,10 +8,11 @@ from typing import Any
 
 from mcp.types import Tool
 
+from agentmemory.paths import get_db_path
 from agentmemory.lib.mcp_helpers import open_db
 from agentmemory.telemetry import get_dashboard
 
-DB_PATH = Path(os.environ.get("BRAIN_DB", str(Path.home() / "agentmemory" / "db" / "brain.db")))
+DB_PATH: Path = get_db_path()
 
 
 def _db() -> sqlite3.Connection:

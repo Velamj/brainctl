@@ -15,7 +15,7 @@ from typing import Any
 
 from mcp.types import Tool
 
-from agentmemory.lib.mcp_helpers import now_iso, open_db, rows_to_list
+from agentmemory.lib.mcp_helpers import days_since as _days_since, now_iso, open_db, rows_to_list
 from agentmemory.paths import get_db_path
 
 DB_PATH: Path = get_db_path()
@@ -71,34 +71,6 @@ def _sanitize_fts_query(query: str) -> str:
     """Strip FTS5 special characters so MATCH never raises a syntax error."""
     cleaned = _FTS5_SPECIAL.sub(" ", query or "")
     return re.sub(r"\s+", " ", cleaned).strip()
-
-
-def _days_since(created_at_str) -> float:
-    if not created_at_str:
-        return 0.0
-    try:
-        ts = created_at_str.strip()
-        if ts.endswith("Z"):
-            ts = ts[:-1] + "+00:00"
-        try:
-            dt = datetime.fromisoformat(ts)
-        except ValueError:
-            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
-                try:
-                    dt = datetime.strptime(ts, fmt)
-                    break
-                except ValueError:
-                    continue
-            else:
-                return 0.0
-        if dt.tzinfo is not None:
-            now = datetime.now(timezone.utc)
-            dt = dt.astimezone(timezone.utc)
-        else:
-            now = datetime.now(timezone.utc).replace(tzinfo=None)
-        return max(0.0, (now - dt).total_seconds() / 86400.0)
-    except Exception:
-        return 0.0
 
 
 def _age_str(created_at_str: str | None) -> str:

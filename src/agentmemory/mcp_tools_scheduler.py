@@ -16,7 +16,9 @@ from agentmemory.scheduler import (
     set_schedule_config,
 )
 
-DB_PATH = Path(os.environ.get("BRAIN_DB", str(Path.home() / "agentmemory" / "db" / "brain.db")))
+from agentmemory.paths import get_db_path
+
+DB_PATH: Path = get_db_path()
 
 
 def _db_path_str() -> str:

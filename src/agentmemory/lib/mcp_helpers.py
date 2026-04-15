@@ -31,8 +31,9 @@ from typing import Any, Iterable, Optional
 from agentmemory.paths import get_db_path
 
 __all__ = [
-    "open_db",
+    "days_since",
     "now_iso",
+    "open_db",
     "rows_to_list",
     "safe_fts",
     "tool_error",
@@ -98,6 +99,40 @@ def safe_fts(query: str) -> str:
     """
     safe = re.sub(r"[^\w\s]", " ", query or "").strip()
     return " OR ".join(safe.split()) if safe else ""
+
+
+def days_since(created_at_str: Optional[str]) -> float:
+    """Return float days elapsed since the given SQLite/ISO timestamp.
+
+    Handles ``Z``-suffixed ISO-8601, naive ISO-8601, and the legacy
+    ``YYYY-MM-DD [HH:MM:SS]`` SQLite formats.  Returns ``0.0`` on any
+    parse failure or falsy input.
+    """
+    if not created_at_str:
+        return 0.0
+    try:
+        ts = created_at_str.strip()
+        if ts.endswith("Z"):
+            ts = ts[:-1] + "+00:00"
+        try:
+            dt = datetime.fromisoformat(ts)
+        except ValueError:
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+                try:
+                    dt = datetime.strptime(ts, fmt)
+                    break
+                except ValueError:
+                    continue
+            else:
+                return 0.0
+        if dt.tzinfo is not None:
+            now = datetime.now(timezone.utc)
+            dt = dt.astimezone(timezone.utc)
+        else:
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+        return max(0.0, (now - dt).total_seconds() / 86400.0)
+    except Exception:
+        return 0.0
 
 
 def tool_error(msg: str, code: str = "error") -> str:

@@ -11,9 +11,10 @@ from typing import Any
 
 from mcp.types import Tool
 
+from agentmemory.paths import get_db_path
 from agentmemory.lib.mcp_helpers import now_iso, open_db, rows_to_list
 
-DB_PATH = Path(os.environ.get("BRAIN_DB", str(Path.home() / "agentmemory" / "db" / "brain.db")))
+DB_PATH: Path = get_db_path()
 
 # Import shared helpers from _impl rather than duplicating them
 from agentmemory._impl import (
