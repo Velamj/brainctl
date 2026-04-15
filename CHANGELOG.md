@@ -5,6 +5,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-04-15
+
+This release lands four bodies of work: new retrieval-quality
+instrumentation, a first-class entity synthesis surface, self-healing
+gap scans, and the plugin set brainctl launches with (cursor, openclaw,
+trading-bot and crypto-native agent-framework placeholders). It also
+includes a broad code-quality sweep across the core modules.
+
+### Added — plugins
+- **Cursor plugin** (`plugins/cursor/brainctl/`). Idempotent installer
+  that wires the brainctl MCP server into `~/.cursor/mcp.json` with a
+  sentinel-wrapped block, ships a `.mdc` rules template that teaches
+  Cursor the orient / wrap_up lifecycle on every session start, and
+  supports `install.py --dry` / `--print` / `--uninstall` with
+  automatic backups. Same ergonomic shape as the Codex CLI plugin
+  from v1.4.0.
+- **OpenClaw plugin** (`plugins/openclaw/brainctl/`). Ships as a skill
+  + `AGENTS.md` snippet injection rather than a config-file merge —
+  OpenClaw's multi-agent topology discovers brainctl through its
+  skill registry rather than a static config file. This closes the
+  one plugin that the brainctl launch site has been listing as
+  "coming next".
+- **Trading-bot plugin placeholders** under `plugins/` for
+  `hummingbot`, `nautilustrader`, `octobot`, and `coinbase-agentkit`.
+  Each is a scaffold with a `README.md`, install stub, and the
+  integration points brainctl needs — enough structure that a
+  contributor can land a working integration without architectural
+  uncertainty. Roadmap lives at `plugins/TRADING_INTEGRATIONS.md`.
+- **Crypto-native agent-framework plugin placeholders** for `rig`,
+  `virtuals-game`, and `zerebro`. Same scaffold-and-ready structure
+  as the trading bots; these target the Solana / crypto-agent
+  ecosystem rather than traditional trading desks.
+
 ### Added — retrieval quality instrumentation
 - **Deterministic search-quality benchmark harness.** `tests/bench/`
   seeds a 29-memory / 8-event / 6-entity corpus with 20 graded queries
@@ -66,6 +99,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   because FTS5 demanded every token match. Added
   `_build_fts_match_expression` that drops stopwords and joins meaningful
   tokens with `OR`, restoring parity with `Brain.search` behavior.
+
+### Changed — code quality sweep
+- **Deduplicated `DB_PATH` boilerplate** and the `_days_since` helper
+  across modules into a single shared source of truth. Reduces drift
+  risk on path resolution and date math.
+- **Dead code elimination pass.** Removed unused functions, imports,
+  and branches surfaced by a coverage pass — roughly the set of code
+  that was never executed by the test suite or the CLI / MCP entry
+  points.
+- **Weak type annotations strengthened.** Local variables that were
+  previously `Any` or untyped now carry precise types, which both
+  improves pyright/mypy output and catches a handful of latent
+  argument-order bugs at type-check time.
+- **Defensive `try/except` blocks that hid bugs have been removed.**
+  The rule applied: a `try/except` that catches a broad exception
+  and logs a warning is only acceptable at a genuine trust boundary
+  (user input, network calls, filesystem). Internal paths that had
+  been wrapped in `except Exception: pass` or `except: log.warning(...)`
+  are now bare — if an invariant breaks, we want the traceback, not
+  a silent swallow.
+- **Deprecated / legacy code and dead branches removed.** A cleanup
+  of code paths left behind from earlier migrations, feature flags
+  that never got flipped, and compatibility shims for interfaces no
+  caller uses anymore.
+- **AI-slop narration comments removed.** Comments that described
+  what the next line was doing in English prose — the kind that
+  appear when an LLM writes code and explains its work — have been
+  purged. Remaining comments are either WHY-level or WORKAROUND
+  markers.
 
 ## [1.5.2] — 2026-04-14
 
