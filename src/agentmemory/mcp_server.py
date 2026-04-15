@@ -503,12 +503,9 @@ def tool_memory_add(agent_id: str, content: str, category: str, scope: str = "gl
     ensure_agent(db, agent_id)
     tags_json = json.dumps(tags.split(",")) if tags else None
 
-    # Surprise scoring — lightweight novelty check
-    blob = None
-    try:
-        blob = _embed_safe(content)
-    except Exception:
-        pass
+    # Surprise scoring — lightweight novelty check.
+    # _embed_safe already catches network errors and returns None.
+    blob = _embed_safe(content)
     try:
         surprise, surprise_method = _surprise_score_mcp(db, content, blob=blob)
     except Exception:

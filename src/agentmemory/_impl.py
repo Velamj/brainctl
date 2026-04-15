@@ -992,14 +992,11 @@ def cmd_memory_add(args):
         pass
     effective_confidence = round(min(1.0, base_confidence * (0.5 + 0.5 * source_weight_applied)), 6)
 
-    # Surprise scoring — lightweight novelty check before W(m) gate
+    # Surprise scoring — lightweight novelty check before W(m) gate.
+    # _embed_query_safe already catches all errors and returns None.
     surprise = None
     surprise_method = None
-    blob = None  # reused for vec_memories insert below
-    try:
-        blob = _embed_query_safe(args.content)
-    except Exception:
-        pass
+    blob = _embed_query_safe(args.content)  # reused for vec_memories insert below
     try:
         surprise, surprise_method = _surprise_score(db, args.content, blob=blob)
     except Exception:

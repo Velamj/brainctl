@@ -435,15 +435,12 @@ def classify_affect(text: str) -> dict:
     # --- 7. Safety flag check ---
     safety_flags = []
     for pattern_name, pattern in SAFETY_PATTERNS.items():
-        try:
-            if pattern["conditions"](compound, arousal, dominance):
-                safety_flags.append({
-                    "pattern": pattern_name,
-                    "severity": pattern["severity"],
-                    "description": pattern["description"],
-                })
-        except Exception:
-            pass
+        if pattern["conditions"](compound, arousal, dominance):
+            safety_flags.append({
+                "pattern": pattern_name,
+                "severity": pattern["severity"],
+                "description": pattern["description"],
+            })
 
     return {
         "valence": round(compound, 4),
