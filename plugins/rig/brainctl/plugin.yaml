@@ -1,0 +1,6 @@
+name: brainctl
+version: 0.0.0-placeholder
+status: placeholder
+description: "PLACEHOLDER — brainctl integration for Rig, the Rust LLM agent framework from 0xPlaygrounds. Not yet implemented. See plugins/TRADING_INTEGRATIONS.md for the roadmap."
+pip_dependencies: []
+requires_env: []
