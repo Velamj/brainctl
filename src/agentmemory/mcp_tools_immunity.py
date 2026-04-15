@@ -72,7 +72,7 @@ def tool_quarantine_list(
     _ensure_quarantine_table(db)
     try:
         conditions = []
-        params: list = []
+        params: list[str] = []
         if verdict == "pending":
             conditions.append("q.verdict IS NULL")
         elif verdict:

@@ -534,8 +534,8 @@ def tool_belief_diff(
 
         shared_topics = set(beliefs_a.keys()) & set(beliefs_b.keys())
 
-        divergent: list[dict] = []
-        aligned: list[dict] = []
+        divergent: list[dict[str, Any]] = []
+        aligned: list[dict[str, Any]] = []
 
         for topic in sorted(shared_topics):
             ba = beliefs_a[topic]

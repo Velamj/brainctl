@@ -197,9 +197,9 @@ def _normalize(scores: list[float]) -> list[float]:
 
 def _rrf_fuse(fts_list: list[dict], vec_list: list[dict], k: int = 60) -> list[dict]:
     """Reciprocal Rank Fusion — returns merged list sorted by rrf_score descending."""
-    scores: dict = {}
-    sources: dict = {}
-    rows: dict = {}
+    scores: dict[int, float] = {}
+    sources: dict[int, str] = {}
+    rows: dict[int, dict[str, Any]] = {}
     for rank, row in enumerate(fts_list):
         rid = row["id"]
         scores[rid] = scores.get(rid, 0.0) + 1.0 / (k + rank + 1)
@@ -467,7 +467,7 @@ def tool_push(
 
         # Snapshot recalled_count for later delta tracking
         memory_ids = [r["id"] for r in selected]
-        recalled_snapshot: dict = {}
+        recalled_snapshot: dict[int, int] = {}
         if memory_ids:
             ph = ",".join("?" * len(memory_ids))
             snap_rows = db.execute(

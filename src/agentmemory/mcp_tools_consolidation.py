@@ -538,7 +538,7 @@ def tool_consolidation_stats(
     try:
         db = _db()
         where_active = "retired_at IS NULL"
-        params_base: list = []
+        params_base: list[str] = []
         if scope:
             where_active += " AND scope = ?"
             params_base = [scope]
@@ -987,7 +987,7 @@ def tool_memory_calibration(
         db = _db()
 
         where_parts = ["retired_at IS NULL"]
-        params: list = []
+        params: list[str] = []
         if scope:
             where_parts.append("scope = ?")
             params.append(scope)
@@ -1145,7 +1145,7 @@ def tool_attention_snapshot(
 
         # Term frequency across query strings
         import re as _re
-        term_freq: dict = {}
+        term_freq: dict[str, int] = {}
         all_terms: list[str] = []
         for r in search_rows:
             q = r["query"] or ""
@@ -1171,7 +1171,7 @@ def tool_attention_snapshot(
         ).fetchall()
 
         # Most common project
-        project_freq: dict = {}
+        project_freq: dict[str, int] = {}
         for r in event_rows:
             p = r["project"]
             if p:
@@ -1237,7 +1237,7 @@ def tool_free_energy_check(
         db = _db()
 
         where_parts = ["agent_id = ?"]
-        params: list = [agent_id]
+        params: list[str] = [agent_id]
         if unresolved_only:
             where_parts.append("resolved_at IS NULL")
         where = " AND ".join(where_parts)
@@ -1257,7 +1257,7 @@ def tool_free_energy_check(
         epistemic_drive = round(sum(fe_values) / len(fe_values), 4) if fe_values else 0.0
 
         # Top domains
-        domain_freq: dict = {}
+        domain_freq: dict[str, int] = {}
         for g in gaps:
             d = g.get("domain") or "unknown"
             domain_freq[d] = domain_freq.get(d, 0) + 1

@@ -265,7 +265,7 @@ def tool_belief_seed(
 
         created = 0
         updated = 0
-        dry_run_items: list[dict] = []
+        dry_run_items: list[dict[str, Any]] = []
 
         for agent_id in target_agents:
             domains = conn.execute(

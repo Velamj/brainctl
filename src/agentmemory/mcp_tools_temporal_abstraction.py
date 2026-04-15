@@ -356,7 +356,7 @@ def tool_temporal_map(
     _ensure_temporal_level_col(db)
     try:
         conditions = ["retired_at IS NULL", "agent_id = ?"]
-        params: list = [agent_id]
+        params: list[str] = [agent_id]
         if scope:
             conditions.append("scope = ?")
             params.append(scope)

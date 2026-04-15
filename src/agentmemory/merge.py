@@ -239,7 +239,7 @@ def _merge_entities(conn: sqlite3.Connection, dry_run: bool) -> tuple[int, int]:
 
             if not dry_run:
                 updates = []
-                params: list = []
+                params: list[str] = []
                 if merged_obs is not None:
                     updates.append("observations = ?")
                     params.append(json.dumps(merged_obs))

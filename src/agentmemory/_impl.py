@@ -8955,7 +8955,7 @@ def cmd_belief_get(args):
         "FROM agent_beliefs "
         "WHERE topic LIKE ? AND invalidated_at IS NULL"
     )
-    params: list = [pattern]
+    params: list[str] = [pattern]
 
     if observer:
         query += " AND agent_id=?"
@@ -13681,7 +13681,7 @@ def cmd_archive_dead_tables(args):
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    archive: dict = {}
+    archive: dict[str, list[dict[str, Any]]] = {}
     total_rows = 0
     for tname in DEAD_TABLES:
         try:

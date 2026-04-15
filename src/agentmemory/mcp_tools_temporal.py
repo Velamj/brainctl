@@ -1092,7 +1092,7 @@ def _epoch_list(active_only: bool = False, limit: int | None = None) -> dict:
             "(SELECT count(*) FROM memories m WHERE m.epoch_id = e.id) AS memory_count "
             "FROM epochs e"
         )
-        params: list = []
+        params: list[int] = []
         if active_only:
             sql += (
                 " WHERE e.started_at <= strftime('%Y-%m-%dT%H:%M:%S', 'now')"
@@ -1112,7 +1112,7 @@ def _epoch_list(active_only: bool = False, limit: int | None = None) -> dict:
 # MCP dispatch
 # ---------------------------------------------------------------------------
 
-def _handle(name: str, args: dict) -> Any:
+def _handle(name: str, args: dict) -> dict[str, Any]:
     if name == "temporal_causes":
         return _temporal_causes(
             event_id=int(args["event_id"]),

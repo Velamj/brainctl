@@ -504,7 +504,7 @@ class Brain:
         with self._lock:
             db = self._get_conn()
             q = ("SELECT * FROM handoff_packets WHERE agent_id = ? AND status = 'pending'")
-            params: list = [self.agent_id]
+            params: list[str] = [self.agent_id]
             if project:
                 q += " AND project = ?"
                 params.append(project)
@@ -542,7 +542,7 @@ class Brain:
             # 1. Check for pending handoff (don't consume yet — agent decides)
             try:
                 hq = "SELECT id, goal, current_state, open_loops, next_step, project, title, created_at FROM handoff_packets WHERE agent_id = ? AND status = 'pending'"
-                hp: list = [self.agent_id]
+                hp: list[str] = [self.agent_id]
                 if project:
                     hq += " AND project = ?"
                     hp.append(project)
@@ -555,7 +555,7 @@ class Brain:
             # 2. Recent events (last 10)
             try:
                 eq = "SELECT id, event_type, summary, project, created_at FROM events WHERE agent_id = ?"
-                ep: list = [self.agent_id]
+                ep: list[str] = [self.agent_id]
                 if project:
                     eq += " AND project = ?"
                     ep.append(project)
