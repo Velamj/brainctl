@@ -38,9 +38,17 @@ Add to `.vscode/mcp.json` or User Settings:
 
 ### Docker
 
+No prebuilt image is published yet. Build locally from the repo's
+`Dockerfile`:
+
 ```bash
-docker run -v ~/.agentmemory:/data -e BRAIN_DB=/data/brain.db ghcr.io/yourorg/brainctl-mcp
+git clone https://github.com/TSchonleber/brainctl.git && cd brainctl
+docker build -t brainctl .
+docker run -v ~/.agentmemory:/data -e BRAIN_DB=/data/brain.db brainctl
 ```
+
+The `CMD` defaults to `brainctl-mcp`, so the container runs the MCP
+server over stdio.
 
 ## Available Tools (199)
 

@@ -67,7 +67,7 @@ brainctl -a myagent event add "WHAT you did and WHAT happened" -t result -p PROJ
 **Good:** "Fixed auth scoping on delete routes. Added 403 for cross-org. Tests pass."
 **Bad:** "Done" / "Worked on issue #36"
 
-Event types: `result`, `observation`, `decision`, `error`, `warning`, `handoff`.
+Event types (most common in day-to-day work): `result`, `observation`, `decision`, `error`, `warning`, `handoff`. The full enum also includes `task_update`, `artifact`, `session_start`, `session_end`, `memory_promoted`, `memory_retired`, and `stale_context` — see `VALID_EVENT_TYPES` in `src/agentmemory/_impl.py` for the authoritative list.
 
 For decisions, also record rationale:
 

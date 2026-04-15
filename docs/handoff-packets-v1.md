@@ -1,5 +1,13 @@
 # Handoff Packets v1
 
+> **Status: implemented.** This is the original design doc for the
+> handoff-packets feature, preserved for historical context. The feature
+> has since shipped: `handoff_packets` table exists, and the
+> `brainctl handoff add|latest|list|consume|expire|pin` CLI plus the
+> `handoff_add` / `handoff_latest` / `handoff_consume` / `handoff_pin` /
+> `handoff_expire` MCP tools are all live. For current usage, see
+> [AGENT_ONBOARDING.md § Session Continuity](AGENT_ONBOARDING.md#session-continuity).
+
 ## Goal
 Let Hermes resume work cleanly after a session reset without dragging the full transcript forever.
 
