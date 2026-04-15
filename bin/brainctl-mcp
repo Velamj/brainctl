@@ -19,7 +19,6 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server

@@ -14,7 +14,6 @@ import logging
 import os
 import sqlite3
 import sys
-import hashlib
 import math
 import shutil
 import re
@@ -22,7 +21,6 @@ import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from textwrap import dedent
 
 from agentmemory.lib.mcp_helpers import days_since as _days_since
 from agentmemory.paths import get_backups_dir, get_blobs_dir, get_brain_home, get_db_path
@@ -85,7 +83,7 @@ def _builtin_classify_intent(query):
 # Quantum amplitude scorer
 try:
     sys.path.insert(0, str(Path.home() / "bin" / "lib"))
-    from quantum_retrieval import quantum_rerank as _quantum_rerank, update_phase_after_recall as _quantum_phase_update
+    from quantum_retrieval import quantum_rerank as _quantum_rerank
     _QUANTUM_AVAILABLE = True
 except Exception:
     _QUANTUM_AVAILABLE = False
