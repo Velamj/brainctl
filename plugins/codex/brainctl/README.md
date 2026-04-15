@@ -6,7 +6,7 @@ Give [OpenAI Codex CLI](https://github.com/openai/codex) persistent memory via [
 
 ## What it gives you
 
-Codex discovers any MCP server listed in `~/.codex/config.toml` and exposes every tool it publishes to the model. This plugin wires `brainctl-mcp` in as a Codex MCP server, so the agent gets the full brainctl tool surface (196 tools) — remember, search, think, decide, log, entity ops, handoffs, affect tracking, and the rest.
+Codex discovers any MCP server listed in `~/.codex/config.toml` and exposes every tool it publishes to the model. This plugin wires `brainctl-mcp` in as a Codex MCP server, so the agent gets the full brainctl tool surface (199 tools) — remember, search, think, decide, log, entity ops, handoffs, affect tracking, and the rest.
 
 Pair that with the included `AGENTS.md` template and your Codex sessions will:
 

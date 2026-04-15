@@ -134,7 +134,7 @@ eliza --character=examples/trader.character.json
 │   Eliza runtime  │ ◄─────────────────────► │   brainctl-mcp   │
 │                  │                         │   (Python)       │
 │  ┌─────────────┐ │                         │                  │
-│  │ Plugin      │ │                         │  196 tools over  │
+│  │ Plugin      │ │                         │  199 tools over  │
 │  │  - actions  │ │                         │  SQLite FTS5 +   │
 │  │  - provider │ │                         │  sqlite-vec +    │
 │  │  - service  │ │                         │  knowledge graph │

@@ -216,6 +216,8 @@ First-party plugins that drop brainctl into agent-runner environments as persist
 | [`plugins/codex/brainctl/`](plugins/codex/brainctl/) | [OpenAI Codex CLI](https://github.com/openai/codex) | Idempotent merge of `[mcp_servers.brainctl]` into `~/.codex/config.toml` + `AGENTS.md.template` for session bookends. Exposes the full 199-tool surface | `python3 plugins/codex/brainctl/install.py` |
 | [`plugins/hermes/brainctl/`](plugins/hermes/brainctl/) | [Hermes Agent](https://hermes-agent.nousresearch.com) | Full `MemoryProvider` with auto-recall, auto-retain, `orient`/`wrap_up` bookends, and `MEMORY.md`/`USER.md` mirroring. Upstream bundling: [NousResearch/hermes-agent#9246](https://github.com/NousResearch/hermes-agent/pull/9246) | `hermes memory setup → brainctl` |
 | [`plugins/eliza/brainctl/`](plugins/eliza/brainctl/) | [Eliza](https://github.com/elizaos/eliza) | TypeScript plugin (`@brainctl/eliza-plugin`) — spawns `brainctl-mcp` as a subprocess, exposes six actions (`BRAINCTL_REMEMBER` / `SEARCH` / `ORIENT` / `WRAP_UP` / `DECIDE` / `LOG`) plus an auto-recall memory provider | `npm install @brainctl/eliza-plugin` |
+| [`plugins/cursor/brainctl/`](plugins/cursor/brainctl/) | [Cursor](https://cursor.com) | Sentinel-wrapped merge of `brainctl-mcp` into `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-local), plus a `.cursor/rules/brainctl.mdc` template that teaches Cursor the orient / wrap_up lifecycle. Full 199-tool surface. | `python3 plugins/cursor/brainctl/install.py` |
+| [`plugins/openclaw/brainctl/`](plugins/openclaw/brainctl/) | [OpenClaw](https://openclaw.ai) | Drops a `brainctl` skill into `<workspace>/skills/brainctl/SKILL.md` and merges a sentinel-wrapped "Persistent memory" section into `<workspace>/AGENTS.md`. Pi shells out to the plain `brainctl` CLI — no MCP server required. | `python3 plugins/openclaw/brainctl/install.py` |
 
 ### Trading-strategy plugins
 
@@ -226,13 +228,14 @@ Strategy-mixin plugins that give algorithmic trading frameworks persistent memor
 | [`plugins/freqtrade/brainctl/`](plugins/freqtrade/brainctl/) | [Freqtrade](https://www.freqtrade.io) | `StrategyBrain` mixin — remembers indicator states, logs trade decisions, correlates backtest vs live outcomes |
 | [`plugins/jesse/brainctl/`](plugins/jesse/brainctl/) | [Jesse](https://jesse.trade) | Same shape as the Freqtrade plugin, adapted to Jesse's strategy API |
 
-## Python API (21 methods)
+## Python API (22 methods)
 
 | Method | What it does |
 |--------|-------------|
 | `remember(content, category)` | Store a durable fact |
 | `search(query)` | FTS5 full-text search with stemming |
 | `vsearch(query)` | Vector similarity search (optional) |
+| `think(query)` | Spreading-activation recall across the knowledge graph |
 | `forget(memory_id)` | Soft-delete a memory |
 | `entity(name, type)` | Create or get an entity |
 | `relate(from, rel, to)` | Link two entities |
@@ -250,6 +253,7 @@ Strategy-mixin plugins that give algorithmic trading frameworks persistent memor
 | `stats()` | Database overview |
 | `affect(text)` | Classify emotional state |
 | `affect_log(text)` | Classify + store emotional state |
+| `close()` | Close the shared SQLite connection (idempotent) |
 
 ## Core Concepts
 
@@ -402,7 +406,7 @@ python3 -m tests.bench.run --update-baseline   # refresh the baseline after an i
 bin/brainctl-bench                        # first-class CLI wrapper (identical output)
 ```
 
-Fixtures live under `tests/bench/fixtures.py`: 29 synthetic memories + 8 events + 6 entities + 20 graded queries across entity / procedural / decision / temporal / troubleshooting / negative / ambiguous classes. The regression gate runs in CI via `tests/test_search_quality_bench.py` and any >2% drop on a headline metric fails the build.
+Fixtures live under `tests/bench/fixtures.py`: 30 synthetic memories + 8 events + 6 entities + 20 graded queries across entity / procedural / decision / temporal / troubleshooting / negative / ambiguous classes. The regression gate runs in CI via `tests/test_search_quality_bench.py` and any >2% drop on a headline metric fails the build.
 
 ## Token Cost Optimization
 

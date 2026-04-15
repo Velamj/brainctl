@@ -17,7 +17,8 @@ src/agentmemory/
   db.py                Shared DB utilities
   cli.py               Entry point
   mcp_server.py        MCP server entry
-  commands/            23 command modules
+  hippocampus.py       Consolidation engine (brainctl-consolidate entry point)
+  commands/            24 command modules
     agent.py           Agent registration and state
     memory.py          Memory CRUD and search
     event.py           Event logging and queries
@@ -31,8 +32,10 @@ src/agentmemory/
 bin/
   brainctl             Thin CLI wrapper
   brainctl-mcp         MCP server launcher
+  brainctl-bench       Retrieval-quality benchmark runner
   embed-populate       Embedding pipeline (optional)
-  hippocampus.py       Consolidation engine
+  consolidation-cycle.sh   Nightly consolidation cycle (shell wrapper)
+  hippocampus-cycle.sh     Hippocampus-only cycle (shell wrapper)
 
 ui/
   server.py            Web dashboard (optional)
@@ -120,7 +123,7 @@ Multi-hop neighbor queries across the knowledge graph via `brainctl graph`.
 
 ### Retrieval Regression Gate
 
-`tests/bench/` ships a deterministic search-quality harness: 29 synthetic
+`tests/bench/` ships a deterministic search-quality harness: 30 synthetic
 memories + 8 events + 6 entities + 20 graded queries (3=primary, 2=related,
 1=tangential) across seven query classes (entity / procedural / decision /
 temporal / troubleshooting / negative / ambiguous). The runner reports
@@ -179,7 +182,7 @@ Runs as part of the nightly consolidation cycle; results surface in
 
 ## Consolidation Engine (hippocampus)
 
-`bin/hippocampus.py` runs periodic maintenance on the memory store:
+`src/agentmemory/hippocampus.py` (exposed as `brainctl-consolidate`) runs periodic maintenance on the memory store:
 
 | Pass | What it does |
 |------|-------------|
@@ -207,7 +210,7 @@ schedule it via cron.
 
 ## Modular Command Structure
 
-The CLI is organized into 23 command modules under `src/agentmemory/commands/`.
+The CLI is organized into 24 command modules under `src/agentmemory/commands/`.
 Each module handles one domain (memory, event, entity, graph, trigger, etc.)
 and registers its subcommands with the main CLI parser. This keeps the codebase
 navigable and makes it easy to add new command groups.

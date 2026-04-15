@@ -15,7 +15,7 @@ You have access to a persistent memory system via brainctl MCP tools. Use it.
 3. Call `trigger_check` with a summary of your current task to see if any reminders fire
 
 ### During work
-- When you learn a durable fact: `memory_add` with the right category (convention, lesson, decision, integration, environment, preference, project)
+- When you learn a durable fact: `memory_add` with the right category (identity, user, environment, convention, project, decision, lesson, preference, integration)
 - When you make a choice: `decision_add` with title and rationale
 - When you discover an entity: `entity_create` + `entity_observe`
 - When entities are related: `entity_relate`
@@ -85,6 +85,7 @@ brain.wrap_up("Finished rate limiting implementation", project="my-project")
 | `preference` | User/agent preferences | "User prefers dark mode and compact layout" |
 | `project` | Project-specific knowledge | "Sprint goal: ship billing v2 by Friday" |
 | `identity` | Core agent identity | "I am a code review specialist" |
+| `user` | User-specific context, traits, or history | "User is a senior backend engineer, prefers terse answers" |
 
 ## Memory categories to AVOID
 

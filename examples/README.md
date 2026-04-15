@@ -22,4 +22,4 @@ All examples use temp databases and won't touch your real `brain.db`.
 
 - [Agent Onboarding Guide](../docs/AGENT_ONBOARDING.md) — full walkthrough
 - [Cognitive Protocol](../COGNITIVE_PROTOCOL.md) — the Orient-Work-Record pattern
-- [MCP Server](../MCP_SERVER.md) — 192 tools for advanced features
+- [MCP Server](../MCP_SERVER.md) — 199 tools for advanced features

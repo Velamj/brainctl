@@ -39,8 +39,8 @@ python3 -m tests.bench.run --check         # fail on >2% regression vs baseline
 ## Conventions
 - Agent IDs: use descriptive names like `my-agent`, `research-bot`, `code-reviewer`
 - Memory categories: convention, decision, environment, identity, integration, lesson, preference, project, user
-- Event types: artifact, decision, error, handoff, result, session_start/end, task_update, warning, observation
-- Entity types: agent, concept, document, event, location, organization, person, project, service, tool
+- Event types: artifact, decision, error, handoff, memory_promoted, memory_retired, observation, result, session_start, session_end, stale_context, task_update, warning
+- Entity types: agent, concept, document, event, location, organization, other, person, project, service, tool
 
 ## Don't Touch
 - Migration files in `db/migrations/` — append-only

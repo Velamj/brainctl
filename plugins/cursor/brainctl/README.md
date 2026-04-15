@@ -6,7 +6,7 @@ Give [Cursor](https://cursor.com) persistent memory via [brainctl](https://githu
 
 ## What it gives you
 
-Cursor discovers any MCP server listed in `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-local) and exposes every tool it publishes to the agent. This plugin wires `brainctl-mcp` in as a Cursor MCP server, so the agent gets the full brainctl tool surface (196 tools) — remember, search, think, decide, log, entity ops, handoffs, affect tracking, and the rest.
+Cursor discovers any MCP server listed in `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-local) and exposes every tool it publishes to the agent. This plugin wires `brainctl-mcp` in as a Cursor MCP server, so the agent gets the full brainctl tool surface (199 tools) — remember, search, think, decide, log, entity ops, handoffs, affect tracking, and the rest.
 
 Pair that with the included `.cursor/rules/brainctl.mdc` template and your Cursor sessions will:
 

@@ -1,7 +1,7 @@
 ---
 name: brainctl
 description: "Unified agent memory CLI — read, write, search, and maintain the shared memory spine (brain.db). Use for persistent cross-session memory, knowledge graph, event logging, decisions, affect tracking, and consolidation."
-version: 1.5.1
+version: 1.6.1
 tags: [memory, agents, sqlite, knowledge-graph, mcp, cli]
 trigger: "When you need to store durable facts, log events, track entities/relations, record decisions, search past context, or orient yourself in a multi-agent environment."
 ---
@@ -36,7 +36,7 @@ ALWAYS pass `-a AGENT_NAME` to attribute writes. Examples:
 
 ```bash
 # Add a memory (categories: identity, user, environment, convention, project, decision, lesson, preference, integration)
-brainctl -a my-agent memory add "Python 3.12 is the minimum version" -c convention
+brainctl -a my-agent memory add "All timestamps in logs are UTC" -c convention
 
 # Search memories
 brainctl -a my-agent memory search "python version"
@@ -48,7 +48,7 @@ brainctl -a my-agent memory list --limit 10
 ### Events (timestamped logs)
 
 ```bash
-# Log an event (types: observation, result, decision, error, handoff, task_update, artifact, session_start, session_end, warning, stale_context)
+# Log an event (types: observation, result, decision, error, handoff, task_update, artifact, session_start, session_end, memory_promoted, memory_retired, warning, stale_context)
 brainctl -a my-agent event add "Deployed v2.0 to production" -t result -p myproject
 
 # Search events
@@ -61,7 +61,7 @@ brainctl -a my-agent event tail -n 20
 ### Entities (typed knowledge graph)
 
 ```bash
-# Create an entity (types: person, project, tool, concept, org, location, etc.)
+# Create an entity (types: agent, concept, document, event, location, organization, other, person, project, service, tool)
 brainctl -a my-agent entity create "Alice" -t person -o "Engineer; Likes Python; Based in NYC"
 
 # Get entity details + relations
@@ -154,7 +154,7 @@ Pure-math memory maintenance — no LLM required. Run periodically or via cron:
 brainctl-consolidate decay             # confidence decay on unused memories
 brainctl-consolidate compress          # merge redundant memories (pure string dedup, no LLM)
 brainctl-consolidate promote           # promote important events to memories
-brainctl-consolidate sweep             # full maintenance cycle
+brainctl-consolidate cycle             # full maintenance cycle
 ```
 
 Also includes: Hebbian co-retrieval strengthening, temporal demotion, EWC importance locking, recall boost, experience replay. All pure SQLite math — no external calls.
@@ -210,14 +210,14 @@ brain.db (single SQLite file, 80+ tables)
 ## Valid Categories & Types
 
 - **Memory categories:** identity, user, environment, convention, project, decision, lesson, preference, integration
-- **Event types:** observation, result, decision, error, handoff, task_update, artifact, session_start, session_end, warning, stale_context
+- **Event types:** observation, result, decision, error, handoff, task_update, artifact, session_start, session_end, memory_promoted, memory_retired, warning, stale_context
 - **Task statuses:** pending, in_progress, blocked, completed, cancelled
 - **Task priorities:** critical, high, medium, low
 
 ## Pitfalls
 
 1. **Namespace collision:** If `~/agentmemory/` exists as a directory, Python may pick it up as a namespace package instead of the installed `agentmemory`. Set `PYTHONPATH` explicitly if needed.
-2. **FTS5 special characters:** brainctl sanitizes queries automatically, but if calling the DB directly, strip `. & | * " ( ) \ - @ ^` from search terms.
+2. **FTS5 special characters:** brainctl sanitizes queries automatically, but if calling the DB directly, strip `. & | * " ' \` ( ) - @ ^ ? ! , ; :` from search terms.
 3. **Agent attribution:** Always use `-a`. Writes without attribution default to "unknown" and are harder to trace.
 4. **Token costs:** Use `--output compact` in automated pipelines to save ~24% tokens.
 5. **Vector search optional:** brainctl works fine without embeddings. Only needed for semantic similarity search.

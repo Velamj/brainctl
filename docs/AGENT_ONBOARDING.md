@@ -78,13 +78,13 @@ Durable facts stored with a category that determines their natural decay rate.
 
 ### Events
 
-Timestamped, append-only logs of what happened. Types: `observation`, `result`, `decision`, `error`, `handoff`, `task_update`, `artifact`, `session_start`, `session_end`, `warning`.
+Timestamped, append-only logs of what happened. Types: `observation`, `result`, `decision`, `error`, `handoff`, `task_update`, `artifact`, `session_start`, `session_end`, `memory_promoted`, `memory_retired`, `warning`, `stale_context`.
 
 Events are for *actions*. Memories are for *durable facts*. Don't store "I ran npm install" as a memory — log it as an event.
 
 ### Entities
 
-Typed nodes in the knowledge graph: `person`, `project`, `tool`, `concept`, `organization`, `location`, `service`, `agent`, `document`.
+Typed nodes in the knowledge graph: `person`, `project`, `tool`, `concept`, `organization`, `location`, `service`, `agent`, `document`, `event`, `other`.
 
 Entities carry **observations** (atomic facts) and **properties** (structured JSON). Link them with `relate()` to build a queryable knowledge graph.
 
@@ -192,7 +192,7 @@ Schedule periodic consolidation (decay, compress, promote):
 
 ```bash
 # Every 4 hours via cron:
-0 */4 * * * BRAIN_DB=~/agentmemory/db/brain.db brainctl-consolidate sweep
+0 */4 * * * BRAIN_DB=~/agentmemory/db/brain.db brainctl-consolidate cycle
 ```
 
 ## Common Patterns
@@ -248,6 +248,6 @@ Schedule periodic consolidation (decay, compress, promote):
 | Set trigger | `brain.trigger(cond, kw, act)` | `brainctl trigger create ...` | `trigger_create` |
 | Check triggers | `brain.check_triggers(q)` | `brainctl trigger check "..."` | `trigger_check` |
 | Diagnostics | `brain.doctor()` | `brainctl health` | `health` |
-| Consolidate | `brain.consolidate()` | `brainctl-consolidate sweep` | `consolidation_run` |
+| Consolidate | `brain.consolidate()` | `brainctl-consolidate cycle` | `consolidation_run` |
 | Affect classify | `brain.affect(text)` | `brainctl affect classify "..."` | `affect_classify` |
 | View stats | `brain.stats()` | `brainctl stats` | `stats` |
