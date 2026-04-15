@@ -383,3 +383,190 @@ class TestRenderMemoryMd:
         row = self._make_row(replay_priority=0.0)
         md = obs_mod._render_memory_md(row)
         assert "replay_priority" not in md
+
+
+# ---------------------------------------------------------------------------
+# v1.6.1 regression coverage: SQL injection, entity import, frontmatter,
+# brain reuse, valid categories
+# ---------------------------------------------------------------------------
+
+
+class TestFrontmatterParser:
+    """The simple `key: value` YAML parser added in v1.6.1."""
+
+    def test_no_frontmatter(self):
+        meta, body = obs_mod._parse_frontmatter("plain text body")
+        assert meta == {}
+        assert body == "plain text body"
+
+    def test_basic_frontmatter(self):
+        text = "---\ncategory: lesson\ntags: alpha\n---\n\nactual body"
+        meta, body = obs_mod._parse_frontmatter(text)
+        assert meta == {"category": "lesson", "tags": "alpha"}
+        assert body == "actual body"
+
+    def test_quoted_values_unwrapped(self):
+        text = '---\ncategory: "lesson"\nname: \'Alice\'\n---\nbody'
+        meta, body = obs_mod._parse_frontmatter(text)
+        assert meta["category"] == "lesson"
+        assert meta["name"] == "Alice"
+
+    def test_unterminated_frontmatter_returns_full_text(self):
+        text = "---\ncategory: lesson\nbody never closes"
+        meta, body = obs_mod._parse_frontmatter(text)
+        assert meta == {}
+        assert "body never closes" in body
+
+    def test_comment_lines_ignored(self):
+        text = "---\n# this is a comment\ncategory: project\n---\nbody"
+        meta, _ = obs_mod._parse_frontmatter(text)
+        assert meta == {"category": "project"}
+
+
+class TestCategoryFromMetadata:
+    def test_valid_category_passes_through(self):
+        assert obs_mod._category_from_metadata({"category": "lesson"}) == "lesson"
+
+    def test_invalid_category_falls_back(self):
+        assert (
+            obs_mod._category_from_metadata({"category": "general"})
+            == obs_mod._DEFAULT_CATEGORY
+        )
+
+    def test_empty_metadata_falls_back(self):
+        assert obs_mod._category_from_metadata({}) == obs_mod._DEFAULT_CATEGORY
+
+    def test_explicit_fallback(self):
+        assert (
+            obs_mod._category_from_metadata({}, fallback="identity")
+            == "identity"
+        )
+
+    def test_default_category_is_documented(self):
+        # The default must be in the documented enum, otherwise downstream
+        # rerank profiles and decay constants break silently.
+        assert obs_mod._DEFAULT_CATEGORY in obs_mod._VALID_CATEGORIES
+
+
+class TestExportSqlInjection:
+    """Regression test for the v1.6.0 SQL injection vulnerability in the
+    export command's --scope and --category flags."""
+
+    def test_scope_arg_does_not_run_sql(self, brain_db, vault, mock_db_path):
+        _, db_file = brain_db
+        # Classic SQLi payload — if this gets f-string-interpolated into
+        # the WHERE clause, sqlite will choke on the syntax error or
+        # (worse) execute the DROP. Either way the test should fail.
+        # With proper parameterization, the literal string is bound as
+        # a value and sqlite just returns zero rows.
+        evil = "x' OR 1=1; DROP TABLE memories--"
+        args = _make_args(vault_path=str(vault), scope=evil)
+        # Should run cleanly and produce zero memory exports
+        obs_mod.cmd_obsidian_export(args)
+        # And the memories table must still exist
+        conn = sqlite3.connect(str(db_file))
+        try:
+            row = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='memories'"
+            ).fetchone()
+            assert row is not None, "memories table was dropped — SQL injection succeeded"
+            count = conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
+            assert count >= 3, "memories were deleted by injected SQL"
+        finally:
+            conn.close()
+
+    def test_category_arg_does_not_run_sql(self, brain_db, vault, mock_db_path):
+        _, db_file = brain_db
+        evil = "convention'; DELETE FROM memories WHERE 1=1--"
+        args = _make_args(vault_path=str(vault), category=evil)
+        obs_mod.cmd_obsidian_export(args)
+        conn = sqlite3.connect(str(db_file))
+        try:
+            count = conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
+            assert count >= 3, "memories were deleted by injected SQL"
+        finally:
+            conn.close()
+
+    def test_legitimate_scope_filter_still_works(self, brain_db, vault, mock_db_path):
+        # Scope filter should work for real queries, just safely.
+        args = _make_args(vault_path=str(vault), scope="global")
+        obs_mod.cmd_obsidian_export(args)
+        # Should produce output without crashing
+        mem_dir = vault / "brainctl" / "memories"
+        assert mem_dir.exists()
+
+
+class TestEntityImportCreatesEntity:
+    """v1.6.1: an entity-shaped markdown file in vault/brainctl/entities/
+    must round-trip into the entities table, not the memories table."""
+
+    def test_new_entity_file_creates_entity_row(
+        self, brain_db, vault, mock_db_path
+    ):
+        _, db_file = brain_db
+
+        # First export so the brainctl/ directory structure exists
+        obs_mod.cmd_obsidian_export(_make_args(vault_path=str(vault)))
+
+        # Drop a fresh entity-shaped note (no brainctl_id) into entities/
+        ent_dir = vault / "brainctl" / "entities"
+        new_entity = ent_dir / "bob.md"
+        new_entity.write_text(
+            "---\n"
+            "entity_type: person\n"
+            "---\n"
+            "\n"
+            "# Bob\n"
+            "\n"
+            "Backend engineer, joined 2024.\n",
+            encoding="utf-8",
+        )
+
+        # Count entities before import
+        conn = sqlite3.connect(str(db_file))
+        before_entities = conn.execute(
+            "SELECT COUNT(*) FROM entities"
+        ).fetchone()[0]
+        before_memories = conn.execute(
+            "SELECT COUNT(*) FROM memories"
+        ).fetchone()[0]
+        conn.close()
+
+        # Run import
+        obs_mod.cmd_obsidian_import(_make_args(vault_path=str(vault)))
+
+        # Verify a NEW entity exists, no spurious memory was created
+        conn = sqlite3.connect(str(db_file))
+        try:
+            after_entities = conn.execute(
+                "SELECT COUNT(*) FROM entities"
+            ).fetchone()[0]
+            after_memories = conn.execute(
+                "SELECT COUNT(*) FROM memories"
+            ).fetchone()[0]
+            bob = conn.execute(
+                "SELECT name FROM entities WHERE name = 'Bob'"
+            ).fetchone()
+        finally:
+            conn.close()
+
+        assert after_entities == before_entities + 1, (
+            "expected exactly one new entity row"
+        )
+        assert after_memories == before_memories, (
+            "import should not create memories for entity files"
+        )
+        assert bob is not None, "Bob entity was not created"
+
+
+class TestExtractEntityName:
+    def test_h1_heading_used(self):
+        text = "Some intro\n\n# Alice Smith\n\nbody"
+        assert obs_mod._extract_entity_name_from_md(text, "fallback") == "Alice Smith"
+
+    def test_first_h1_wins(self):
+        text = "# First\n\n# Second"
+        assert obs_mod._extract_entity_name_from_md(text, "fallback") == "First"
+
+    def test_falls_back_to_filename_stem(self):
+        assert obs_mod._extract_entity_name_from_md("no headings here", "alice") == "alice"

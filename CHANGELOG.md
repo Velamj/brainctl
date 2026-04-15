@@ -5,6 +5,83 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.6.1] — 2026-04-15
+
+Patch release covering an audit of the Obsidian integration. Five real
+bugs found and fixed, plus a README walkback on what the integration
+actually does.
+
+### Security
+- **SQL injection in `brainctl obsidian export --scope` / `--category`.**
+  Both flags were f-string-interpolated directly into the SELECT WHERE
+  clause in `cmd_obsidian_export`, e.g. `where += f" AND scope = '{args.scope}'"`.
+  A user passing `--scope "x' OR 1=1; DROP TABLE memories--"` would
+  execute arbitrary SQL against the brain.db file the export targeted.
+  Fixed by parameterizing the query with `?` placeholders and a bound
+  params list. Regression tests in
+  `tests/test_obsidian.py::TestExportSqlInjection` verify that classic
+  injection payloads no longer drop or delete rows.
+
+### Fixed — Obsidian integration
+- **`Brain` instance recreated per file in import + watch.** Both the
+  `cmd_obsidian_import` for-loop and the `VaultHandler._handle` watchdog
+  callback constructed a new `Brain(db_path=..., agent_id=...)` for
+  every single file. This defeated the v1.2.0 lazy shared sqlite
+  connection optimization — every file event paid the connection setup
+  cost from scratch. Hoisted `Brain` to outer scope in both code paths
+  so the shared connection is actually shared.
+- **YAML frontmatter was stripped, not parsed.** The old import path
+  found the closing `---` and discarded everything in between, never
+  reading the metadata. Any user-supplied `category:`, `tags:`,
+  `entity_type:`, etc. on a new note was silently ignored. Added a
+  ~20-line zero-dependency `_parse_frontmatter()` helper that returns
+  `(metadata: dict, body: str)`. Both import and watch now use it. The
+  `--scope` / `--category` discovery on import respects frontmatter
+  values when they name a documented category.
+- **Watch handler hardcoded `category="general"`,** which is **not**
+  in the documented category enum (`convention`, `decision`,
+  `environment`, `identity`, `integration`, `lesson`, `preference`,
+  `project`, `user`). Replaced with a `_DEFAULT_CATEGORY = "project"`
+  constant (which IS in the enum) plus frontmatter-supplied override
+  via the new `_category_from_metadata()` helper. The valid-category
+  set is now a single source of truth at the top of the module.
+- **Entities imported from the vault became memories with `category=identity`,**
+  not entity rows. The import path called `Brain.remember()` with a
+  tweaked category instead of `Brain.entity()`, breaking the
+  export → edit → import round trip for entities. Now: files under
+  `vault/brainctl/entities/` are routed through `Brain.entity()`, the
+  canonical name is pulled from the first H1 heading (with the
+  filename stem as fallback), and `entity_type` is honored from
+  frontmatter (defaulting to `concept`). New regression test
+  `TestEntityImportCreatesEntity` verifies the behavior.
+- **Entity export filename collisions.** Entity files were named
+  `{slug(name)}.md` with no ID prefix, so two entities slugging to the
+  same string (`API rate limiter` and `API rate limiting` both →
+  `api-rate-limit`) overwrote each other on export. Memories already
+  prefixed with `{id:06d}-`; entities now do the same.
+- **Watch handler's `_recently_processed` cache grew unbounded.** It
+  kept entries forever for any file ever touched, leaking memory on
+  long-running watch processes. Added a periodic eviction pass that
+  drops entries older than `5 × cooldown` (minimum 30s) once the cache
+  exceeds 256 entries.
+
+### Changed — Obsidian README walkback
+- Dropped the **"Bidirectional sync between brain.db and an Obsidian vault"**
+  framing. The actual behavior is *one-way export* with an *ingest path
+  for new notes*; edits to already-exported notes never flow back to
+  brain.db because there's no merge or conflict-detection logic. The
+  README now says so explicitly: "treat the export as
+  canonical-from-brain and the vault layer as edit-and-replay rather
+  than two-way mirror." Avoids overselling a feature that doesn't yet
+  do what users would reasonably assume "bidirectional sync" means.
+
+### Tests
+- `tests/test_obsidian.py` grew from 35 to 44 tests:
+  `TestFrontmatterParser` (5), `TestCategoryFromMetadata` (5),
+  `TestExportSqlInjection` (3), `TestEntityImportCreatesEntity` (1),
+  `TestExtractEntityName` (3). Existing tests still pass; the new ones
+  cover the regression surface for every fix above.
+
 ## [1.6.0] — 2026-04-15
 
 This release lands four bodies of work: new retrieval-quality

@@ -344,15 +344,27 @@ Profiles never override explicit `--tables` or `--category` flags — they're de
 
 ## Obsidian Integration
 
-Bidirectional sync between brain.db and an [Obsidian](https://obsidian.md) vault:
+Export brain.db to a navigable [Obsidian](https://obsidian.md) vault — and
+optionally ingest new notes from the vault back into the brain through
+the W(m) write gate. Karpathy's "LLM Wiki" pattern: brain.db is the
+authoritative store, the markdown layer is the navigable overlay.
 
 ```bash
 pip install brainctl[obsidian]
-brainctl obsidian export ~/Documents/MyVault    # brain → markdown + wikilinks
-brainctl obsidian import ~/Documents/MyVault    # new notes → brain (through write gate)
-brainctl obsidian watch ~/Documents/MyVault     # auto-sync on file changes
-brainctl obsidian status ~/Documents/MyVault    # drift report
+
+brainctl obsidian export ~/Documents/MyVault    # brain → markdown + wikilinks + frontmatter
+brainctl obsidian import ~/Documents/MyVault    # ingest new vault notes through the W(m) gate
+brainctl obsidian watch  ~/Documents/MyVault    # auto-ingest new notes on file changes
+brainctl obsidian status ~/Documents/MyVault    # vault vs brain.db count delta
 ```
+
+New markdown notes can carry `category: <one-of-the-documented-categories>`
+in their frontmatter to control how they're filed; entity-shaped notes
+under `brainctl/entities/` round-trip through `Brain.entity()` so they
+become real entity rows, not memories. **One-way edits to already-exported
+notes do not flow back to brain.db** — there's no merge / conflict logic
+yet, so treat the export as canonical-from-brain and the vault layer as
+edit-and-replay rather than two-way mirror.
 
 ## Memory Lifecycle
 

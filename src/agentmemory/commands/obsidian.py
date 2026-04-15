@@ -37,11 +37,81 @@ from typing import Any
 _SLUG_RE = re.compile(r"[^\w\s-]")
 _WS_RE = re.compile(r"[\s_-]+")
 
+# Documented memory categories — kept in sync with the MCP tool enum
+# in mcp_tools_lifecycle.py and the convention list in CLAUDE.md. Used
+# by the import + watch paths to validate frontmatter-supplied categories
+# and to fall back to a sane default.
+_VALID_CATEGORIES = {
+    "convention",
+    "decision",
+    "environment",
+    "identity",
+    "integration",
+    "lesson",
+    "preference",
+    "project",
+    "user",
+}
+_DEFAULT_CATEGORY = "project"
+
 
 def _slug(text: str, max_len: int = 40) -> str:
     s = _SLUG_RE.sub("", text.lower())
     s = _WS_RE.sub("-", s).strip("-")
     return s[:max_len] or "memory"
+
+
+def _parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
+    """Parse a leading YAML frontmatter block out of a markdown document.
+
+    Returns ``(metadata, body)``. If there is no frontmatter, returns
+    ``({}, text)``. Only handles the simple ``key: value`` line format —
+    no nested structures, no multiline values, no YAML lists. That's
+    enough for everything brainctl writes on export and everything an
+    Obsidian user is likely to type by hand. We deliberately do not pull
+    in PyYAML; the simple-case parser is ~20 lines and stays in-tree.
+    """
+    if not text.startswith("---"):
+        return {}, text
+
+    # Find the closing fence — it must be `\n---` on its own line.
+    end = text.find("\n---", 3)
+    if end == -1:
+        # Unterminated frontmatter — treat the whole text as body.
+        return {}, text
+
+    block = text[3:end].lstrip("\n")
+    body = text[end + 4:].lstrip("\n")
+
+    metadata: dict[str, str] = {}
+    for raw_line in block.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        key = key.strip()
+        value = value.strip()
+        # Strip simple wrapping quotes
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        if key:
+            metadata[key] = value
+
+    return metadata, body
+
+
+def _category_from_metadata(metadata: dict[str, str], fallback: str = _DEFAULT_CATEGORY) -> str:
+    """Pull a valid memory category out of frontmatter metadata, or fall back.
+
+    Caller-supplied frontmatter wins as long as it names a category we
+    recognize. Anything else falls through to ``fallback``.
+    """
+    raw = (metadata.get("category") or "").strip().lower()
+    if raw and raw in _VALID_CATEGORIES:
+        return raw
+    return fallback
 
 
 def _now_iso() -> str:
@@ -184,16 +254,26 @@ def cmd_obsidian_export(args: Any) -> None:
     conn = _open_db(db_path)
 
     # --- Memories ---
-    cols = "id, content, category, confidence, tags, scope, created_at, " \
-           "updated_at, recalled_count, replay_priority, file_path, file_line"
-    where = "retired_at IS NULL"
+    # Build the WHERE clause with parameterized values — never
+    # f-string-interpolate CLI args into SQL. The cols list is a
+    # static string so it's fine to splice; the dynamic predicates
+    # bind through `?` placeholders.
+    cols = (
+        "id, content, category, confidence, tags, scope, created_at, "
+        "updated_at, recalled_count, replay_priority, file_path, file_line"
+    )
+    where_parts: list[str] = ["retired_at IS NULL"]
+    where_params: list[Any] = []
     if args.scope:
-        where += f" AND scope = '{args.scope}'"
+        where_parts.append("scope = ?")
+        where_params.append(args.scope)
     if args.category:
-        where += f" AND category = '{args.category}'"
+        where_parts.append("category = ?")
+        where_params.append(args.category)
 
     rows = conn.execute(
-        f"SELECT {cols} FROM memories WHERE {where} ORDER BY id"
+        f"SELECT {cols} FROM memories WHERE {' AND '.join(where_parts)} ORDER BY id",
+        where_params,
     ).fetchall()
 
     exported_mem = 0
@@ -227,7 +307,10 @@ def cmd_obsidian_export(args: Any) -> None:
         rels: list = []
 
         name = row["name"] or f"entity-{row['id']}"
-        fname = f"{_slug(name)}.md"
+        # Prefix with the entity ID to avoid filename collisions when
+        # two entities slug to the same string (e.g. "API rate limiter"
+        # and "API rate limiting" both -> "api-rate-limit").
+        fname = f"{row['id']:06d}-{_slug(name)}.md"
         fpath = ent_dir / fname
         if not args.force and fpath.exists():
             continue
@@ -294,6 +377,20 @@ def cmd_obsidian_export(args: Any) -> None:
 # Import
 # ---------------------------------------------------------------------------
 
+def _extract_entity_name_from_md(text: str, fallback: str) -> str:
+    """Pull an entity name out of an imported markdown body.
+
+    Looks for the first H1 (`# Name`) and falls back to the file basename
+    if none is found. The H1 wins over the filename so users can rename
+    by editing the heading without touching the file path.
+    """
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            return stripped[2:].strip() or fallback
+    return fallback
+
+
 def cmd_obsidian_import(args: Any) -> None:
     vault = Path(args.vault_path).expanduser().resolve()
     db_path = _get_db_path()
@@ -329,39 +426,60 @@ def cmd_obsidian_import(args: Any) -> None:
         print("No new (non-exported) markdown files found to import.")
         return
 
-    # Import through brain.remember() → W(m) gate
+    # Import through Brain — instantiate once and reuse so the v1.2.0
+    # lazy shared sqlite connection is actually shared across files.
+    # Constructing a new Brain per file recreates the connection and
+    # defeats the optimization.
     from agentmemory.brain import Brain
+    brain = None if dry_run else Brain(db_path=str(db_path), agent_id=agent_id)
 
     imported = 0
     skipped = 0
     for md_file in new_files:
-        text = md_file.read_text(encoding="utf-8").strip()
-        # Strip YAML frontmatter if present
-        if text.startswith("---"):
-            end = text.find("\n---", 3)
-            if end != -1:
-                text = text[end + 4:].strip()
+        raw = md_file.read_text(encoding="utf-8")
+        metadata, body = _parse_frontmatter(raw)
+        body = body.strip()
 
-        if not text or len(text) < 20:
+        if not body or len(body) < 20:
             skipped += 1
             continue
 
-        # Infer category from path
+        # Determine kind (memory vs entity) from path, then category
+        # from frontmatter (if supplied), with sensible per-kind defaults.
         rel = md_file.relative_to(brain_dir)
-        parts = rel.parts
-        category = "project"
-        if parts[0] == "entities":
-            category = "identity"
+        is_entity = rel.parts[0] == "entities" if rel.parts else False
+        category = _category_from_metadata(
+            metadata, fallback="identity" if is_entity else _DEFAULT_CATEGORY
+        )
 
         if dry_run:
-            print(f"[dry-run] Would import: {md_file.name} (category={category})")
+            kind = "entity" if is_entity else "memory"
+            print(
+                f"[dry-run] Would import: {md_file.name} "
+                f"(kind={kind}, category={category})"
+            )
             imported += 1
             continue
 
         try:
-            brain = Brain(db_path=str(db_path), agent_id=agent_id)
-            mid = brain.remember(text, category=category)
-            print(f"  Imported {md_file.name} → memory #{mid}")
+            if is_entity:
+                # Route through Brain.entity() so an Obsidian-authored
+                # entity becomes an actual entity row, not a memory
+                # mislabeled as 'identity'. Pull the canonical name
+                # from the H1 heading, fall back to the filename slug.
+                name = _extract_entity_name_from_md(body, md_file.stem)
+                entity_type = (metadata.get("entity_type") or "concept").strip() or "concept"
+                # Use the body (minus frontmatter) as a single observation.
+                # Caller can split it later via `brainctl entity observe`.
+                eid = brain.entity(
+                    name=name,
+                    entity_type=entity_type,
+                    observations=[body],
+                )
+                print(f"  Imported {md_file.name} → entity #{eid} ({name})")
+            else:
+                mid = brain.remember(body, category=category)
+                print(f"  Imported {md_file.name} → memory #{mid}")
             imported += 1
         except Exception as exc:
             print(f"  Skipped {md_file.name}: {exc}")
@@ -402,42 +520,62 @@ def cmd_obsidian_watch(args: Any) -> None:
     agent_id = getattr(args, "agent", "obsidian-watch")
     cooldown = getattr(args, "cooldown", 5)  # seconds between processing same file
 
+    # Hoist Brain construction OUTSIDE the per-event handler so the v1.2.0
+    # lazy shared sqlite connection is actually shared across events. The
+    # old per-event Brain() call rebuilt the connection on every file
+    # touch — fine for one-off ingest, terrible for long-running watch.
+    brain = Brain(db_path=str(db_path), agent_id=agent_id)
+
+    # Bounded cooldown cache. Old impl kept entries forever for any file
+    # ever touched, which leaked memory on long-running processes against
+    # large vaults. We evict entries older than 5x the cooldown window.
     _recently_processed: dict[str, float] = {}
+    _CACHE_TTL = max(cooldown * 5, 30)  # at least 30s
+
+    def _evict_stale(now: float) -> None:
+        if len(_recently_processed) < 256:
+            return  # cheap path: no eviction needed for small caches
+        cutoff = now - _CACHE_TTL
+        stale = [k for k, t in _recently_processed.items() if t < cutoff]
+        for k in stale:
+            _recently_processed.pop(k, None)
 
     class VaultHandler(FileSystemEventHandler):
         def _handle(self, path_str: str) -> None:
             if not path_str.endswith(".md"):
                 return
             path = Path(path_str)
-            # Skip files we exported (they have brainctl_id)
             now = time.time()
             last = _recently_processed.get(path_str, 0)
             if now - last < cooldown:
                 return
             _recently_processed[path_str] = now
+            _evict_stale(now)
 
             try:
-                text = path.read_text(encoding="utf-8").strip()
+                raw = path.read_text(encoding="utf-8")
             except Exception:
                 return
 
-            if "brainctl_id:" in text:
+            if "brainctl_id:" in raw:
                 return  # our own export — skip
 
-            # Strip frontmatter
-            if text.startswith("---"):
-                end = text.find("\n---", 3)
-                if end != -1:
-                    text = text[end + 4:].strip()
+            metadata, body = _parse_frontmatter(raw)
+            body = body.strip()
 
-            if len(text) < 20:
+            if len(body) < 20:
                 return  # too short to be meaningful
 
+            # Honor frontmatter-supplied category if it's valid; otherwise
+            # default to a documented category (was 'general' before, which
+            # is NOT in the documented enum and would silently break
+            # anything downstream that relies on the category constants).
+            category = _category_from_metadata(metadata, fallback=_DEFAULT_CATEGORY)
+
             try:
-                brain = Brain(db_path=str(db_path), agent_id=agent_id)
-                mid = brain.remember(text, category="general")
+                mid = brain.remember(body, category=category)
                 ts = datetime.now().strftime("%H:%M:%S")
-                print(f"[{ts}] Ingested {path.name} → memory #{mid}")
+                print(f"[{ts}] Ingested {path.name} → memory #{mid} ({category})")
             except Exception as exc:
                 ts = datetime.now().strftime("%H:%M:%S")
                 print(f"[{ts}] Skipped {path.name}: {exc}")
