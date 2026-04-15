@@ -10,7 +10,7 @@ from typing import Any
 from mcp.types import Tool
 
 from agentmemory.paths import get_db_path
-from agentmemory.lib.mcp_helpers import now_iso, open_db, rows_to_list
+from agentmemory.lib.mcp_helpers import open_db
 
 DB_PATH: Path = get_db_path()
 
@@ -21,10 +21,6 @@ DB_PATH: Path = get_db_path()
 
 def _db() -> sqlite3.Connection:
     return open_db(str(DB_PATH))
-
-
-_now = now_iso
-_rows_to_list = rows_to_list
 
 
 def _row_to_dict(row) -> dict | None:

@@ -12,16 +12,13 @@ from typing import Any
 from mcp.types import Tool
 
 from agentmemory.paths import get_db_path
-from agentmemory.lib.mcp_helpers import now_iso, open_db
+from agentmemory.lib.mcp_helpers import open_db
 
 DB_PATH: Path = get_db_path()
 
 
 def _db() -> sqlite3.Connection:
     return open_db(str(DB_PATH))
-
-
-_now = now_iso
 
 
 # ---------------------------------------------------------------------------
@@ -204,8 +201,6 @@ def detect_epoch_boundaries(
     min_window: int = 4,
     topic_shift_threshold: float = 0.45,
     min_boundary_distance: int = 8,
-    context_decay: float = 0.7,
-    cosine_divergence_threshold: float = 0.55,
 ) -> list[dict]:
     """Detect event boundaries from divergence against recent context.
 
@@ -213,10 +208,6 @@ def detect_epoch_boundaries(
     short smoothing lookahead of ``min(window_size, 3)`` events to reduce noise
     from one-off vocabulary spikes while still honoring smaller caller-supplied
     windows.
-
-    ``context_decay`` and ``cosine_divergence_threshold`` are kept for backward
-    compatibility with earlier rolling-context experiments, but the public
-    threshold is now ``topic_shift_threshold`` again.
     """
     candidates = []
     if len(events) < 2:

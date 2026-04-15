@@ -8,17 +8,13 @@ from pathlib import Path
 from mcp.types import Tool
 
 from agentmemory.paths import get_db_path
-from agentmemory.lib.mcp_helpers import now_iso, open_db
-from agentmemory.lib.mcp_helpers import rows_to_list as _rows_to_list_helper
+from agentmemory.lib.mcp_helpers import now_iso, open_db, rows_to_list
 
 DB_PATH: Path = get_db_path()
 
 
 def _db() -> sqlite3.Connection:
     return open_db(str(DB_PATH))
-
-
-_now = now_iso
 
 
 # NOTE: local _now_ts uses naive strftime format; differs from now_iso.
@@ -28,9 +24,6 @@ def _now_ts() -> str:
 
 def row_to_dict(row) -> dict | None:
     return dict(row) if row else None
-
-
-rows_to_list = _rows_to_list_helper
 
 
 # ---------------------------------------------------------------------------
@@ -331,7 +324,7 @@ def tool_world_status(agent_id: str = "mcp-client", days: int = 7) -> dict:
 
     return {
         "ok": True,
-        "snapshot_at": _now(),
+        "snapshot_at": now_iso(),
         "window_days": days,
         "org_state": org_state,
         "active_agents": rows_to_list(agent_activity),
