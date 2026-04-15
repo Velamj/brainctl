@@ -1,0 +1,15 @@
+## Persistent memory (brainctl)
+
+This workspace has persistent memory across sessions via **brainctl**, exposed
+to Pi as the `brainctl` CLI. Full usage lives in
+`skills/brainctl/SKILL.md` — read it before your first memory call.
+
+- **On task start:** run `brainctl --agent openclaw orient --project <p>` and
+  treat the output as authoritative prior context.
+- **During work:** capture durable facts with `memory add`, `decision add`,
+  `event add`, and the `entity` commands. Skip ephemeral chatter.
+- **On task end:** run `brainctl --agent openclaw wrap-up` with goal,
+  current-state, open-loops, and next-step so the next session can resume.
+
+Never store secrets, credentials, or transient log output in brainctl — use
+`event add` for logs and keep `brain.db` free of sensitive material.

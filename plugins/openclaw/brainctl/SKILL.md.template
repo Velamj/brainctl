@@ -1,0 +1,94 @@
+---
+name: brainctl
+description: "Persistent memory across OpenClaw sessions via the brainctl CLI."
+---
+
+# brainctl skill
+
+brainctl is available as the `brainctl` CLI in Pi's shell. It is a
+SQLite-backed persistent memory system with FTS5 search, an optional vector
+index, a knowledge graph, and session handoffs. See
+<https://github.com/TSchonleber/brainctl> for the full reference.
+
+All commands in this skill default to `--agent openclaw`. Scope writes and
+reads to the active project with `--project <name>` whenever you know it.
+
+## On task start — orient
+
+Before doing anything else, pull prior context:
+
+```bash
+brainctl --agent openclaw orient --project <p>
+```
+
+This returns the latest handoff packet, recent events, and task-relevant
+memories from previous sessions. Treat the orient output as authoritative
+prior context. If it conflicts with what you think you know, trust the brain
+and flag the discrepancy.
+
+Follow up with targeted recall when orient alone is not enough:
+
+```bash
+brainctl --agent openclaw search "<keywords>" --project <p>
+brainctl --agent openclaw think "<concept>" --project <p>
+```
+
+`search` is literal FTS5. `think` is spreading-activation across the graph —
+reach for it when you want related concepts rather than string matches.
+
+## During work — capture durable facts
+
+As durable information surfaces, write it back. Skip ephemeral chatter,
+intermediate scratchwork, and anything already obvious from reading the code.
+
+```bash
+# Store a long-term fact. Category is one of:
+#   convention | decision | environment | integration |
+#   lesson     | preference | project    | user
+brainctl --agent openclaw memory add \
+  --category <cat> \
+  --content "<fact>" \
+  --tags <tag1,tag2> \
+  --project <p>
+
+# Record a decision with its rationale and outcome.
+brainctl --agent openclaw decision add \
+  --title "<short title>" \
+  --rationale "<why>" \
+  --outcome "<what it enables or blocks>" \
+  --project <p>
+
+# Append to the structured event stream (test results, errors, observations).
+brainctl --agent openclaw event add \
+  --type <test|error|observation|task> \
+  --content "<what happened>" \
+  --project <p>
+
+# Build up the knowledge graph for named things (services, files, people).
+brainctl --agent openclaw entity create --name "<name>" --kind <kind>
+brainctl --agent openclaw entity observe --name "<name>" --content "<observation>"
+brainctl --agent openclaw entity relate --src "<a>" --dst "<b>" --kind <relation>
+```
+
+## On task end — wrap up
+
+Before you stop, write a handoff packet. The next session reads this
+verbatim when it calls `orient`, so make it tight, honest, and actionable.
+
+```bash
+brainctl --agent openclaw wrap-up \
+  --project <p> \
+  --goal "<what you were trying to accomplish>" \
+  --current-state "<where things stand now>" \
+  --open-loops "<unfinished work, known issues, pending questions>" \
+  --next-step "<the single most useful thing to do first next time>"
+```
+
+## Do not
+
+- Do not store secrets, API keys, passwords, or credentials — `brain.db` is
+  plaintext SQLite.
+- Do not mirror transient build output or test logs as memories. Use
+  `event add` for those instead.
+- Do not duplicate facts that are already in the code. Memory is for things
+  git blame cannot tell you.

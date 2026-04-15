@@ -1,0 +1,7 @@
+name: brainctl
+version: 0.1.0
+description: "OpenClaw persistent memory via brainctl. Drops a brainctl skill into the OpenClaw workspace and merges an AGENTS.md snippet so Pi reaches for brainctl automatically via the CLI."
+pip_dependencies:
+  - "brainctl>=1.2.0"
+requires_env:
+  - BRAIN_DB   # optional — defaults to ~/agentmemory/db/brain.db
