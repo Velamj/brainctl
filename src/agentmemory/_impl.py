@@ -769,6 +769,221 @@ def _create_cooccurrence_edges(db, agent_id="autolink"):
     return {"edges_created": edges_created, "memories_with_pairs": len(rows)}
 
 
+# ---------------------------------------------------------------------------
+# Typed Causal Edges + Counterfactual Attribution (Task 2)
+# ---------------------------------------------------------------------------
+
+def _add_causal_edge(
+    db,
+    source_table: str,
+    source_id: int,
+    target_table: str,
+    target_id: int,
+    causal_type: str,
+    weight: float = 1.0,
+    agent_id: str = "causal",
+) -> dict:
+    """Create a typed causal edge in knowledge_edges.
+
+    Valid causal_type values: 'causes', 'enables', 'prevents'
+    (defined in _VALID_CAUSAL_TYPES).  Uses INSERT OR IGNORE so calling this
+    function repeatedly with the same source/target/type is idempotent.
+
+    Args:
+        db:           Active sqlite3 connection with row_factory set.
+        source_table: Table name of the causal source node.
+        source_id:    Integer PK of the source row.
+        target_table: Table name of the causal target node.
+        target_id:    Integer PK of the target row.
+        causal_type:  One of {'causes', 'enables', 'prevents'}.
+        weight:       Edge weight in [0.0, 1.0] (default 1.0).
+        agent_id:     Agent credited for creating the edge (default 'causal').
+
+    Returns:
+        On success: {"edge_id": <int or None>, "created": <bool>}
+        On invalid type: {"error": "Invalid causal_type '<x>'. Must be one of: ..."}
+    """
+    if causal_type not in _VALID_CAUSAL_TYPES:
+        valid_sorted = sorted(_VALID_CAUSAL_TYPES)
+        return {
+            "error": (
+                f"Invalid causal_type {causal_type!r}. "
+                f"Must be one of: {valid_sorted}"
+            )
+        }
+    cur = db.execute(
+        """INSERT OR IGNORE INTO knowledge_edges
+               (source_table, source_id, target_table, target_id,
+                relation_type, weight, agent_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%S','now'))""",
+        (source_table, source_id, target_table, target_id, causal_type, weight, agent_id),
+    )
+    db.commit()
+    created = cur.rowcount > 0
+    edge_id: "int | None"
+    if created:
+        edge_id = cur.lastrowid
+    else:
+        row = db.execute(
+            "SELECT id FROM knowledge_edges WHERE source_table=? AND source_id=? "
+            "AND target_table=? AND target_id=? AND relation_type=?",
+            (source_table, source_id, target_table, target_id, causal_type),
+        ).fetchone()
+        edge_id = row["id"] if row else None
+    return {"edge_id": edge_id, "created": created}
+
+
+def _trace_causal_chain(
+    db,
+    start_table: str,
+    start_id: int,
+    max_hops: int = 5,
+) -> list:
+    """Follow causes/enables edges forward from a starting node.
+
+    Performs a breadth-first traversal through knowledge_edges with
+    relation_type in ('causes', 'enables'), up to max_hops levels deep.
+    Cycles are broken via a visited set — each (table, id) pair is visited
+    at most once.
+
+    Args:
+        db:          Active sqlite3 connection with row_factory set.
+        start_table: Table of the origin node.
+        start_id:    PK of the origin node.
+        max_hops:    Maximum number of edge hops to follow (default 5).
+
+    Returns:
+        List of dicts — one per node reachable from the start (excluding the
+        start itself), in BFS order::
+
+            [
+                {
+                    "target_table":  str,
+                    "target_id":     int,
+                    "relation_type": str,   # 'causes' | 'enables'
+                    "weight":        float,
+                    "hop":           int,   # 1-indexed distance from start
+                },
+                ...
+            ]
+    """
+    visited = {(start_table, start_id)}
+    # frontier: list of (table, id, hop)
+    frontier = [(start_table, start_id, 0)]
+    chain = []
+
+    while frontier:
+        current_table, current_id, hop = frontier.pop(0)
+        if hop >= max_hops:
+            continue
+        rows = db.execute(
+            "SELECT target_table, target_id, relation_type, weight "
+            "FROM knowledge_edges "
+            "WHERE source_table=? AND source_id=? "
+            "  AND relation_type IN ('causes', 'enables')",
+            (current_table, current_id),
+        ).fetchall()
+        for row in rows:
+            tbl = row["target_table"]
+            tid = int(row["target_id"])
+            key = (tbl, tid)
+            if key in visited:
+                continue
+            visited.add(key)
+            chain.append(
+                {
+                    "target_table": tbl,
+                    "target_id": tid,
+                    "relation_type": row["relation_type"],
+                    "weight": row["weight"],
+                    "hop": hop + 1,
+                }
+            )
+            frontier.append((tbl, tid, hop + 1))
+
+    return chain
+
+
+def _counterfactual_attribution(
+    db,
+    event_id: int,
+    outcome_positive: bool = True,
+) -> dict:
+    """Trace backward from an event to find memories that contributed to it.
+
+    Performs a backward BFS through causes/enables edges — starting from the
+    given event and walking toward source nodes — collecting every
+    source_table='memories' node encountered along the way.  Boosts each
+    memory's Q-value using the inline TD update::
+
+        q_new = q_old + 0.1 * edge_weight * (reward - q_old)
+
+    where reward = 1.0 when outcome_positive is True, 0.0 otherwise.
+    The multiplied learning rate (0.1 * edge_weight) weights the contribution
+    of each upstream memory by the strength of the causal edge connecting
+    it to the outcome.
+
+    Cycle-safe: each (table, id) pair is visited at most once.
+
+    Args:
+        db:               Active sqlite3 connection with row_factory set.
+        event_id:         PK of the outcome event in the events table.
+        outcome_positive: True for a positive outcome (reward=1.0);
+                          False for a negative outcome (reward=0.0).
+
+    Returns:
+        {"memories_attributed": <int>}  — count of memories whose Q-values
+        were updated.
+    """
+    reward = 1.0 if outcome_positive else 0.0
+
+    visited = {("events", event_id)}
+    # frontier: list of (table, id)
+    frontier = [("events", event_id)]
+    # (memory_id, edge_weight) pairs to update
+    attributed_memories = []
+
+    while frontier:
+        current_table, current_id = frontier.pop(0)
+        rows = db.execute(
+            "SELECT source_table, source_id, relation_type, weight "
+            "FROM knowledge_edges "
+            "WHERE target_table=? AND target_id=? "
+            "  AND relation_type IN ('causes', 'enables')",
+            (current_table, current_id),
+        ).fetchall()
+        for row in rows:
+            stbl = row["source_table"]
+            sid = int(row["source_id"])
+            key = (stbl, sid)
+            if key in visited:
+                continue
+            visited.add(key)
+            edge_weight = float(row["weight"])
+            if stbl == "memories":
+                attributed_memories.append((sid, edge_weight))
+            # Keep traversing backward regardless of node type
+            frontier.append((stbl, sid))
+
+    # Apply inline TD update: q_new = q_old + 0.1 * edge_weight * (reward - q_old)
+    updated = 0
+    for memory_id, edge_weight in attributed_memories:
+        mem_row = db.execute(
+            "SELECT q_value FROM memories WHERE id=? AND retired_at IS NULL",
+            (memory_id,),
+        ).fetchone()
+        if mem_row is None:
+            continue
+        q_old = mem_row["q_value"] if mem_row["q_value"] is not None else 0.5
+        lr = 0.1 * edge_weight
+        q_new = max(0.0, min(1.0, q_old + lr * (reward - q_old)))
+        db.execute("UPDATE memories SET q_value=? WHERE id=?", (q_new, memory_id))
+        updated += 1
+
+    db.commit()
+    return {"memories_attributed": updated}
+
+
 def _gliner_entity_extract(db, agent_id="autolink", model_name="urchade/gliner_medium-v2.1"):
     """Layer 2: optional NER via GLiNER (Zaratiana et al., NAACL 2024).
 
