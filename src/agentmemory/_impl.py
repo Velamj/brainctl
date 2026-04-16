@@ -206,6 +206,11 @@ HARD_MEMORY_TARGET = 8_000
 DEDUP_FTS_MIN_RESULTS = 1
 DEDUP_CONTENT_SIMILARITY_THRESHOLD = 0.85  # Jaccard word overlap
 
+# Base confidence boost per successful recall (Roediger & Karpicke 2006, Bjork 1994).
+# Actual boost = BASE * (1 + clamp(retrieval_prediction_error, 0, 1)) so hard
+# retrievals (high prediction error) strengthen the trace more than easy ones.
+_RETRIEVAL_PRACTICE_BASE_BOOST = 0.02
+
 # ---------------------------------------------------------------------------
 # Temporal recency helpers
 # ---------------------------------------------------------------------------
@@ -1429,6 +1434,40 @@ def cmd_trigger_cancel(args):
 
 REFLEXION_BOOST = 1.5  # score multiplier for reflexion-tagged memories in retrieval
 
+
+def _retrieval_practice_boost(db, memory_id, retrieval_prediction_error=0.0):
+    """Apply desirable-difficulty weighting after a successful memory recall.
+
+    Based on Roediger & Karpicke (2006) testing effect and Bjork (1994)
+    desirable difficulties: hard retrievals (high prediction error) should
+    strengthen the memory trace more than easy ones.
+
+    Args:
+        db: Active sqlite3 connection (already open, caller owns lifecycle).
+        memory_id: The integer PK of the memory being recalled.
+        retrieval_prediction_error: Float in [0, 1] — 0 = easy recall,
+            1 = maximally hard retrieval. Values outside [0, 1] are clamped.
+            None is treated as 0.0.
+
+    Side effects:
+        - Updates confidence, alpha, recalled_count, last_recalled_at, labile_until.
+        - Commits the change.
+    """
+    rpe = max(0.0, min(1.0, retrieval_prediction_error or 0.0))
+    boost = _RETRIEVAL_PRACTICE_BASE_BOOST * (1.0 + rpe)
+    db.execute(
+        "UPDATE memories SET "
+        "confidence = MIN(1.0, confidence + ?), "
+        "alpha = COALESCE(alpha, 1.0) + 1.0, "
+        "recalled_count = recalled_count + 1, "
+        "last_recalled_at = strftime('%Y-%m-%dT%H:%M:%S', 'now'), "
+        "labile_until = strftime('%Y-%m-%dT%H:%M:%S', 'now', '+2 hours') "
+        "WHERE id = ?",
+        (boost, memory_id),
+    )
+    db.commit()
+
+
 def cmd_memory_add(args):
     db = get_db()
     # --reflexion shorthand: force category=lesson, inject 'reflexion' tag
@@ -1934,12 +1973,10 @@ def cmd_memory_search(args):
             r["epistemic_score"] = round((1.0 - conf) * imp, 4)
         results.sort(key=lambda r: -r.get("epistemic_score", 0.0))
 
-    # Update recall stats for memories the caller actually sees (reconsolidation boost)
+    # Update recall stats for memories the caller actually sees.
+    # Uses retrieval-practice strengthening: hard retrievals boost more than easy ones.
     for r in results:
-        db.execute(
-            "UPDATE memories SET recalled_count = recalled_count + 1, last_recalled_at = strftime('%Y-%m-%dT%H:%M:%S', 'now'), confidence = MIN(1.0, confidence + 0.15 * (1.0 - confidence)) WHERE id = ?",
-            (r["id"],)
-        )
+        _retrieval_practice_boost(db, r["id"])
 
     log_access(db, args.agent or "unknown", "search", "memories", query=query, result_count=len(results))
     db.commit()
@@ -4839,28 +4876,16 @@ def cmd_search(args):
     tokens_out = _estimate_tokens(results)
     log_access(db, args.agent or "unknown", "search", query=query, result_count=total, tokens_consumed=tokens_out)
 
-    # Update recalled_count for direct (non-graph) memory hits only ()
-    # Bayesian recall update: increment alpha, recompute confidence = alpha/(alpha+beta)
-    _has_ab_cols = any(
-        col[1] == "alpha" for col in db.execute("PRAGMA table_info(memories)").fetchall()
-    )
+    # Update recalled_count for direct (non-graph) memory hits only.
+    # Uses retrieval-practice strengthening: hard retrievals (high prediction error)
+    # boost confidence more than easy ones (Roediger & Karpicke 2006, Bjork 1994).
     for r in results.get("memories", []):
         if r.get("source") != "graph":
-            if _has_ab_cols:
-                db.execute(
-                    "UPDATE memories SET recalled_count = recalled_count + 1, "
-                    "last_recalled_at = strftime('%Y-%m-%dT%H:%M:%S', 'now'), "
-                    "alpha = COALESCE(alpha, 1.0) + 1.0, "
-                    "confidence = (COALESCE(alpha, 1.0) + 1.0) / "
-                    "             ((COALESCE(alpha, 1.0) + 1.0) + COALESCE(beta, 1.0)) "
-                    "WHERE id = ?",
-                    (r["id"],)
-                )
-            else:
-                db.execute(
-                    "UPDATE memories SET recalled_count = recalled_count + 1, last_recalled_at = strftime('%Y-%m-%dT%H:%M:%S', 'now'), confidence = MIN(1.0, confidence + 0.15 * (1.0 - confidence)) WHERE id = ?",
-                    (r["id"],)
-                )
+            _retrieval_practice_boost(
+                db,
+                r["id"],
+                retrieval_prediction_error=r.get("retrieval_prediction_error") or 0.0,
+            )
 
     # Online phase learning: nudge confidence_phase toward constructive (0) after recall
     # Uses existing db connection to avoid lock contention with uncommitted recall_count updates.
