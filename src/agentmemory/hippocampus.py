@@ -1952,6 +1952,29 @@ def select_replay_candidates(db, top_k=20):
     return [dict(r) for r in rows]
 
 
+def select_importance_weighted_replay(db, top_k=20, lookback_hours=24):
+    """Access-pattern-driven replay (Yang & Buzsaki 2024).
+    Prioritize memories co-temporal with high-importance events."""
+    rows = db.execute("""
+        SELECT m.id, m.content, m.salience_score, m.confidence, m.category,
+               COALESCE(MAX(e.importance), 0.5) as max_event_importance
+        FROM memories m
+        LEFT JOIN events e ON e.created_at >= datetime(m.created_at, '-2 hours')
+                          AND e.created_at <= datetime(m.created_at, '+2 hours')
+                          AND e.importance >= 0.7
+        WHERE m.retired_at IS NULL AND m.memory_type = 'episodic'
+        GROUP BY m.id
+        ORDER BY (COALESCE(m.salience_score, 0.5) * COALESCE(MAX(e.importance), 0.5)) DESC
+        LIMIT ?
+    """, (top_k,)).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["replay_weight"] = (d.get("salience_score") or 0.5) * (d.get("max_event_importance") or 0.5)
+        result.append(d)
+    return result
+
+
 def replay_memories(db, candidates):
     """Replay without auto-strengthening (Widloski & Foster 2025).
     Replay is decoupled from tagging — strengthening happens in a
@@ -2155,9 +2178,9 @@ def run_phased_consolidation(db, downscale_factor=None, dry_run=False):
         if not dry_run else {"downscaled": 0, "retired": 0, "skipped": 0}
     )
 
-    # Phase 3: Replay — entity-clustered with magnitude weighting
+    # Phase 3: Replay — importance-weighted + entity-clustered
     clusters = build_entity_clusters(db)
-    candidates = select_replay_candidates(db, top_k=20)
+    candidates = select_importance_weighted_replay(db, top_k=20)
     phases["replay"] = (
         replay_memories(db, candidates)
         if not dry_run else {"replayed": 0}
