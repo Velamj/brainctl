@@ -628,6 +628,12 @@ VALID_ENTITY_TYPES = {
 # Minimum entity name length for autolink scanning — avoids noisy 1-2 char matches.
 _AUTOLINK_MIN_NAME_LENGTH = 3
 
+# GLiNER label set — maps to brainctl entity type system (Zaratiana et al., NAACL 2024).
+_GLINER_LABELS = ["person", "project", "tool", "service", "concept", "organization"]
+
+# Module-level cache to avoid reloading the 205M-param model per call.
+_gliner_model_cache: dict = {}
+
 
 def _fts5_entity_match(db, agent_id="autolink"):
     """Scan all active memories for substring matches against known entity names.
@@ -760,6 +766,141 @@ def _create_cooccurrence_edges(db, agent_id="autolink"):
                     pass
     db.commit()
     return {"edges_created": edges_created, "memories_with_pairs": len(rows)}
+
+
+def _gliner_entity_extract(db, agent_id="autolink", model_name="gliner_medium-v2.1"):
+    """Layer 2: optional NER via GLiNER (Zaratiana et al., NAACL 2024).
+
+    Uses a 205M-parameter zero-shot NER model (CPU/ONNX) to extract entities
+    from memories not yet linked to the knowledge graph.  Requires the optional
+    ``ner`` extra: ``pip install brainctl[ner]``.
+
+    Entity matching is case-insensitive against existing entity names.  New
+    entities that don't match any existing name are created automatically.
+    All links are recorded as ``knowledge_edges`` with ``relation_type='mentions'``
+    using INSERT OR IGNORE for idempotency.
+
+    Args:
+        db: SQLite connection (row_factory = sqlite3.Row expected).
+        agent_id: Agent to record as creator of new edges and entities.
+        model_name: HuggingFace model name for GLiNER (default: gliner_medium-v2.1).
+
+    Returns:
+        dict with keys:
+            entities_created – new entity rows inserted
+            edges_created    – new knowledge_edge rows inserted
+            memories_scanned – total unlinked memories examined
+        On ImportError:
+            {"error": "gliner not installed. Run: pip install brainctl[ner]"}
+    """
+    try:
+        from gliner import GLiNER  # type: ignore[import]
+    except ImportError:
+        return {"error": "gliner not installed. Run: pip install brainctl[ner]"}
+
+    # Load (or reuse cached) model.
+    if model_name not in _gliner_model_cache:
+        _gliner_model_cache[model_name] = GLiNER.from_pretrained(model_name)
+    model = _gliner_model_cache[model_name]
+
+    # Find memories that are not yet linked to any entity via a 'mentions' edge.
+    linked_rows = db.execute(
+        "SELECT DISTINCT source_id FROM knowledge_edges "
+        "WHERE source_table='memories' AND target_table='entities' "
+        "AND relation_type='mentions'"
+    ).fetchall()
+    already_linked: set[int] = {r["source_id"] for r in linked_rows}
+
+    if already_linked:
+        placeholders = ",".join("?" for _ in already_linked)
+        memories = db.execute(
+            f"SELECT id, content FROM memories "
+            f"WHERE retired_at IS NULL AND id NOT IN ({placeholders})",
+            list(already_linked)
+        ).fetchall()
+    else:
+        memories = db.execute(
+            "SELECT id, content FROM memories WHERE retired_at IS NULL"
+        ).fetchall()
+
+    # Pre-load existing entities for case-insensitive lookup.
+    existing_entities = db.execute(
+        "SELECT id, name FROM entities WHERE retired_at IS NULL"
+    ).fetchall()
+    existing_by_lower: dict[str, int] = {
+        r["name"].lower(): r["id"] for r in existing_entities
+    }
+
+    now = _now_ts()
+    entities_created = 0
+    edges_created = 0
+
+    for mem in memories:
+        mem_id = mem["id"]
+        content = mem["content"] or ""
+        if not content.strip():
+            continue
+
+        extracted = model.predict_entities(content, _GLINER_LABELS, threshold=0.5)
+
+        for ent in extracted:
+            name = ent["text"].strip()
+            label = ent["label"]
+            if not name:
+                continue
+
+            name_lower = name.lower()
+
+            # Match against existing entities (case-insensitive).
+            if name_lower in existing_by_lower:
+                entity_id = existing_by_lower[name_lower]
+            else:
+                # Map GLiNER label to brainctl entity_type (organization not in VALID_ENTITY_TYPES).
+                etype = label if label in VALID_ENTITY_TYPES else "other"
+                # Insert new entity.
+                try:
+                    cur = db.execute(
+                        "INSERT INTO entities "
+                        "(name, entity_type, properties, observations, agent_id, "
+                        "created_at, updated_at) "
+                        "VALUES (?, ?, '{}', '[]', ?, ?, ?)",
+                        (name, etype, agent_id, now, now)
+                    )
+                    entity_id = cur.lastrowid
+                    existing_by_lower[name_lower] = entity_id
+                    entities_created += 1
+                except Exception:
+                    # Possible race/unique constraint — try to fetch existing.
+                    row = db.execute(
+                        "SELECT id FROM entities WHERE name = ? AND retired_at IS NULL",
+                        (name,)
+                    ).fetchone()
+                    if row:
+                        entity_id = row["id"]
+                        existing_by_lower[name_lower] = entity_id
+                    else:
+                        continue
+
+            # Create the mentions edge.
+            try:
+                db.execute(
+                    "INSERT OR IGNORE INTO knowledge_edges "
+                    "(source_table, source_id, target_table, target_id, "
+                    "relation_type, weight, agent_id, created_at) "
+                    "VALUES ('memories', ?, 'entities', ?, 'mentions', 0.5, ?, ?)",
+                    (mem_id, entity_id, agent_id, now)
+                )
+                edges_created += 1
+            except Exception:
+                pass
+
+    db.commit()
+
+    return {
+        "entities_created": entities_created,
+        "edges_created": edges_created,
+        "memories_scanned": len(memories),
+    }
 
 
 def cmd_entity_create(args):
@@ -1532,14 +1673,31 @@ def cmd_entity_autolink(args):
     """Run entity name matching against all unlinked memories.
 
     --layer fts5  (default): Run Layer 1 FTS5 substring matching only.
-    --layer all:             Run Layer 1 (FTS5) then Layer 3 (co-occurrence edges).
+    --layer ner:             Run Layer 2 GLiNER NER extraction only.
+    --layer all:             Run Layer 1 (FTS5) → Layer 2 (NER) → Layer 3 (co-occurrence).
     """
     db = get_db()
     layer = getattr(args, "layer", "fts5")
-    stats = _fts5_entity_match(db, agent_id="autolink")
-    if layer == "all":
+
+    if layer == "ner":
+        stats = _gliner_entity_extract(db, agent_id="autolink")
+    elif layer == "all":
+        stats = _fts5_entity_match(db, agent_id="autolink")
+        ner_stats = _gliner_entity_extract(db, agent_id="autolink")
         cooccur_stats = _create_cooccurrence_edges(db, agent_id="autolink")
-        stats = {**stats, **cooccur_stats}
+        # Merge stats — prefix NER keys to avoid clobbering fts5 keys.
+        stats = {
+            **stats,
+            "ner_entities_created": ner_stats.get("entities_created", 0),
+            "ner_edges_created": ner_stats.get("edges_created", 0),
+            "ner_memories_scanned": ner_stats.get("memories_scanned", 0),
+            "ner_error": ner_stats.get("error"),
+            **cooccur_stats,
+        }
+    else:
+        # Default: fts5
+        stats = _fts5_entity_match(db, agent_id="autolink")
+
     json_out({"ok": True, "layer": layer, **stats})
 
 
@@ -13911,8 +14069,10 @@ def build_parser():
         help="Scan unlinked memories for entity name mentions and create knowledge_edges",
     )
     ent_autolink.add_argument(
-        "--layer", choices=["fts5", "all"], default="fts5",
-        help="Matching layer to run (default: fts5 — pure substring match)",
+        "--layer", choices=["fts5", "ner", "all"], default="fts5",
+        help="Matching layer to run (default: fts5 — pure substring match; "
+             "ner — GLiNER zero-shot NER [requires brainctl[ner]]; "
+             "all — fts5 → ner → co-occurrence)",
     )
 
     # --- trigger ---  (prospective memory)

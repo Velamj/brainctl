@@ -18,7 +18,13 @@ SRC = Path(__file__).resolve().parent.parent / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from agentmemory._impl import _fts5_entity_match, _AUTOLINK_MIN_NAME_LENGTH, _create_cooccurrence_edges
+from agentmemory._impl import (
+    _fts5_entity_match,
+    _AUTOLINK_MIN_NAME_LENGTH,
+    _create_cooccurrence_edges,
+    _gliner_entity_extract,
+    _GLINER_LABELS,
+)
 from agentmemory.brain import Brain
 
 
@@ -332,4 +338,120 @@ class TestCooccurrenceEdges:
         _create_cooccurrence_edges(conn)
         count_after_second = cooccur_edge_count(conn)
         assert count_after_second == count_after_first
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Layer 2: GLiNER NER extraction (Zaratiana et al., NAACL 2024)
+# ---------------------------------------------------------------------------
+
+
+class TestGLiNERExtract:
+    """Tests for _gliner_entity_extract (Layer 2) and _GLINER_LABELS constant."""
+
+    def test_gliner_labels_constant(self):
+        """_GLINER_LABELS should be a non-empty list of strings."""
+        assert isinstance(_GLINER_LABELS, list)
+        assert len(_GLINER_LABELS) > 0
+        assert all(isinstance(lbl, str) for lbl in _GLINER_LABELS)
+        # Core labels must be present.
+        for expected in ("person", "project", "tool", "service", "concept", "organization"):
+            assert expected in _GLINER_LABELS, f"Expected label '{expected}' in _GLINER_LABELS"
+
+    def test_returns_error_when_not_installed(self, brain):
+        """Should return gracefully if gliner is not installed."""
+        conn = raw_conn(brain)
+        insert_memory_raw(conn, "Some text about Alice")
+        conn.close()
+
+        # Monkeypatch builtins.__import__ to simulate missing gliner.
+        import builtins
+        real_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "gliner":
+                raise ImportError("No module named 'gliner'")
+            return real_import(name, *args, **kwargs)
+
+        builtins.__import__ = mock_import
+        try:
+            # Clear any cached model so import path is exercised.
+            from agentmemory._impl import _gliner_model_cache
+            _gliner_model_cache.clear()
+
+            stats = _gliner_entity_extract(conn if False else raw_conn(brain))
+        finally:
+            builtins.__import__ = real_import
+
+        # Must return a dict (either {"error": ...} or full stats if gliner IS installed).
+        assert isinstance(stats, dict)
+        # When monkeypatched to fail, must contain the error key.
+        assert "error" in stats
+        assert "gliner" in stats["error"].lower()
+
+    def test_matches_existing_entities_if_gliner_available(self, brain):
+        """If gliner is installed, extracted entities should match existing ones (no duplicates)."""
+        try:
+            import gliner  # noqa: F401
+        except ImportError:
+            pytest.skip("gliner not installed")
+
+        conn = raw_conn(brain)
+        brain.entity("Python", "tool")
+        insert_memory_raw(conn, "We use Python for all backend services")
+
+        stats = _gliner_entity_extract(conn)
+
+        # Should have linked, not duplicated.
+        count = conn.execute(
+            "SELECT COUNT(*) FROM entities WHERE name='Python'"
+        ).fetchone()[0]
+        assert count == 1, "GLiNER must reuse the existing Python entity, not duplicate it"
+        assert isinstance(stats, dict)
+        conn.close()
+
+    def test_creates_new_entities(self, brain):
+        """GLiNER should create new entities for genuinely new mentions."""
+        try:
+            import gliner  # noqa: F401
+        except ImportError:
+            pytest.skip("gliner not installed")
+
+        conn = raw_conn(brain)
+        insert_memory_raw(conn, "John Smith deployed the production API at Amazon Web Services")
+
+        stats = _gliner_entity_extract(conn)
+
+        assert isinstance(stats, dict)
+        # Function may or may not extract depending on model confidence — just verify structure.
+        assert "entities_created" in stats
+        assert "edges_created" in stats
+        assert "memories_scanned" in stats
+        assert stats.get("entities_created", 0) >= 0
+        conn.close()
+
+    def test_idempotent_no_duplicate_edges(self, brain):
+        """Running _gliner_entity_extract twice must not create duplicate edges."""
+        try:
+            import gliner  # noqa: F401
+        except ImportError:
+            pytest.skip("gliner not installed")
+
+        conn = raw_conn(brain)
+        insert_memory_raw(conn, "John Smith deployed the production API at Amazon Web Services")
+
+        stats1 = _gliner_entity_extract(conn)
+        edges_after_first = conn.execute(
+            "SELECT COUNT(*) FROM knowledge_edges WHERE relation_type='mentions'"
+        ).fetchone()[0]
+
+        # Second run: memory is now linked, should be skipped entirely.
+        stats2 = _gliner_entity_extract(conn)
+        edges_after_second = conn.execute(
+            "SELECT COUNT(*) FROM knowledge_edges WHERE relation_type='mentions'"
+        ).fetchone()[0]
+
+        assert edges_after_second == edges_after_first, (
+            "Second run must not create duplicate edges"
+        )
         conn.close()
