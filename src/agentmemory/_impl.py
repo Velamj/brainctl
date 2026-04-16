@@ -1465,6 +1465,76 @@ def cmd_trigger_cancel(args):
 
 REFLEXION_BOOST = 1.5  # score multiplier for reflexion-tagged memories in retrieval
 
+# ---------------------------------------------------------------------------
+# A-MAC 5-Factor Write Gate (Zhang et al. 2026, ICLR 2026 Workshop MemAgents)
+# Replaces the surprise-only W(m) pre-worthiness formula with a principled,
+# interpretable 5-factor decomposition. Content type prior is the dominant
+# factor (weight 0.40) — the most reliable proxy for long-term utility.
+# ---------------------------------------------------------------------------
+
+_AMAC_WEIGHTS = {
+    "future_utility":     0.15,
+    "factual_confidence": 0.15,
+    "semantic_novelty":   0.20,
+    "temporal_recency":   0.10,
+    "content_type_prior": 0.40,
+}
+
+# Per-category content-type priors: how durable/valuable is this category
+# as a prior over all memories (independent of the specific content).
+# Mirrors _TRUST_CATEGORY_PRIORS but tuned for write-gate worthiness, not trust.
+_CATEGORY_PRIORS = {
+    "identity":    0.9,
+    "decision":    0.85,
+    "lesson":      0.85,
+    "convention":  0.8,
+    "preference":  0.75,
+    "user":        0.75,
+    "project":     0.7,
+    "integration": 0.7,
+    "environment": 0.6,
+}
+
+
+def _amac_worthiness(future_utility: float, factual_confidence: float,
+                     semantic_novelty: float, temporal_recency: float,
+                     content_type_prior: float) -> float:
+    """Compute A-MAC 5-factor worthiness score for a candidate memory write.
+
+    Each factor is clamped to [0, 1] before weighting. The weighted sum is
+    also clamped to [0, 1] on output (the weights already sum to 1.0, so this
+    is only a safety clamp for floating-point edge cases).
+
+    Args:
+        future_utility:     Predicted future retrieval demand. Default 0.5 when
+                            no demand forecast is available.
+        factual_confidence: Trust in the source. Use the source trust weight:
+                            human_verified=1.0, mcp_tool=0.85, llm_inference=0.7,
+                            external_doc=0.5. Or the agent expertise strength when
+                            available (source_weight_applied from the CLI path).
+        semantic_novelty:   Surprise score from _surprise_score(). High surprise =
+                            high novelty = higher worthiness.
+        temporal_recency:   1.0 for freshly written memories (always new). May be
+                            lower for backdated or imported memories.
+        content_type_prior: _CATEGORY_PRIORS[category] — structural prior over how
+                            durable/valuable this category of memory tends to be.
+
+    Returns:
+        float in [0.0, 1.0]. The pre-worthiness gate thresholds are:
+            < 0.3  → SKIP (rejected, unless --force)
+            0.3–0.7 → CONSTRUCT_ONLY (lightweight write)
+            >= 0.7 → FULL_EVOLUTION (full pipeline)
+    """
+    w = _AMAC_WEIGHTS
+    score = (
+        w["future_utility"]     * max(0.0, min(1.0, future_utility)) +
+        w["factual_confidence"] * max(0.0, min(1.0, factual_confidence)) +
+        w["semantic_novelty"]   * max(0.0, min(1.0, semantic_novelty)) +
+        w["temporal_recency"]   * max(0.0, min(1.0, temporal_recency)) +
+        w["content_type_prior"] * max(0.0, min(1.0, content_type_prior))
+    )
+    return max(0.0, min(1.0, score))
+
 
 def _retrieval_practice_boost(db, memory_id, retrieval_prediction_error=0.0):
     """Apply desirable-difficulty weighting after a successful memory recall.
@@ -1673,16 +1743,17 @@ def cmd_memory_add(args):
     except Exception:
         surprise, surprise_method = 0.7, "error"
 
-    # Lightweight W(m) worthiness pre-check using surprise score
-    # worthiness = surprise * importance_estimate * (1 - redundancy) * arousal_boost
-    # importance_estimate derived from confidence and category weight
-    importance_estimate = effective_confidence * (0.5 + 0.5 * source_weight_applied)
-    _pre_redundancy = 0.0
-    if surprise is not None and surprise < 0.2:
-        _pre_redundancy = 0.5  # high overlap implies some redundancy
+    # A-MAC 5-factor pre-worthiness gate (Zhang et al. 2026, ICLR 2026 MemAgents)
+    # Replaces: surprise * importance_estimate * (1 - redundancy) * arousal_boost
+    # Factor mapping:
+    #   future_utility     = 0.5 (default; no demand_forecast in write path yet)
+    #   factual_confidence = source_weight_applied (agent expertise trust)
+    #   semantic_novelty   = surprise score (already computed above)
+    #   temporal_recency   = 1.0 (newly written memory is maximally recent)
+    #   content_type_prior = per-category prior from _CATEGORY_PRIORS
 
-    # Affect-modulated worthiness: high-arousal memories are more worth storing
-    # Grounded in McGaugh (2004) emotional modulation of memory consolidation
+    # Affect computation kept here because _arousal_boost is still passed downstream
+    # to gate_write() for the deeper W(m) embedding check.
     _arousal_boost = 1.0
     try:
         from agentmemory.affect import classify_affect, arousal_write_boost
@@ -1691,7 +1762,14 @@ def cmd_memory_add(args):
     except Exception:
         pass  # affect module failure is never fatal
 
-    _pre_worthiness = (surprise or 0.7) * importance_estimate * (1.0 - _pre_redundancy) * _arousal_boost
+    _content_type_prior = _CATEGORY_PRIORS.get(args.category or "", 0.5)
+    _pre_worthiness = _amac_worthiness(
+        future_utility=0.5,
+        factual_confidence=source_weight_applied,
+        semantic_novelty=surprise if surprise is not None else 0.7,
+        temporal_recency=1.0,
+        content_type_prior=_content_type_prior,
+    )
     if _pre_worthiness < 0.3 and not force_write:
         # Log rejected memory as observation event
         try:
@@ -1704,8 +1782,10 @@ def cmd_memory_add(args):
                      "content_preview": args.content[:120],
                      "surprise": surprise,
                      "surprise_method": surprise_method,
-                     "importance_estimate": round(importance_estimate, 4),
+                     "factual_confidence": round(source_weight_applied, 4),
+                     "content_type_prior": round(_content_type_prior, 4),
                      "pre_worthiness": round(_pre_worthiness, 4),
+                     "gate": "amac_5factor",
                      "category": args.category,
                      "scope": args.scope or "global",
                  }),
