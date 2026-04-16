@@ -604,6 +604,94 @@ VALID_ENTITY_TYPES = {
     "agent", "location", "event", "document", "service", "other"
 }
 
+# Minimum entity name length for autolink scanning — avoids noisy 1-2 char matches.
+_AUTOLINK_MIN_NAME_LENGTH = 3
+
+
+def _fts5_entity_match(db, agent_id="autolink"):
+    """Scan all active memories for substring matches against known entity names.
+
+    Creates ``knowledge_edges`` with ``relation_type='mentions'`` for every
+    (memory, entity) pair where the entity name appears as a case-insensitive
+    substring of the memory content.  Uses INSERT OR IGNORE so it is fully
+    idempotent — running twice produces no duplicate edges.
+
+    Only scans memories that are not already linked to *any* entity via a
+    ``mentions`` edge, so repeat runs are cheap.
+
+    Args:
+        db: SQLite connection (row_factory = sqlite3.Row expected).
+        agent_id: Agent to record as creator of the new edges.
+
+    Returns:
+        dict with keys:
+            linked              – memories that received at least one new edge
+            edges_created       – total new knowledge_edges rows inserted
+            skipped_already_linked – memories skipped because already linked
+            memories_scanned    – total active memories examined
+    """
+    # 1. Load memory IDs that already have at least one 'mentions' edge to an entity.
+    linked_rows = db.execute(
+        "SELECT DISTINCT source_id FROM knowledge_edges "
+        "WHERE source_table='memories' AND target_table='entities' "
+        "AND relation_type='mentions'"
+    ).fetchall()
+    already_linked: set[int] = {r["source_id"] for r in linked_rows}
+
+    # 2. Load all active memories NOT already linked.
+    if already_linked:
+        placeholders = ",".join("?" for _ in already_linked)
+        memories = db.execute(
+            f"SELECT id, content FROM memories "
+            f"WHERE retired_at IS NULL AND id NOT IN ({placeholders})",
+            list(already_linked)
+        ).fetchall()
+    else:
+        memories = db.execute(
+            "SELECT id, content FROM memories WHERE retired_at IS NULL"
+        ).fetchall()
+
+    # 3. Load all active entities whose names meet the minimum length threshold.
+    entities = db.execute(
+        "SELECT id, name FROM entities "
+        "WHERE retired_at IS NULL AND length(name) >= ?",
+        (_AUTOLINK_MIN_NAME_LENGTH,)
+    ).fetchall()
+
+    now = _now_ts()
+    edges_created = 0
+    linked_memories: set[int] = set()
+
+    # 4. For each unlinked memory, check every entity name via plain substring match.
+    for mem in memories:
+        mem_id = mem["id"]
+        content_lower = mem["content"].lower()
+        for ent in entities:
+            ename_lower = ent["name"].lower()
+            if ename_lower in content_lower:
+                try:
+                    db.execute(
+                        "INSERT OR IGNORE INTO knowledge_edges "
+                        "(source_table, source_id, target_table, target_id, "
+                        "relation_type, weight, agent_id, created_at) "
+                        "VALUES ('memories', ?, 'entities', ?, 'mentions', 0.5, ?, ?)",
+                        (mem_id, ent["id"], agent_id, now)
+                    )
+                    edges_created += 1
+                    linked_memories.add(mem_id)
+                except Exception:
+                    pass
+
+    if edges_created:
+        db.commit()
+
+    return {
+        "linked": len(linked_memories),
+        "edges_created": edges_created,
+        "skipped_already_linked": len(already_linked),
+        "memories_scanned": len(memories),
+    }
+
 
 def cmd_entity_create(args):
     db = get_db()
@@ -1369,6 +1457,15 @@ def find_entity_by_alias(db, candidate: str):
             if alias and alias.strip().lower() == candidate:
                 return r
     return None
+
+
+def cmd_entity_autolink(args):
+    """Run FTS5 entity name matching against all unlinked memories."""
+    db = get_db()
+    layer = getattr(args, "layer", "fts5")
+    # Currently only layer 'fts5' is implemented; 'all' falls through to same.
+    stats = _fts5_entity_match(db, agent_id="autolink")
+    json_out({"ok": True, "layer": layer, **stats})
 
 
 # ---------------------------------------------------------------------------
@@ -13722,6 +13819,16 @@ def build_parser():
     ent_alias.add_argument("values", nargs="*",
                            help="Aliases to add or remove (ignored for list)")
 
+    # --- autolink (V2-1: FTS5 entity name matching) ---
+    ent_autolink = ent_sub.add_parser(
+        "autolink",
+        help="Scan unlinked memories for entity name mentions and create knowledge_edges",
+    )
+    ent_autolink.add_argument(
+        "--layer", choices=["fts5", "all"], default="fts5",
+        help="Matching layer to run (default: fts5 — pure substring match)",
+    )
+
     # --- trigger ---  (prospective memory)
     trg = sub.add_parser("trigger", help="Prospective memory triggers — conditional future recall")
     trg_sub = trg.add_subparsers(dest="trg_cmd")
@@ -15359,6 +15466,7 @@ def main():
             "compile": cmd_entity_compile,
             "tier": cmd_entity_tier,
             "alias": cmd_entity_alias,
+            "autolink": cmd_entity_autolink,
         }
         fn = dispatch.get(args.ent_cmd)
     elif args.command == "trigger":
