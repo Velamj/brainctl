@@ -935,3 +935,400 @@ Gutierrez et al. 2024 / HippoRAG [CE-11], Xu et al. 2025 / A-MEM
 **"brainctl adapts retrieval strategy via explore/exploit":**
 Thompson 1933 [ML-1], Glowacka 2019 [ML-2], Zhang et al. 2026 [ML-3],
 Finn et al. 2017 [ML-5]
+
+---
+
+## 12. 2026 Supplement — Papers Published January–April 2026
+
+### 12.1 AI Agent Memory Architectures (2026)
+
+**[2026-1]** Bousetouane, F. (2026). AI agents need memory control
+over more context. *arXiv:2601.11653*.
+
+> Agent Cognitive Compressor (ACC): separates artifact recall from
+> state commitment. Candidate memories sit in a bounded staging area;
+> only memories surviving N turns without contradiction get promoted.
+> **Design implication:** add a staging buffer before brain.db commit —
+> temporal verification window strengthening the W(m) gate.
+
+**[2026-2]** Nguyen, A., Doan, D., Pham, H., Ha, B., Pham, D.,
+Nguyen, L., Nguyen, H., Nguyen, T., Do, C., Nguyen, P., & Nguyen, T.
+(2026). ByteRover: Agent-native memory through LLM-curated hierarchical
+context. *arXiv:2604.01599*.
+
+> Hierarchical Context Tree (Domain > Topic > Subtopic > Entry) with
+> 5-tier retrieval resolving most queries within 100ms without LLM
+> calls. Competitive on LoCoMo and LongMemEval. **Design implication:**
+> augment FTS5 with a tiered retrieval pipeline — escalate from keyword
+> → category-scoped → entity-graph → vsearch → LLM-assisted only when
+> cheaper tiers fail.
+
+**[2026-3]** Wang, S., Yu, E., Love, O., Zhang, T., Wong, T.,
+Scargall, S., & Fan, C. (2026). MemMachine: A ground-truth-preserving
+memory system for personalized AI agents. *arXiv:2604.04853*.
+
+> Stores complete conversation episodes to preserve accuracy rather
+> than extracting lossy summaries. Three memory types: short-term,
+> long-term episodic, profile. 0.9169 accuracy on LoCoMo. **Design
+> implication:** consider an optional episode store — compressed raw
+> conversation chunks the consolidation engine can re-mine later.
+
+**[2026-4]** Wen, S., & Ku, B. (2026). Knowledge compounding: An
+empirical economic analysis of self-evolving knowledge wikis under the
+agentic ROI framework. *arXiv:2604.11243*.
+
+> 84.6% token savings vs. standard RAG when structured knowledge layers
+> persist across queries. Costs decrease over time as coverage grows.
+> Reconceptualizes LLM tokens from consumables to capital goods.
+> **Design implication:** track "knowledge reuse rate" — how often
+> orient/search results reduce downstream token consumption. Compute
+> compounding ROI per project scope.
+
+### 12.2 Memory Admission & Write Gates (2026)
+
+**[2026-5]** Zhang, G., Jiang, W., Wang, X., Behr, A., Zhao, K.,
+Friedman, J., Chu, X., & Anoun, A. (2026). Adaptive memory admission
+control for LLM agents. *arXiv:2603.04549*. ICLR 2026 Workshop
+MemAgents.
+
+> A-MAC: decomposes memory value into five interpretable factors —
+> future utility, factual confidence, semantic novelty, temporal
+> recency, and content type prior. Content type prior is the single
+> most influential factor. F1 = 0.583 on LoCoMo. **Design
+> implication:** the most directly relevant paper for W(m). Replace
+> the current surprise-only gate with A-MAC's 5-factor scoring:
+> (1) future utility → demand_forecast signals, (2) factual confidence
+> → source trust scores, (3) semantic novelty → existing FTS5 surprise,
+> (4) temporal recency → decay curves, (5) content type prior →
+> memory_suggest_category weightings.
+
+### 12.3 Memory Benchmarks & Evaluation (2026)
+
+**[2026-6]** He, Z., Wang, Y., Zhi, C., Hu, Y., Chen, T.-P., Yin, L.,
+Chen, Z., Wu, T. A., Ouyang, S., Wang, Z., Pei, J., McAuley, J.,
+Choi, Y., & Pentland, A. (2026). MemoryArena: Benchmarking agent memory
+in interdependent multi-session agentic tasks.
+*arXiv:2602.16313*.
+
+> First benchmark testing memory where agents acquire it through
+> environment interaction and later rely on it for actions. Agents
+> performing well on LoCoMo struggle badly in this agentic setting.
+> **Design implication:** build an automated end-to-end test harness
+> where simulated sessions write memories, hand off, and the next
+> session must use those memories to complete tasks. First integration
+> test for the orient/wrap_up pipeline.
+
+**[2026-7]** Hu, Y., Wang, Y., & McAuley, J. (2026). Evaluating
+memory in LLM agents via incremental multi-turn interactions
+(MemoryAgentBench). *arXiv:2507.05257*. Accepted ICLR 2026.
+
+> Four core competencies: accurate retrieval, test-time learning,
+> long-range understanding, selective forgetting. Current methods
+> master none of all four. **Design implication:** map brainctl's
+> tools to the four competencies and build a per-competency benchmark.
+
+### 12.4 Multi-Agent Shared Memory (2026)
+
+**[2026-8]** Yu, Z., Yu, N., Zhang, H., Ni, W., Yin, M., Yang, J.,
+Zhao, Y., & Zhao, J. (2026). Multi-agent memory from a computer
+architecture perspective: Visions and challenges ahead.
+*arXiv:2603.10062*.
+
+> Frames multi-agent memory as a computer architecture problem.
+> Identifies two critical protocol gaps: cache sharing and structured
+> access control. Shared memory needs coherence support. **Design
+> implication:** add version counters on memory rows for concurrent
+> modification detection, agent-scoped read locks during consolidation,
+> workspace_broadcast notifications on shared-scope memory updates.
+
+**[2026-9]** Ge, Z., Li, H., Wang, Y., Hu, N., Zhang, C. J., & Li, Q.
+(2026). ClinicalAgents: Multi-agent orchestration for clinical decision
+making with dual-memory. *arXiv:2603.26182*.
+
+> Dual-memory: mutable Working Memory + static Experience Memory. MCTS
+> for dynamic orchestration with hypothesis generation and backtracking.
+> **Design implication:** formalize working/experience split. Working =
+> MEB + handoff state. Experience = high-confidence semantic memories
+> with source="human_verified". MCTS backtracking idea could improve
+> dream_cycle contradiction handling.
+
+**[2026-10]** Mao, W., Liu, H., Liu, Z., Tan, H., Shi, Y., Wu, J.,
+Zhang, A., & Wang, X. (2026). Collaborative multi-agent optimization
+for personalized memory system (CoMAM). *arXiv:2603.12631*.
+
+> Models multi-agent memory as sequential MDP. Uses collaborative RL
+> with group-level ranking consistency for cross-agent credit
+> assignment. **Design implication:** track cross-agent memory utility
+> (which agent's memories are most retrieved by other agents). Agents
+> with higher cross-agent utility get lower W(m) thresholds.
+
+**[2026-11]** Fleming, C., Kompella, R., Bosch, P., & Pandey, V.
+(2026). Scaling multi-agent systems: A smart middleware for improving
+agent interactions. *arXiv:2604.03430*.
+
+> Cognitive Fabric Nodes: middleware that grounds inter-agent
+> communication semantically before broadcasting. Prevents agents from
+> fragmenting into isolated subjective realities. **Design
+> implication:** run entity resolution + contradiction checks on
+> memories before workspace_broadcast, so agents receive pre-validated
+> grounded facts.
+
+### 12.5 Adaptive RAG & Retrieval (2026)
+
+**[2026-12]** Du, M., Xu, B., Zhu, C., Wang, S., Wang, P., Wang, X.,
+& Mao, Z. (2026). A-RAG: Scaling agentic retrieval-augmented generation
+via hierarchical retrieval interfaces. *arXiv:2602.03442*.
+
+> Exposes keyword search, semantic search, and chunk read as separate
+> tools — agent adaptively chooses retrieval granularity. Outperforms
+> fixed pipelines. **Design implication:** validates brainctl's
+> multi-tool approach (memory_search / vsearch / entity_search).
+> Add a meta-tool that recommends which search tool to use based on
+> query characteristics.
+
+**[2026-13]** Pollertlam, N., & Kornsuwannawit, W. (2026). Beyond the
+context window: A cost-performance analysis of fact-based memory vs.
+long-context LLMs for persistent agents. *arXiv:2603.04814*.
+
+> Memory systems become more cost-effective than long-context after
+> ~10 interaction turns at 100k tokens. **Design implication:** track
+> cumulative tokens saved by brainctl vs. hypothetical full-context
+> cost. Report the break-even point per project.
+
+### 12.6 Continual Learning & Forgetting (2026)
+
+**[2026-14]** Wang, Z., Wu, Z., Li, Y., Liu, B., Li, G., & Wang, Y.
+(2026). Continual learning of achieving forgetting-free and positive
+knowledge transfer. *arXiv:2601.05623*.
+
+> ETCL: task-specific binary masks isolate sparse sub-networks per
+> task. Achieves positive forward AND backward transfer — not just
+> preventing forgetting but improving old tasks. **Design implication:**
+> per-project "relevance masks" over the global memory pool. When a new
+> project is added, run backward transfer — check if new memories
+> improve retrieval quality for existing projects.
+
+**[2026-15]** Imanov, O. Y. L. (2026). Mechanistic analysis of
+catastrophic forgetting in large language models during continual
+fine-tuning. *arXiv:2601.18699*.
+
+> Identifies three forgetting mechanisms: gradient interference in
+> attention weights, representational drift, loss landscape flattening.
+> Forgetting severity correlates with task similarity. **Design
+> implication:** memories in crowded semantic neighborhoods decay faster
+> unless they carry distinguishing specificity — "similarity-aware
+> decay."
+
+### 12.7 Neuroscience of Memory Consolidation (2026)
+
+**[2026-16]** Fountas, Z., Oomerjee, A., Bou-Ammar, H., Wang, J., &
+Burgess, N. (2026). Why the brain consolidates: Predictive forgetting
+for optimal generalisation. *arXiv:2603.04688*.
+
+> Consolidation optimizes stored knowledge through "predictive
+> forgetting" — selectively preserving information that predicts future
+> outcomes. Offline consolidation serves compression for generalization,
+> not just stabilization. **Design implication:** retain memories with
+> highest predictive value for future queries (from demand_forecast).
+> Memories describing past events without future predictive value should
+> be compressed/retired more aggressively.
+
+**[2026-17]** Alevi, D., Lundt, F., Ciceri, S., Heiney, K., &
+Sprekeler, H. (2026). Memory consolidation and representational drift.
+*bioRxiv 2026.03.09.710554*.
+
+> Memories follow deterministic trajectories through pattern space
+> during consolidation. Representational drift is a natural consequence
+> of ongoing consolidation, not noise. **Design implication:** allow
+> memory embeddings/tags to gradually update during consolidation based
+> on access context — "controlled drift" aligns memories with how
+> they're actually used rather than how they were originally written.
+
+**[2026-18]** Robinson, H. L., Todorova, R., Nagy, G. A., Gruzdeva,
+A., Paudel, P., Oliva, A., & Fernandez-Ruiz, A. (2026). Large
+sharp-wave ripples promote hippocampo-cortical memory reactivation and
+consolidation during sleep. *Neuron*, 114(2), 226-236.e6.
+
+> Only large-amplitude SWRs drive consolidation; small ripples do not.
+> Optogenetic SWR boosting during sleep rescues otherwise-forgotten
+> memories. **Design implication:** replay should be weighted by
+> activation magnitude — high-salience replay candidates get priority
+> and potentially multiple passes. The replay_boost tool is the
+> "optogenetic rescue" analog for at-risk important memories.
+
+**[2026-19]** Pouget, C., Morier, F., Treiber, N., et al. (2026).
+Deconstruction of a memory engram reveals distinct ensembles recruited
+at learning. *Nature Neuroscience*.
+
+> A memory engram consists of distinct, non-overlapping sub-ensembles
+> recruited at different temporal phases of learning. A "core engram"
+> is essential for recall; peripheral components can be lost. **Design
+> implication:** memories should be decomposable into core vs.
+> peripheral components with differential protection during
+> consolidation. Core components (highest activation) get stronger
+> Hebbian reinforcement and EWC protection.
+
+**[2026-20]** Morici, J. F., Silva, A., Lima-Paiva, I., et al. (2026).
+Dorsoventral hippocampus neural assemblies reactivate during sleep
+following an aversive experience. *Nature Neuroscience*.
+
+> Replay following aversive experiences more faithfully reproduces
+> original firing patterns than replay following rewarding experiences.
+> Negative experiences get higher-fidelity replay. **Design
+> implication:** memories tagged with negative valence (errors,
+> warnings, failures, corrections) should get higher-fidelity
+> reconstruction during consolidation — not replayed more often, but
+> replayed more accurately.
+
+**[2026-21]** Kehl, M. S., Reber, T. P., Borger, V., Surges, R.,
+Mormann, F., & Staresina, B. P. (2026). Sleep ripples drive
+single-neuron reactivation for human memory consolidation.
+*bioRxiv 2026.03.27.714528*.
+
+> First direct evidence in humans that ripple-driven single-neuron
+> reactivation during sleep supports episodic consolidation. Sleep
+> ripples elicit stronger activation than wake ripples. Neurons coding
+> remembered items fire more during sleep ripples. **Design
+> implication:** consolidation cycles (offline "sleep") should be
+> protected from interruption by active queries. Consider a "quiet
+> period" flag for exclusive consolidation access.
+
+**[2026-22]** O'Neill, O. S., & Winters, B. D. (2026). Breaking
+boundaries: Dopamine's role in prediction error, salient novelty, and
+memory reconsolidation. *Neuroscience*, 594, 31-41.
+
+> Dopamine enables memory modification by overcoming biological
+> "boundary conditions" that normally prevent memory destabilization.
+> High surprise (prediction error) breaches even strong memories'
+> protection. **Design implication:** add `modification_resistance` to
+> memories that increases with age/access/EWC importance. The W(m)
+> surprise signal must exceed this resistance to enable
+> reconsolidation. Low surprise fails to destabilize strong memories —
+> which is protective and correct.
+
+**[2026-23]** Dupret, D., Fusi, S., & Panzeri, S. (2026). Neural
+population activity for memory: Properties, computations, and codes.
+*Neuron*, 114(3), 390-407.
+
+> Memory circuits navigate trade-offs between high-dimensional
+> representations (resist interference, costly) and overlapping
+> representations (enable generalization, cause confusion). A "safe
+> zone" in population-activity space balances both. **Design
+> implication:** monitor embedding space utilization as a health
+> metric — memories too clustered (interference risk) vs. too
+> dispersed (retrieval cost). Trigger pattern separation when clusters
+> get too dense.
+
+**[2026-24]** Niediek, J., Reber, T. P., et al. (2026). Episodic
+memory consolidation by reactivation of human concept neurons during
+sleep reflects contents, not sequence of events.
+*bioRxiv 2026.01.10.698827*.
+
+> Concept neurons reactivate based on content association within the
+> same episode, not temporal sequence. Co-reactivation is the
+> consolidation mechanism for "who/what." **Design implication:**
+> restructure replay queue by entity cluster, not temporal order.
+> Memories sharing common entities should be co-activated regardless
+> of creation time, strengthening Hebbian links by semantic relatedness
+> rather than temporal adjacency.
+
+**[2026-25]** Schwimmbeck, F., Niediek, J., et al. (2026). Sequential
+coupling of sleep oscillations enables concept-neuron reactivation and
+supports information flow across the human hippocampal-cortical circuit.
+*bioRxiv 2026.01.15.699122*.
+
+> Cross-regional co-activation is enhanced only when hippocampal SWRs
+> coincide with cortical slow oscillation-spindle complexes. The
+> cortex actively shapes consolidation. **Design implication:** gate
+> memory promotion on whether replayed memories integrate with existing
+> semantic structures. Only replays that find matching knowledge-graph
+> structures proceed to long-term storage.
+
+**[2026-26]** Causse, A. A., Curot, J., Lopes-dos-Santos, V., et al.
+(2026). A learning-evoked slow-oscillatory architecture paces
+population activity for offline reactivation across the human medial
+temporal lobe. *bioRxiv 2026.02.12.705512*.
+
+> Learning-time oscillatory bursts structure coactivity patterns that
+> are selectively reactivated during post-learning rest. Reactivation
+> strength predicts subsequent recall accuracy. **Design implication:**
+> implement write-time coordination tagging — memories written in close
+> temporal proximity with overlapping entity references form a
+> "coordination cluster" that should be replayed together as a unit.
+
+**[2026-27]** Aquino Argueta, S., Lazarus, A., Yao, F., et al. (2026).
+Reactivation during sleep segregates the neural representations of
+episodic memories. *bioRxiv 2026.04.08.717230*.
+
+> Sleep reactivation actively separates overlapping representations —
+> it does not merely strengthen memories but de-confuses them.
+> **Design implication:** add a de-overlap mechanism during
+> consolidation. When similar-but-distinct memories are detected
+> (high embedding similarity, different entities/contexts), push their
+> representations apart or add discriminative metadata rather than
+> merging them.
+
+**[2026-28]** Widloski, J., & Foster, D. J. (2025). Replay without
+sharp wave ripples in a spatial memory task. *Nature Communications*,
+16, 10287. (Published Nov 2025; included for direct relevance.)
+
+> Replay sequences can occur without ripples. Ripples serve a selective
+> tagging function, not a replay function. Replay and tagging are
+> distinct but coordinated. **Design implication:** decouple replay
+> from tagging in the consolidation pipeline. Replay happens broadly;
+> a separate context-sensitive tagging step selects which replayed
+> memories deserve strengthening.
+
+### 12.8 Surveys & Frameworks (2026)
+
+**[2026-29]** Du, P. (2026). Memory for autonomous LLM agents:
+Mechanisms, evaluation, and emerging frontiers. *arXiv:2603.07670*.
+
+> Comprehensive survey formalizing agent memory as a write-manage-read
+> loop. Identifies "learned forgetting" as the key open frontier.
+> **Design implication:** brainctl is strong on write (W(m)) and read
+> (FTS5/vsearch) but the "manage" layer (consolidation, forgetting) is
+> the weakest link — consistent with this survey's assessment.
+
+**[2026-30]** Dong, C. V., Lu, Q., Norman, K. A., & Michelmann, S.
+(2026). Towards large language models with human-like episodic memory.
+*Trends in Cognitive Sciences*, 30(2).
+
+> Identifies key episodic memory properties missing from current LLMs:
+> dynamic memory updating, event segmentation, selective encoding/
+> retrieval, temporal contiguity, and competition at retrieval.
+> **Design implication:** add a temporal contiguity bonus to search —
+> when a memory is retrieved, boost scores of temporally adjacent
+> memories from the same session. Add event boundary detection during
+> writes (significant project/context shifts trigger epoch boundaries).
+
+### 12.9 Updated Whitepaper Citation Guide (2026 additions)
+
+**"brainctl uses a principled memory admission gate":**
+Zhang et al. 2026 / A-MAC [2026-5], Bousetouane 2026 / ACC [2026-1]
+
+**"brainctl's consolidation is grounded in 2026 neuroscience":**
+Robinson et al. 2026 [2026-18] (large SWR selective consolidation),
+Pouget et al. 2026 [2026-19] (engram temporal layers),
+Morici et al. 2026 [2026-20] (aversive replay prioritization),
+Niediek et al. 2026 [2026-24] (content-association replay),
+Aquino Argueta et al. 2026 [2026-27] (sleep de-overlaps memories),
+Fountas et al. 2026 [2026-16] (predictive forgetting),
+Alevi et al. 2026 [2026-17] (representational drift)
+
+**"brainctl outperforms flat memory on agentic benchmarks":**
+He et al. 2026 / MemoryArena [2026-6],
+Hu et al. 2026 / MemoryAgentBench [2026-7],
+Wen & Ku 2026 [2026-4] (84.6% token savings)
+
+**"brainctl supports principled multi-agent memory":**
+Yu et al. 2026 [2026-8] (coherence protocols),
+Mao et al. 2026 / CoMAM [2026-10] (cross-agent credit assignment),
+Fleming et al. 2026 [2026-11] (semantic grounding middleware),
+Ge et al. 2026 [2026-9] (dual-memory architecture)
+
+**"brainctl's forgetting is sculpted, not accidental":**
+Fountas et al. 2026 [2026-16] (predictive forgetting),
+O'Neill & Winters 2026 [2026-22] (dopamine boundary conditions),
+Wang et al. 2026 [2026-14] (positive knowledge transfer),
+Dong et al. 2026 [2026-30] (selective encoding/forgetting)
