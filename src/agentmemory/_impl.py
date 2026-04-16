@@ -218,6 +218,57 @@ _RETRIEVAL_PRACTICE_BASE_BOOST = 0.02
 _CONTIGUITY_WINDOW_MINUTES = 30
 _CONTIGUITY_BONUS = 1.15
 
+# Q-learning rate for temporal-difference memory utility updates (Zhang et al. 2026 / MemRL).
+_Q_LEARNING_RATE = 0.1
+
+
+def _update_q_value(db, memory_id, contributed, learning_rate=_Q_LEARNING_RATE):
+    """TD update: q_new = q_old + lr * (reward - q_old).
+
+    Implements the temporal-difference Q-learning update rule from MemRL
+    (Zhang et al. 2026). reward=1.0 on positive contribution, 0.0 otherwise.
+    Q-value is clamped to [0, 1] after each update.
+
+    Args:
+        db: Active sqlite3 connection. Commits after updating.
+        memory_id: Integer PK of the memory being updated.
+        contributed: True if the memory contributed to a useful outcome.
+        learning_rate: TD step size alpha (default _Q_LEARNING_RATE = 0.1).
+
+    Side effects:
+        Updates q_value for the memory and commits.
+    """
+    reward = 1.0 if contributed else 0.0
+    row = db.execute(
+        "SELECT q_value FROM memories WHERE id=? AND retired_at IS NULL",
+        (memory_id,),
+    ).fetchone()
+    if not row:
+        return
+    q_old = row["q_value"] if row["q_value"] is not None else 0.5
+    q_new = max(0.0, min(1.0, q_old + learning_rate * (reward - q_old)))
+    db.execute("UPDATE memories SET q_value = ? WHERE id = ?", (q_new, memory_id))
+    db.commit()
+
+
+def _q_adjusted_score(base_score, q_value):
+    """Multiply base score by Q-weight. Q=0.5 is neutral (1.0x).
+
+    Maps Q-value in [0, 1] to a multiplier in [0.8, 1.2]:
+        multiplier = 0.8 + 0.4 * q
+
+    At q=0.0 → 0.8x (attenuated), q=0.5 → 1.0x (neutral), q=1.0 → 1.2x (boosted).
+
+    Args:
+        base_score: Current retrieval score (float).
+        q_value: Memory's Q-value in [0, 1], or None (treated as 0.5).
+
+    Returns:
+        Adjusted score (float).
+    """
+    q = q_value if q_value is not None else 0.5
+    return base_score * (0.8 + 0.4 * q)
+
 
 def _thompson_confidence(alpha=1.0, beta=1.0):
     """Draw a confidence sample from Beta(alpha, beta) for Thompson Sampling retrieval.
@@ -1553,8 +1604,9 @@ def _retrieval_practice_boost(db, memory_id, retrieval_prediction_error=0.0):
 
     Side effects:
         - Updates confidence, alpha, recalled_count, last_recalled_at, labile_until.
-        - Does NOT commit — the caller owns the transaction and commits after
-          processing all results (one commit per search, not one per row).
+        - Calls _update_q_value(contributed=True) which commits the Q-value update.
+        - Does NOT commit the confidence/alpha UPDATE — the caller owns that transaction
+          and commits after processing all results (one commit per search, not per row).
     """
     rpe = max(0.0, min(1.0, retrieval_prediction_error or 0.0))
     boost = _RETRIEVAL_PRACTICE_BASE_BOOST * (1.0 + rpe)
@@ -1572,6 +1624,8 @@ def _retrieval_practice_boost(db, memory_id, retrieval_prediction_error=0.0):
         "WHERE id = ?",
         (boost, memory_id),
     )
+    # Q-value TD update: successful retrieval implies contribution (Zhang et al. 2026 / MemRL).
+    _update_q_value(db, memory_id, contributed=True)
 
 
 def _apply_temporal_contiguity(candidates, retrieved_at, agent_id):
@@ -4823,7 +4877,7 @@ def cmd_search(args):
             "SELECT m.id, 'memory' as type, m.category, m.content, m.confidence, m.scope, "
             "m.created_at, m.recalled_count, m.temporal_class, m.last_recalled_at, f.rank as fts_rank, "
             "m.retrieval_prediction_error, m.alpha, m.beta, m.agent_id, "
-            "m.encoding_task_context, m.encoding_context_hash "
+            "m.encoding_task_context, m.encoding_context_hash, m.q_value "
             "FROM memories m JOIN memories_fts f ON m.id = f.rowid "
             "WHERE memories_fts MATCH ? AND m.retired_at IS NULL ORDER BY rank LIMIT ?",
             (fts_query, fetch_limit)
@@ -4848,7 +4902,7 @@ def cmd_search(args):
         src_rows = db_vec.execute(
             f"SELECT id, 'memory' as type, category, content, confidence, scope, "
             f"created_at, recalled_count, temporal_class, last_recalled_at, retrieval_prediction_error, alpha, beta, agent_id, "
-            f"encoding_task_context, encoding_context_hash "
+            f"encoding_task_context, encoding_context_hash, q_value "
             f"FROM memories WHERE id IN ({ph}) AND retired_at IS NULL",
             rowids
         ).fetchall()
@@ -5018,6 +5072,12 @@ def cmd_search(args):
                     r["final_score"] = round(r["final_score"] * (1.0 + 0.2 * ctx_score), 8)
             except Exception:
                 pass  # context-match boost is optional; never break search
+
+            # Q-value utility reranking: memories with high Q (frequently contributed)
+            # are boosted up to 1.2x; low Q memories are attenuated to 0.8x.
+            # (Zhang et al. 2026 / MemRL; Q=0.5 neutral → 1.0x multiplier)
+            if r.get("type") == "memory":
+                r["final_score"] = round(_q_adjusted_score(r["final_score"], r.get("q_value")), 8)
 
         # PageRank reranking boost: score *= (1 + alpha * norm_pagerank)
         pr_alpha = getattr(args, "pagerank_boost", 0.0)

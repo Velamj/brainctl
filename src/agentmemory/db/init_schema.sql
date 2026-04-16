@@ -84,7 +84,8 @@ CREATE TABLE memories (
     encoding_context_hash TEXT DEFAULT NULL,
     temporal_level TEXT NOT NULL DEFAULT 'moment'
         CHECK(temporal_level IN ('moment','session','day','week','month','quarter')),
-    next_review_at TEXT DEFAULT NULL
+    next_review_at TEXT DEFAULT NULL,
+    q_value REAL DEFAULT 0.5
 );
 
 CREATE INDEX idx_memories_agent ON memories(agent_id);
