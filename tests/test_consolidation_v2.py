@@ -156,3 +156,93 @@ class TestHomeostaticPressure:
             pressure=0.1,
             learning_load=5
         ) is False
+
+
+class TestProportionalDownscaling:
+    def test_downscaling_reduces_confidence(self):
+        """All non-protected memories should lose confidence."""
+        db = _make_db()
+        _insert_memory(db, content="a", confidence=0.8)
+        _insert_memory(db, content="b", confidence=0.6)
+        from agentmemory.hippocampus import apply_proportional_downscaling
+        stats = apply_proportional_downscaling(db, downscale_factor=0.9)
+        rows = db.execute("SELECT confidence FROM memories ORDER BY id").fetchall()
+        assert rows[0]["confidence"] < 0.8
+        assert rows[1]["confidence"] < 0.6
+
+    def test_tagged_memories_exempt(self):
+        """Memories with tag_cycles_remaining > 0 skip downscaling."""
+        db = _make_db()
+        m1 = _insert_memory(db, content="tagged", confidence=0.8, tag_cycles_remaining=2)
+        m2 = _insert_memory(db, content="untagged", confidence=0.8, tag_cycles_remaining=0)
+        from agentmemory.hippocampus import apply_proportional_downscaling
+        apply_proportional_downscaling(db, downscale_factor=0.8)
+        r1 = db.execute("SELECT confidence FROM memories WHERE id=?", (m1,)).fetchone()
+        r2 = db.execute("SELECT confidence FROM memories WHERE id=?", (m2,)).fetchone()
+        assert abs(r1["confidence"] - 0.8) < 0.001  # unchanged
+        assert r2["confidence"] < 0.8  # downscaled
+
+    def test_importance_resists_downscaling(self):
+        """High-importance memories should be downscaled less."""
+        db = _make_db()
+        m1 = _insert_memory(db, content="important", confidence=0.8, ewc_importance=0.9)
+        m2 = _insert_memory(db, content="unimportant", confidence=0.8, ewc_importance=0.1)
+        from agentmemory.hippocampus import apply_proportional_downscaling
+        apply_proportional_downscaling(db, downscale_factor=0.8)
+        r1 = db.execute("SELECT confidence FROM memories WHERE id=?", (m1,)).fetchone()
+        r2 = db.execute("SELECT confidence FROM memories WHERE id=?", (m2,)).fetchone()
+        assert r1["confidence"] > r2["confidence"]
+
+    def test_retirement_below_threshold(self):
+        """Memories below retirement threshold get retired."""
+        db = _make_db()
+        _insert_memory(db, content="dying", confidence=0.05)
+        from agentmemory.hippocampus import apply_proportional_downscaling
+        stats = apply_proportional_downscaling(db, downscale_factor=0.5)
+        row = db.execute("SELECT retired_at FROM memories WHERE id=1").fetchone()
+        assert row["retired_at"] is not None
+        assert stats["retired"] >= 1
+
+    def test_permanent_memories_exempt(self):
+        """Memories with temporal_class='permanent' skip downscaling."""
+        db = _make_db()
+        _insert_memory(db, content="permanent", confidence=0.8, temporal_class="permanent")
+        from agentmemory.hippocampus import apply_proportional_downscaling
+        apply_proportional_downscaling(db, downscale_factor=0.5)
+        row = db.execute("SELECT confidence FROM memories WHERE id=1").fetchone()
+        assert abs(row["confidence"] - 0.8) < 0.001
+
+    def test_tag_cycles_decremented(self):
+        """Downscaling pass should decrement tag_cycles_remaining by 1."""
+        db = _make_db()
+        _insert_memory(db, content="tagged", confidence=0.8, tag_cycles_remaining=3)
+        from agentmemory.hippocampus import apply_proportional_downscaling
+        apply_proportional_downscaling(db, downscale_factor=0.9)
+        row = db.execute("SELECT tag_cycles_remaining FROM memories WHERE id=1").fetchone()
+        assert row["tag_cycles_remaining"] == 2
+
+
+class TestSynapticTagging:
+    def test_tag_applied_to_labile_memories(self):
+        """Memories in labile window should get tagged."""
+        db = _make_db()
+        _insert_memory(db, content="labile", confidence=0.5)
+        db.execute("""UPDATE memories SET labile_until =
+            strftime('%Y-%m-%dT%H:%M:%S', 'now', '+1 hour') WHERE id=1""")
+        db.commit()
+        from agentmemory.hippocampus import apply_synaptic_tagging
+        stats = apply_synaptic_tagging(db, tag_cycles=3)
+        row = db.execute("SELECT tag_cycles_remaining FROM memories WHERE id=1").fetchone()
+        assert row["tag_cycles_remaining"] == 3
+
+    def test_expired_labile_not_tagged(self):
+        """Memories with expired labile windows should not be tagged."""
+        db = _make_db()
+        _insert_memory(db, content="expired", confidence=0.5)
+        db.execute("""UPDATE memories SET labile_until =
+            strftime('%Y-%m-%dT%H:%M:%S', 'now', '-1 hour') WHERE id=1""")
+        db.commit()
+        from agentmemory.hippocampus import apply_synaptic_tagging
+        apply_synaptic_tagging(db, tag_cycles=3)
+        row = db.execute("SELECT tag_cycles_remaining FROM memories WHERE id=1").fetchone()
+        assert row["tag_cycles_remaining"] == 0

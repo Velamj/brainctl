@@ -38,6 +38,14 @@ HOMEOSTATIC_SETPOINT = 0.55
 # cycle that triggers demand-driven consolidation (Schabus et al. 2004).
 LEARNING_LOAD_THRESHOLD = 20
 
+# Global proportional downscaling constants (Tononi & Cirelli 2014 [SHY-3])
+# Memories whose confidence drops below RETIREMENT_THRESHOLD are retired.
+RETIREMENT_THRESHOLD = 0.05
+
+# Default number of consolidation cycles a synaptic tag persists
+# (Frey & Morris 1997 [SHY-7]).
+DEFAULT_TAG_CYCLES = 3
+
 COMPRESS_PROMPT = (
     "You are an expert knowledge compressor. Given these N memories about [scope], "
     "reorganize them into the minimum number of dense, well-structured memories "
@@ -1026,6 +1034,111 @@ def apply_decay(conn: sqlite3.Connection, now: Optional[datetime] = None) -> Dic
 
     conn.commit()
     return stats
+
+
+def apply_synaptic_tagging(db: sqlite3.Connection, tag_cycles: int = DEFAULT_TAG_CYCLES) -> Dict[str, int]:
+    """Tag memories in active labile windows for protection from downscaling.
+
+    Frey & Morris 1997 [SHY-7]: synaptic tagging and capture hypothesis.
+    Memories within their labile consolidation window are tagged so they
+    survive proportional downscaling (apply_proportional_downscaling).
+    The tag protects for `tag_cycles` consolidation cycles.
+
+    Only raises the counter — never lowers it — so this is safe to call
+    multiple times per cycle without undoing prior tagging.
+    """
+    result = db.execute("""
+        UPDATE memories SET tag_cycles_remaining = ?
+        WHERE retired_at IS NULL
+          AND labile_until IS NOT NULL
+          AND labile_until > strftime('%Y-%m-%dT%H:%M:%S', 'now')
+          AND tag_cycles_remaining < ?
+    """, (tag_cycles, tag_cycles))
+    db.commit()
+    return {"tagged": result.rowcount}
+
+
+def apply_proportional_downscaling(
+    db: sqlite3.Connection,
+    downscale_factor: float = 0.95,
+) -> Dict[str, Any]:
+    """Global proportional downscaling (Tononi & Cirelli 2014 [SHY-3], rule 3).
+
+    Every non-exempt active memory has its confidence multiplied by an
+    importance-weighted effective factor derived from `downscale_factor`:
+
+        effective_factor = downscale_factor ** (1.0 - ewc_importance)
+
+    This means:
+    - ewc_importance = 0.0 → full downscale (factor = downscale_factor)
+    - ewc_importance = 1.0 → no downscale (factor = 1.0)
+    - Intermediate values interpolate smoothly (EWC analog, Kirkpatrick 2017 [SHY-13])
+
+    Exempt memories (skipped):
+    - temporal_class == 'permanent'
+    - tag_cycles_remaining > 0  (synaptic tagging, Frey & Morris 1997 [SHY-7])
+
+    Retirement:
+    - If new_confidence < RETIREMENT_THRESHOLD and not protected, the memory is
+      retired immediately (retired_at set to current timestamp).
+
+    Tag cycle decrement:
+    - After processing, tag_cycles_remaining is decremented by 1 for all tagged
+      memories (tagged memories are still exempt from downscaling this pass).
+
+    Args:
+        db:               Active SQLite connection with row_factory = sqlite3.Row.
+        downscale_factor: Multiplicative scale applied to unimportant memories.
+                          Typically 0.90–0.99.  Default 0.95.
+
+    Returns:
+        dict with keys: downscaled, retired, skipped, downscale_factor
+    """
+    rows = db.execute("""
+        SELECT id, confidence, ewc_importance, tag_cycles_remaining,
+               temporal_class, protected
+        FROM memories
+        WHERE retired_at IS NULL
+    """).fetchall()
+
+    downscaled = 0
+    retired = 0
+    skipped = 0
+
+    for r in rows:
+        # Permanent memories: exempt (Tononi & Cirelli 2014)
+        if r["temporal_class"] == "permanent":
+            skipped += 1
+            continue
+        # Tagged memories: exempt (Frey & Morris 1997)
+        if r["tag_cycles_remaining"] and r["tag_cycles_remaining"] > 0:
+            skipped += 1
+            continue
+
+        # Importance-weighted resistance (EWC analog, Kirkpatrick 2017)
+        importance = max(0.0, min(1.0, r["ewc_importance"] or 0.0))
+        effective_factor = downscale_factor ** (1.0 - importance)
+        new_conf = r["confidence"] * effective_factor
+
+        if new_conf < RETIREMENT_THRESHOLD and not r["protected"]:
+            db.execute("""
+                UPDATE memories SET confidence = ?,
+                    retired_at = strftime('%Y-%m-%dT%H:%M:%S', 'now')
+                WHERE id = ?""", (new_conf, r["id"]))
+            retired += 1
+        else:
+            db.execute("UPDATE memories SET confidence = ? WHERE id = ?",
+                       (new_conf, r["id"]))
+            downscaled += 1
+
+    # Decrement tag_cycles_remaining for all tagged memories
+    db.execute("""
+        UPDATE memories SET tag_cycles_remaining = tag_cycles_remaining - 1
+        WHERE retired_at IS NULL AND tag_cycles_remaining > 0""")
+    db.commit()
+
+    return {"downscaled": downscaled, "retired": retired, "skipped": skipped,
+            "downscale_factor": downscale_factor}
 
 
 def apply_recall_boost(
