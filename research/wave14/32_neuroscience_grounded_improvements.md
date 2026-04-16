@@ -569,10 +569,36 @@ Computational Biology*, 18(11), e1010628.
 
 ## 6. Design — Tier A: Quick Wins (v1.7.0-alpha)
 
+*Revised 2026-04-16 to incorporate 2026 supplement findings.*
+
 Builds on existing columns and tables. Minimal schema changes.
 Immediately measurable on the bench harness.
 
-### A1. Thompson Sampling retrieval
+### A1. A-MAC 5-factor write gate (replaces simple W(m) feedback loop)
+
+**Papers:** [2026-5] (A-MAC, ICLR 2026 Workshop), [ML-6], [ML-7]
+
+The current W(m) gate uses a single surprise score. A-MAC decomposes
+memory admission into five interpretable, independently tunable factors:
+
+```python
+W(m) = (
+    w1 * future_utility     +  # demand_forecast signal [2026-5]
+    w2 * factual_confidence  +  # source trust score (existing)
+    w3 * semantic_novelty    +  # FTS5 surprise score (existing)
+    w4 * temporal_recency    +  # decay curve position (existing)
+    w5 * content_type_prior     # category-specific base rate [2026-5]
+)
+```
+
+Content type prior is the single most influential factor per A-MAC.
+Compute from historical accept/reject rates per category:
+`prior(cat) = accepted_count(cat) / total_candidates(cat)`.
+
+**Where:** `_compute_worthiness()` in `_impl.py`, `tool_memory_add` in
+`mcp_server.py`.
+
+### A2. Thompson Sampling retrieval
 
 **Papers:** [ML-1], [ML-2]
 
@@ -592,9 +618,10 @@ with high certainty get exploited. Zero new columns needed.
 **Where:** `cmd_search` reranker in `_impl.py`, `tool_memory_search` in
 `mcp_server.py`.
 
-### A2. Retrieval-practice strengthening
+### A3. Retrieval-practice strengthening
 
-**Papers:** [CE-5], [CE-6], [CE-9]
+**Papers:** [CE-5], [CE-6], [CE-9], [2026-21] (validates via human
+single-neuron replay evidence)
 
 On each successful retrieval (`retrieval_contributed = 1` in
 access_log), boost the memory's confidence:
@@ -611,9 +638,52 @@ the reconsolidation window.
 
 **Where:** access_log write path in `_impl.py` and `mcp_server.py`.
 
-### A3. Encoding affect linkage
+### A4. Temporal contiguity bonus
 
-**Papers:** [CE-10], [CE-2]
+**Papers:** [2026-30] (Dong et al., Trends in Cognitive Sciences 2026)
+
+When a memory is retrieved, boost the retrieval scores of temporally
+adjacent memories from the same session (within ±30 minutes of
+`created_at`, same `agent_id`). This mimics the brain's tendency to
+recall related events in sequence and addresses the "temporal
+contiguity" gap Dong et al. identify as missing from current systems.
+
+```python
+for candidate in search_results:
+    if abs(candidate.created_at - hit.created_at) < timedelta(minutes=30) \
+       and candidate.agent_id == hit.agent_id:
+        candidate.score *= 1.15  # 15% temporal contiguity bonus
+```
+
+**Where:** reranker in `cmd_search` and `tool_memory_search`.
+
+### A5. Modification resistance for reconsolidation
+
+**Papers:** [2026-22] (O'Neill & Winters, Neuroscience 2026)
+
+Reconsolidation should not be trivially triggered. Memories develop
+`modification_resistance` that increases with age, recall count, and
+EWC importance. The W(m) surprise signal must exceed this resistance
+to open a reconsolidation window:
+
+```python
+resistance = min(0.9, 0.1 * log(1 + days_old) + 0.05 * recalled_count
+                 + 0.3 * ewc_importance)
+if surprise_score > resistance:
+    open_labile_window(memory)
+```
+
+Low-surprise events cannot destabilize strong memories — which is
+protective and biologically correct.
+
+**Where:** `reconsolidation_check` in `mcp_server.py` and
+`_impl.py`.
+
+### A6. Encoding affect linkage
+
+**Papers:** [CE-10], [CE-2], [2026-20] (Morici et al. — negative
+valence gets higher-fidelity replay, strengthening case for affect
+linkage at encoding time)
 
 **Migration 037:** Add `encoding_affect_id INTEGER REFERENCES
 affect_log(id)` to memories table.
@@ -625,15 +695,16 @@ candidate memory's encoding affect. Use as a reranking signal, weighted
 higher for internally-generated categories (`decision`, `lesson`,
 `preference`) per [CE-10].
 
-### A4. W(m) gate feedback loop
+### A7. W(m) gate calibration feedback loop
 
 **Papers:** [ML-7], [ML-6]
 
-Correlate W(m) surprise scores at write time with recall counts at
-retirement time. If high-W(m) memories are not recalled more often than
-low-W(m) memories, the gate is miscalibrated. Log the correlation as a
-health SLO metric (`retrieval_accuracy`). When accuracy drops below
-threshold, widen search scope.
+Correlate W(m) scores at write time with recall counts at retirement
+time. If high-W(m) memories are not recalled more often than low-W(m)
+memories, the gate is miscalibrated. Log the correlation as a health
+SLO metric (`gate_calibration`). Use the correlation to retune the
+five A-MAC factor weights (A1) via simple linear regression on
+historical write+recall data.
 
 **Where:** `brainctl lint` and `brainctl health` outputs.
 
@@ -641,9 +712,11 @@ threshold, widen search scope.
 
 ## 7. Design — Tier B: Consolidation 2.0 (v1.7.0)
 
-Principled overhaul of hippocampus.py based on SHY and sleep
-neuroscience. The consolidation engine becomes a phased pipeline with
-demand-driven triggers and protection mechanisms.
+*Revised 2026-04-16 to incorporate 2026 neuroscience findings.*
+
+Principled overhaul of hippocampus.py based on SHY, sleep neuroscience,
+and 2026 findings on replay mechanics, predictive forgetting, and
+memory de-overlapping.
 
 ### B1. Homeostatic pressure trigger
 
@@ -662,11 +735,14 @@ if pressure > HOMEOSTATIC_SETPOINT or learning_load > LOAD_THRESHOLD:
 The cron remains as a fallback (consolidation at least every 6 hours),
 but high-activity sessions trigger consolidation earlier.
 
-### B2. Global proportional downscaling
+### B2. Global proportional downscaling with predictive forgetting
 
-**Papers:** [SHY-1], [SHY-3], [SHY-13]
+**Papers:** [SHY-1], [SHY-3], [SHY-13], [2026-16] (Fountas et al.)
 
-Replace per-category DECAY_RATES with a single global factor:
+Replace per-category DECAY_RATES with a single global factor. Extend
+with predictive forgetting [2026-16]: memories with high predicted
+future utility resist downscaling more than mere historical access
+frequency would warrant.
 
 ```python
 downscale_factor = HOMEOSTATIC_SETPOINT / current_pressure
@@ -675,14 +751,13 @@ for memory in active_non_permanent_memories:
     if memory.tagged or memory.protected:
         continue  # activity-dependent protection [SHY-3 rule 3]
     importance = compute_importance(memory)  # [SHY-13] EWC analog
-    effective_factor = downscale_factor ** (1 - importance)
+    predictive_value = demand_forecast_score(memory)  # [2026-16]
+    effective_importance = max(importance, predictive_value)
+    effective_factor = downscale_factor ** (1 - effective_importance)
     memory.confidence *= effective_factor
     if memory.confidence < RETIREMENT_THRESHOLD:
         retire(memory)
 ```
-
-High-importance memories resist downscaling (differential depression,
-[SHY-3] rule 2). Protected memories are exempt ([SHY-3] rule 3).
 
 ### B3. Synaptic tagging protection
 
@@ -698,24 +773,57 @@ downscaling. If recalled during the tagged period, the tag is consumed
 **Migration 038:** Add `tag_cycles_remaining INTEGER DEFAULT 0` to
 memories table.
 
-### B4. Phased consolidation pipeline
+### B4. Entity-clustered replay with magnitude weighting
 
-**Papers:** [SHY-4], [SHY-5], [SHY-6], [SHY-7], [CLS-7]
+**Papers:** [2026-24] (Niediek et al.), [2026-18] (Robinson et al.),
+[2026-28] (Widloski & Foster)
 
-The `cycle` subcommand becomes a strict 5-phase pipeline:
+Three 2026 findings restructure replay:
+
+1. **Replay by entity cluster, not temporal order** [2026-24]: group
+   replay candidates by shared entity references (knowledge_edges).
+   Memories sharing common entities co-activate as a unit, strengthening
+   semantic links rather than temporal adjacency.
+2. **Magnitude-weighted selection** [2026-18]: not all replay candidates
+   are equal. Rank by `salience_score * importance`. High-magnitude
+   candidates get priority AND potentially multiple replay passes.
+   Low-magnitude candidates may skip replay entirely.
+3. **Decouple replay from tagging** [2026-28]: replay happens broadly
+   (all candidates in the cluster are re-accessed). A separate,
+   context-sensitive tagging step then selects which replayed memories
+   deserve Hebbian strengthening. Only memories relevant to the active
+   project scope or recently active entities get tagged for
+   strengthening; replayed memories outside the active context do not.
+
+### B5. Phased consolidation pipeline with coupling gate
+
+**Papers:** [SHY-4], [SHY-5], [SHY-6], [CLS-7], [2026-25]
+(Schwimmbeck et al.), [2026-27] (Aquino Argueta et al.)
+
+The `cycle` subcommand becomes a strict 7-phase pipeline:
 
 1. **N2 (spindle) phase:** Protect tagged and recently-written memories.
    Apply tagging for memories within labile windows.
-2. **N3 (SWS) phase:** Global proportional downscaling (B2). Compress
-   low-value surviving memories into gist summaries. Promote high-value
-   episodics to semantic.
-3. **REM phase:** Dream synthesis — find novel cross-domain connections.
+2. **N3 (SWS) phase:** Global proportional downscaling with predictive
+   forgetting (B2). Compress low-value surviving memories into gist
+   summaries.
+3. **Replay phase:** Entity-clustered replay with magnitude weighting
+   (B4). Decouple replay from tagging — replay broadly, tag selectively.
+4. **Coupling gate** [2026-25]: promotion is gated on whether replayed
+   memories integrate with existing knowledge-graph structures. Only
+   replays that find matching semantic structures proceed to promotion.
+   This prevents isolated, unconnected memories from being promoted.
+5. **De-overlap phase** [2026-27]: for similar-but-distinct memories
+   (high embedding similarity, different entities/contexts), actively
+   push representations apart — add discriminative metadata, sharpen
+   tag differences, or adjust embeddings. Sleep actively separates
+   overlapping memories; so should brainctl.
+6. **REM phase:** Dream synthesis — find novel cross-domain connections.
    Dampen affect scores on processed memories [SHY-10]. Big-loop
    recurrence — re-ingest compressed outputs as queries [CLS-8].
-4. **Hebbian phase:** Strengthen co-accessed memory pairs. Update
-   knowledge_edge weights.
-5. **Housekeeping:** Retire memories below threshold. Update
-   homeostatic pressure metric. Decrement tag_cycles_remaining.
+7. **Housekeeping:** Retire memories below threshold. Update homeostatic
+   pressure metric. Decrement tag_cycles_remaining. Hebbian strengthen
+   tagged co-accessed pairs. Update knowledge_edge weights.
 
 ### B5. Spacing-effect decay function
 
