@@ -29,6 +29,15 @@ DECAY_RATES = {
     "ephemeral": 0.2,
 }
 
+# Homeostatic pressure setpoint (Tononi & Cirelli 2003/2006)
+# Pressure = total confidence mass / active memory count.
+# Above this value consolidation is triggered to restore balance.
+HOMEOSTATIC_SETPOINT = 0.55
+
+# Learning load threshold: number of new memories since last consolidation
+# cycle that triggers demand-driven consolidation (Schabus et al. 2004).
+LEARNING_LOAD_THRESHOLD = 20
+
 COMPRESS_PROMPT = (
     "You are an expert knowledge compressor. Given these N memories about [scope], "
     "reorganize them into the minimum number of dense, well-structured memories "
@@ -742,6 +751,56 @@ TEMPORAL_CLASS_ORDER_LIST = ["ephemeral", "short", "medium", "long", "permanent"
 # Protected memories are skipped in demotion, retirement, compression, and merge.
 PROTECT_RECALL_MIN = 10       # recalled_count threshold for auto-protection
 PROTECT_CONFIDENCE_MIN = 0.8  # confidence threshold for auto-protection
+
+
+def compute_homeostatic_pressure(db: sqlite3.Connection) -> float:
+    """Total confidence mass / active memory count (Tononi & Cirelli 2003).
+
+    Returns 0.0 when there are no active memories to avoid division by zero.
+    """
+    row = db.execute("""
+        SELECT COALESCE(SUM(confidence), 0.0) as total,
+               COUNT(*) as cnt
+        FROM memories WHERE retired_at IS NULL
+    """).fetchone()
+    if row["cnt"] == 0:
+        return 0.0
+    return row["total"] / row["cnt"]
+
+
+def compute_learning_load(db: sqlite3.Connection, since: Optional[str] = None) -> int:
+    """Count memories created since a reference timestamp.
+
+    Args:
+        db:    Active SQLite connection with row_factory = sqlite3.Row.
+        since: ISO-8601 timestamp string.  If None or empty, returns 0.
+
+    Returns:
+        Number of non-retired memories whose created_at > since.
+    """
+    if not since:
+        return 0
+    row = db.execute(
+        "SELECT COUNT(*) as cnt FROM memories WHERE retired_at IS NULL AND created_at > ?",
+        (since,),
+    ).fetchone()
+    return row["cnt"]
+
+
+def should_trigger_consolidation(
+    pressure: float,
+    setpoint: float = HOMEOSTATIC_SETPOINT,
+    learning_load: int = 0,
+    load_threshold: int = LEARNING_LOAD_THRESHOLD,
+) -> bool:
+    """Demand-driven consolidation trigger (Tononi & Cirelli 2006).
+
+    Returns True when either:
+    - homeostatic pressure exceeds the setpoint (mean confidence too high), or
+    - learning load exceeds the load threshold (too many new memories since
+      last consolidation cycle, per Schabus et al. 2004).
+    """
+    return pressure > setpoint or learning_load > load_threshold
 
 
 def _mark_importance_locks(conn: sqlite3.Connection) -> int:
