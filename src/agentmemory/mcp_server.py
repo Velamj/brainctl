@@ -540,10 +540,23 @@ def tool_memory_add(agent_id: str, content: str, category: str, scope: str = "gl
     except Exception:
         pass
 
-    # Lightweight W(m) pre-check: worthiness = surprise * importance * source_trust * (1 - redundancy) * arousal * valence
-    importance_estimate = confidence
-    _pre_redundancy = 0.5 if (surprise is not None and surprise < 0.2) else 0.0
-    _pre_worthiness = (surprise or 0.7) * importance_estimate * source_trust * (1.0 - _pre_redundancy) * _arousal_gain * _valence_scale
+    # A-MAC 5-factor pre-worthiness gate (Zhang et al. 2026, ICLR 2026 MemAgents)
+    # Replaces: surprise * importance * source_trust * (1 - redundancy) * arousal * valence
+    # Factor mapping:
+    #   future_utility     = 0.5 (default; no demand_forecast in write path yet)
+    #   factual_confidence = source_trust (MCP source trust weight)
+    #   semantic_novelty   = surprise score (already computed above)
+    #   temporal_recency   = 1.0 (newly written memory is maximally recent)
+    #   content_type_prior = per-category prior from _CATEGORY_PRIORS
+    from agentmemory._impl import _amac_worthiness, _CATEGORY_PRIORS
+    _content_type_prior = _CATEGORY_PRIORS.get(category, 0.5)
+    _pre_worthiness = _amac_worthiness(
+        future_utility=0.5,
+        factual_confidence=source_trust,
+        semantic_novelty=surprise if surprise is not None else 0.7,
+        temporal_recency=1.0,
+        content_type_prior=_content_type_prior,
+    )
     if _pre_worthiness < 0.3 and not force:
         try:
             db.execute(
@@ -555,9 +568,10 @@ def tool_memory_add(agent_id: str, content: str, category: str, scope: str = "gl
                      "content_preview": content[:120],
                      "surprise": surprise,
                      "surprise_method": surprise_method,
-                     "importance_estimate": round(importance_estimate, 4),
-                     "valence_scale": round(_valence_scale, 4),
+                     "factual_confidence": round(source_trust, 4),
+                     "content_type_prior": round(_content_type_prior, 4),
                      "pre_worthiness": round(_pre_worthiness, 4),
+                     "gate": "amac_5factor",
                      "source": source,
                      "source_trust": source_trust,
                      "category": category,
