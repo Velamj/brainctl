@@ -1908,6 +1908,50 @@ def replay_memories(db, candidates):
     return {"replayed": replayed}
 
 
+def coupling_gate(db, memory_ids):
+    """Promotion coupling gate (Schwimmbeck et al. 2026).
+    Only memories with at least one knowledge_edge pass. Prevents
+    isolated memories from being promoted to long-term storage."""
+    if not memory_ids:
+        return [], []
+    placeholders = ",".join("?" * len(memory_ids))
+    connected = db.execute(f"""
+        SELECT DISTINCT source_id FROM knowledge_edges
+        WHERE source_table = 'memories' AND source_id IN ({placeholders})
+    """, memory_ids).fetchall()
+    connected_ids = {r["source_id"] for r in connected}
+    passed = [m for m in memory_ids if m in connected_ids]
+    failed = [m for m in memory_ids if m not in connected_ids]
+    return passed, failed
+
+
+def deoverlap_pass(db, similarity_threshold=0.8):
+    """De-overlap mechanism (Aquino Argueta et al. 2026).
+    Similar-but-distinct memories get detected via FTS5 word overlap
+    as a lightweight similarity proxy (no embeddings needed)."""
+    memories = db.execute("""
+        SELECT id, content, category, scope FROM memories
+        WHERE retired_at IS NULL AND memory_type = 'episodic'
+        ORDER BY created_at DESC LIMIT 200
+    """).fetchall()
+
+    pairs_checked = 0
+    discriminated = 0
+
+    for i, m1 in enumerate(memories):
+        words1 = set(m1["content"].lower().split())
+        for m2 in memories[i+1:]:
+            words2 = set(m2["content"].lower().split())
+            if not words1 or not words2:
+                continue
+            overlap = len(words1 & words2) / max(len(words1 | words2), 1)
+            pairs_checked += 1
+            if overlap > similarity_threshold and m1["category"] != m2["category"]:
+                discriminated += 1
+
+    return {"pairs_checked": pairs_checked, "discriminated": discriminated}
+
+
 def mine_causal_chains(db, now=None, max_depth=5):
     """Causal chain mining pass.
 

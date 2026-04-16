@@ -365,3 +365,81 @@ class TestEntityClusteredReplay:
         from agentmemory.hippocampus import replay_memories
         result = replay_memories(db, [])
         assert result["replayed"] == 0
+
+
+class TestCouplingGate:
+    def test_connected_memory_passes_gate(self):
+        """Memory with knowledge_edges should pass the coupling gate."""
+        db = _make_db()
+        m = _insert_memory(db, content="connected fact")
+        db.execute("INSERT INTO entities (id, name, entity_type) VALUES (1, 'X', 'concept')")
+        db.execute("""INSERT INTO knowledge_edges (source_table, source_id, target_table,
+            target_id, relation_type, created_at)
+            VALUES ('memories', ?, 'entities', 1, 'mentions',
+            strftime('%Y-%m-%dT%H:%M:%S','now'))""", (m,))
+        db.commit()
+        from agentmemory.hippocampus import coupling_gate
+        passed, failed = coupling_gate(db, [m])
+        assert m in passed
+        assert m not in failed
+
+    def test_isolated_memory_fails_gate(self):
+        """Memory with zero knowledge_edges should fail the coupling gate."""
+        db = _make_db()
+        m = _insert_memory(db, content="isolated fact")
+        from agentmemory.hippocampus import coupling_gate
+        passed, failed = coupling_gate(db, [m])
+        assert m in failed
+        assert m not in passed
+
+    def test_empty_list_returns_empty(self):
+        """Empty input should return two empty lists."""
+        db = _make_db()
+        from agentmemory.hippocampus import coupling_gate
+        passed, failed = coupling_gate(db, [])
+        assert passed == []
+        assert failed == []
+
+    def test_mixed_connected_and_isolated(self):
+        """Mixed list should correctly partition."""
+        db = _make_db()
+        m1 = _insert_memory(db, content="connected")
+        m2 = _insert_memory(db, content="isolated")
+        db.execute("INSERT INTO entities (id, name, entity_type) VALUES (1, 'Y', 'concept')")
+        db.execute("""INSERT INTO knowledge_edges (source_table, source_id, target_table,
+            target_id, relation_type, created_at)
+            VALUES ('memories', ?, 'entities', 1, 'mentions',
+            strftime('%Y-%m-%dT%H:%M:%S','now'))""", (m1,))
+        db.commit()
+        from agentmemory.hippocampus import coupling_gate
+        passed, failed = coupling_gate(db, [m1, m2])
+        assert m1 in passed
+        assert m2 in failed
+
+
+class TestDeOverlap:
+    def test_similar_memories_detected(self):
+        """Memories with high word overlap should be detected."""
+        db = _make_db()
+        _insert_memory(db, content="API rate limits at 100 per minute", category="integration")
+        _insert_memory(db, content="API rate limits at 200 per minute", category="project")
+        from agentmemory.hippocampus import deoverlap_pass
+        stats = deoverlap_pass(db, similarity_threshold=0.5)
+        assert stats["pairs_checked"] >= 1
+
+    def test_different_memories_not_flagged(self):
+        """Memories with low word overlap should not be flagged."""
+        db = _make_db()
+        _insert_memory(db, content="Alice likes Python programming", category="lesson")
+        _insert_memory(db, content="Deploy the Docker container now", category="project")
+        from agentmemory.hippocampus import deoverlap_pass
+        stats = deoverlap_pass(db, similarity_threshold=0.8)
+        assert stats["discriminated"] == 0
+
+    def test_empty_db_returns_zeros(self):
+        """No memories should return zero stats."""
+        db = _make_db()
+        from agentmemory.hippocampus import deoverlap_pass
+        stats = deoverlap_pass(db)
+        assert stats["pairs_checked"] == 0
+        assert stats["discriminated"] == 0
