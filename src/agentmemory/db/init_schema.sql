@@ -77,6 +77,7 @@ CREATE TABLE memories (
     labile_until TEXT DEFAULT NULL,
     labile_agent_id TEXT DEFAULT NULL,
     retrieval_prediction_error REAL DEFAULT NULL,
+    encoding_affect_id INTEGER REFERENCES affect_log(id) DEFAULT NULL,
     temporal_level TEXT NOT NULL DEFAULT 'moment'
         CHECK(temporal_level IN ('moment','session','day','week','month','quarter'))
 );
@@ -94,6 +95,9 @@ CREATE INDEX idx_memories_confidence ON memories(confidence DESC);
 CREATE INDEX idx_memories_agent_active_cat ON memories(agent_id, category) WHERE retired_at IS NULL;
 
 CREATE INDEX idx_memories_agent_time ON memories(agent_id, created_at DESC) WHERE retired_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_memories_encoding_affect
+    ON memories(encoding_affect_id) WHERE encoding_affect_id IS NOT NULL;
 
 CREATE VIRTUAL TABLE memories_fts USING fts5(
     content,

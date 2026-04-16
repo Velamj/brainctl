@@ -1591,6 +1591,43 @@ def _should_open_labile_window(surprise, resistance):
     return surprise > resistance
 
 
+def _get_encoding_affect_id(db, agent_id):
+    """Get the most recent affect_log ID for this agent at encoding time.
+
+    Based on Eich & Metcalfe 1989: encoding context (including affect state)
+    is captured alongside the memory trace and influences later retrieval.
+
+    Args:
+        db: Active SQLite connection with row_factory = sqlite3.Row.
+        agent_id: The agent whose most recent affect_log entry to retrieve.
+
+    Returns:
+        Integer ID of the most recent affect_log row, or None if no entry exists.
+    """
+    row = db.execute(
+        """SELECT id FROM affect_log
+           WHERE agent_id = ?
+           ORDER BY created_at DESC LIMIT 1""",
+        (agent_id,)).fetchone()
+    return row["id"] if row else None
+
+
+def _affect_distance(v1, a1, d1, v2, a2, d2):
+    """Euclidean distance in VAD (valence-arousal-dominance) space.
+
+    Used to quantify how far apart two affect states are. Based on the
+    circumplex model of affect (Russell 1980) extended to 3D VAD space.
+
+    Args:
+        v1, a1, d1: Valence, arousal, dominance of the first state.
+        v2, a2, d2: Valence, arousal, dominance of the second state.
+
+    Returns:
+        Float Euclidean distance >= 0.0.
+    """
+    return math.sqrt((v1 - v2) ** 2 + (a1 - a2) ** 2 + (d1 - d2) ** 2)
+
+
 def cmd_memory_add(args):
     db = get_db()
     # --reflexion shorthand: force category=lesson, inject 'reflexion' tag
@@ -1886,6 +1923,16 @@ def cmd_memory_add(args):
             )
         except Exception:
             pass  # column not yet migrated — non-fatal
+
+    # Encoding affect linkage (Eich & Metcalfe 1989, Morici et al. 2026):
+    # Capture the agent's affect state at encoding time as a FK to affect_log.
+    try:
+        encoding_affect_id = _get_encoding_affect_id(db, args.agent)
+        if encoding_affect_id:
+            db.execute("UPDATE memories SET encoding_affect_id = ? WHERE id = ?",
+                       (encoding_affect_id, memory_id))
+    except Exception:
+        pass  # column not yet migrated or affect_log unavailable — non-fatal
 
     log_access(db, args.agent, "write", "memories", memory_id)
     db.commit()

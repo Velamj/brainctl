@@ -750,6 +750,17 @@ def tool_memory_add(agent_id: str, content: str, category: str, scope: str = "gl
         except Exception:
             pass
 
+    # Encoding affect linkage (Eich & Metcalfe 1989, Morici et al. 2026):
+    # Capture the agent's affect state at encoding time as a FK to affect_log.
+    try:
+        from agentmemory._impl import _get_encoding_affect_id
+        encoding_affect_id = _get_encoding_affect_id(db, agent_id)
+        if encoding_affect_id:
+            db.execute("UPDATE memories SET encoding_affect_id = ? WHERE id = ?",
+                       (encoding_affect_id, mid))
+    except Exception:
+        pass  # column not yet migrated or affect_log unavailable — non-fatal
+
     log_access(db, agent_id, "write", "memories", mid)
     # Embed on write — only for FULL_EVOLUTION tier
     embedded = False
