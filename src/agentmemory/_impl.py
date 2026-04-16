@@ -117,6 +117,7 @@ VALID_EVENT_TYPES = {
 
 VALID_TASK_STATUSES = {"pending", "in_progress", "blocked", "completed", "cancelled"}
 VALID_PRIORITIES = {"critical", "high", "medium", "low"}
+_VALID_CAUSAL_TYPES = {"causes", "enables", "prevents"}
 
 # FTS5 special characters that cause sqlite3.OperationalError when unescaped.
 # Strip them before passing any user query to a MATCH clause.
@@ -10138,6 +10139,72 @@ def cmd_belief_conflicts(args):
 
 
 # ---------------------------------------------------------------------------
+# Belief Collapse Mechanics — private helpers
+# ---------------------------------------------------------------------------
+
+def _collapse_belief(db, belief_id, agent_id, collapse_type, chosen_state, collapse_context=None):
+    """Resolve a superposed belief to a definite state.
+
+    Writes a belief_collapse_events record and clears is_superposed on
+    agent_beliefs.  Returns {"already_collapsed": True} if the belief is
+    already definite, or {"error": ...} if not found.
+
+    collapse_type must be one of: 'query', 'action', 'update'
+    """
+    import uuid as _uuid_mod
+    row = db.execute(
+        "SELECT * FROM agent_beliefs WHERE id = ?", (belief_id,)
+    ).fetchone()
+    if not row:
+        return {"error": "belief not found"}
+    if not row["is_superposed"]:
+        return {"already_collapsed": True, "current_value": row["belief_content"]}
+    amplitude = math.sqrt(max(0.0, row["confidence"] or 0.5))
+    db.execute(
+        """INSERT INTO belief_collapse_events
+           (id, belief_id, agent_id, collapsed_state, measured_amplitude,
+            collapse_type, collapse_context)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (
+            _uuid_mod.uuid4().hex,
+            str(belief_id),
+            agent_id,
+            chosen_state,
+            amplitude,
+            collapse_type,
+            collapse_context,
+        ),
+    )
+    db.execute(
+        """UPDATE agent_beliefs
+              SET is_superposed = 0,
+                  belief_content = ?,
+                  updated_at = strftime('%Y-%m-%dT%H:%M:%S', 'now')
+            WHERE id = ?""",
+        (chosen_state, belief_id),
+    )
+    db.commit()
+    return {"collapsed_to": chosen_state, "amplitude": amplitude, "collapse_type": collapse_type}
+
+
+def _check_collapse_triggers(db, agent_id, max_superposition_days=30):
+    """Return superposed beliefs older than max_superposition_days for agent_id.
+
+    Each returned dict has the keys from the SELECT: id, topic, belief_content,
+    confidence, created_at.
+    """
+    candidates = db.execute(
+        """SELECT id, topic, belief_content, confidence, created_at
+             FROM agent_beliefs
+            WHERE agent_id = ?
+              AND is_superposed = 1
+              AND julianday('now') - julianday(created_at) > ?""",
+        (agent_id, max_superposition_days),
+    ).fetchall()
+    return [dict(r) for r in candidates]
+
+
+# ---------------------------------------------------------------------------
 # Belief Collapse Mechanics — collapse-log / collapse-stats
 # ---------------------------------------------------------------------------
 
@@ -15567,6 +15634,118 @@ def cmd_monitor(args):
 
     except KeyboardInterrupt:
         print("\n[monitor] stopped.", flush=True)
+
+
+# ---------------------------------------------------------------------------
+# Temporal Abstraction Hierarchy helpers
+# ---------------------------------------------------------------------------
+
+_TEMPORAL_LEVEL_THRESHOLDS = [
+    (0.5, "moment"), (1.0, "session"), (7.0, "day"),
+    (30.0, "week"), (90.0, "month"),
+]
+
+# Child levels consulted when building a day or week summary
+_TEMPORAL_SUMMARY_CHILDREN = {
+    "day": ("moment",),
+    "week": ("moment", "session"),
+}
+
+
+def _assign_temporal_levels(db):
+    """Assign temporal_level to all active memories based on their age.
+
+    Uses a 5-threshold hierarchy: moment (<12h), session (12h-1d), day (1-7d),
+    week (7-30d), month (30-90d), quarter (>90d). Anything that falls through
+    all thresholds is assigned "quarter".
+
+    Args:
+        db: sqlite3.Connection with row_factory=sqlite3.Row set.
+
+    Returns:
+        dict with key "updated" (int) — number of rows touched.
+    """
+    updated = 0
+    rows = db.execute(
+        """SELECT id, julianday('now') - julianday(created_at) as age_days
+           FROM memories WHERE retired_at IS NULL"""
+    ).fetchall()
+    for r in rows:
+        age = r["age_days"] or 0
+        level = "quarter"
+        for threshold, lvl in _TEMPORAL_LEVEL_THRESHOLDS:
+            if age < threshold:
+                level = lvl
+                break
+        db.execute(
+            "UPDATE memories SET temporal_level = ? WHERE id = ?", (level, r["id"])
+        )
+        updated += 1
+    db.commit()
+    return {"updated": updated}
+
+
+def _build_temporal_summary(db, level="day", date=None, agent_id="test"):
+    """Build a simple extractive summary from memories at a temporal level.
+
+    For "day" level: selects moment-level memories whose created_at falls on
+    the given date (YYYY-MM-DD). For "week" level: selects moment- and
+    session-level memories from the 7 days ending on that date.
+
+    Content snippets are concatenated into a single summary string. Returns
+    None when no matching memories exist.
+
+    Args:
+        db:       sqlite3.Connection with row_factory=sqlite3.Row set.
+        level:    "day" or "week" (other levels accepted but treated like day).
+        date:     Date string in YYYY-MM-DD format. Defaults to today (UTC).
+        agent_id: Filter by this agent_id (default "test").
+
+    Returns:
+        str with concatenated snippets, or None if no memories match.
+    """
+    import datetime as _dt
+
+    if date is None:
+        date = _dt.datetime.utcnow().strftime("%Y-%m-%d")
+
+    child_levels = _TEMPORAL_SUMMARY_CHILDREN.get(level, ("moment",))
+
+    if level == "week":
+        try:
+            end_dt = _dt.datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            return None
+        start_dt = end_dt - _dt.timedelta(days=7)
+        window_start = start_dt.strftime("%Y-%m-%d") + "T00:00:00"
+        window_end = end_dt.strftime("%Y-%m-%d") + "T23:59:59"
+    else:
+        # day: just the single calendar date
+        window_start = date + "T00:00:00"
+        window_end = date + "T23:59:59"
+
+    placeholders = ",".join("?" for _ in child_levels)
+    params = [agent_id] + list(child_levels) + [window_start, window_end]
+    rows = db.execute(
+        f"""SELECT content FROM memories
+            WHERE retired_at IS NULL
+              AND agent_id = ?
+              AND temporal_level IN ({placeholders})
+              AND created_at BETWEEN ? AND ?
+            ORDER BY created_at ASC""",
+        params,
+    ).fetchall()
+
+    if not rows:
+        return None
+
+    snippets = []
+    for r in rows:
+        text = (r["content"] or "").strip()
+        if text:
+            snippets.append(text.split(".")[0].strip())
+
+    return "; ".join(s for s in snippets if s) or None
 
 
 # ---------------------------------------------------------------------------
