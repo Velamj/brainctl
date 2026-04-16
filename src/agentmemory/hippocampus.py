@@ -1858,6 +1858,56 @@ def experience_replay(
     return {"replayed": len(replayed_ids), "ids": replayed_ids, "skipped_permanent": skipped}
 
 
+def build_entity_clusters(db, min_cluster_size=2):
+    """Group memories by shared entity references (Niediek et al. 2026).
+    Replay by content association, not temporal sequence."""
+    entity_to_memories = {}
+    rows = db.execute("""
+        SELECT ke.target_id as entity_id, ke.source_id as memory_id,
+               m.salience_score, m.confidence, m.content
+        FROM knowledge_edges ke
+        JOIN memories m ON m.id = ke.source_id AND m.retired_at IS NULL
+        WHERE ke.source_table = 'memories' AND ke.target_table = 'entities'
+    """).fetchall()
+    for r in rows:
+        eid = r["entity_id"]
+        if eid not in entity_to_memories:
+            entity_to_memories[eid] = []
+        entity_to_memories[eid].append(dict(r))
+    clusters = [mems for mems in entity_to_memories.values()
+                if len(mems) >= min_cluster_size]
+    clusters.sort(key=lambda c: max(m.get("salience_score") or 0 for m in c), reverse=True)
+    return clusters
+
+
+def select_replay_candidates(db, top_k=20):
+    """Magnitude-weighted replay selection (Robinson et al. 2026).
+    High-salience candidates get priority."""
+    rows = db.execute("""
+        SELECT id, content, salience_score, confidence, category
+        FROM memories
+        WHERE retired_at IS NULL AND memory_type = 'episodic'
+        ORDER BY COALESCE(salience_score, 0.5) DESC
+        LIMIT ?
+    """, (top_k,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def replay_memories(db, candidates):
+    """Replay without auto-strengthening (Widloski & Foster 2025).
+    Replay is decoupled from tagging — strengthening happens in a
+    separate Hebbian pass that only targets tagged memories."""
+    replayed = 0
+    for c in candidates:
+        db.execute("""UPDATE memories SET
+            recalled_count = recalled_count + 1,
+            last_recalled_at = strftime('%Y-%m-%dT%H:%M:%S', 'now')
+            WHERE id = ? AND retired_at IS NULL""", (c["id"],))
+        replayed += 1
+    db.commit()
+    return {"replayed": replayed}
+
+
 def mine_causal_chains(db, now=None, max_depth=5):
     """Causal chain mining pass.
 

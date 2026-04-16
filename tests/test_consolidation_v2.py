@@ -35,6 +35,7 @@ def _make_db():
             stability REAL DEFAULT 1.0,
             labile_until TEXT DEFAULT NULL,
             retired_at TEXT DEFAULT NULL,
+            last_recalled_at TEXT DEFAULT NULL,
             created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now')),
             updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now'))
         );
@@ -298,3 +299,69 @@ class TestSpacingDecay:
                                  temporal_class="medium")
         row = db.execute("SELECT stability FROM memories WHERE id=?", (m,)).fetchone()
         assert row["stability"] <= 20.0
+
+
+class TestEntityClusteredReplay:
+    def test_memories_grouped_by_shared_entity(self):
+        """Memories sharing entities should be grouped for replay."""
+        db = _make_db()
+        m1 = _insert_memory(db, content="Alice likes Python", salience_score=0.8)
+        m2 = _insert_memory(db, content="Alice works at Acme", salience_score=0.7)
+        m3 = _insert_memory(db, content="Bob likes Java", salience_score=0.6)
+        db.execute("INSERT INTO entities (id, name, entity_type) VALUES (1, 'Alice', 'person')")
+        db.execute("""INSERT INTO knowledge_edges (source_table, source_id, target_table, target_id,
+            relation_type, created_at) VALUES ('memories', ?, 'entities', 1, 'mentions',
+            strftime('%Y-%m-%dT%H:%M:%S','now'))""", (m1,))
+        db.execute("""INSERT INTO knowledge_edges (source_table, source_id, target_table, target_id,
+            relation_type, created_at) VALUES ('memories', ?, 'entities', 1, 'mentions',
+            strftime('%Y-%m-%dT%H:%M:%S','now'))""", (m2,))
+        db.commit()
+        from agentmemory.hippocampus import build_entity_clusters
+        clusters = build_entity_clusters(db)
+        found_cluster = None
+        for cluster in clusters:
+            ids = {m["memory_id"] for m in cluster}
+            if m1 in ids and m2 in ids:
+                found_cluster = cluster
+                break
+        assert found_cluster is not None
+        for cluster in clusters:
+            ids = {m["memory_id"] for m in cluster}
+            assert m3 not in ids
+
+    def test_magnitude_weighted_selection(self):
+        """Higher-salience memories should appear first in replay order."""
+        db = _make_db()
+        _insert_memory(db, content="low", salience_score=0.2)
+        _insert_memory(db, content="high", salience_score=0.9)
+        _insert_memory(db, content="mid", salience_score=0.5)
+        from agentmemory.hippocampus import select_replay_candidates
+        candidates = select_replay_candidates(db, top_k=10)
+        assert candidates[0]["salience_score"] >= candidates[1]["salience_score"]
+
+    def test_replay_does_not_change_confidence(self):
+        """Replayed memories should not automatically get confidence boost.
+        Tagging is a separate step (Widloski & Foster 2025)."""
+        db = _make_db()
+        m1 = _insert_memory(db, content="replay me", confidence=0.5)
+        from agentmemory.hippocampus import replay_memories
+        result = replay_memories(db, [{"id": m1, "salience_score": 0.8}])
+        row = db.execute("SELECT confidence FROM memories WHERE id=?", (m1,)).fetchone()
+        assert abs(row["confidence"] - 0.5) < 0.001
+        assert result["replayed"] >= 1
+
+    def test_replay_increments_recalled_count(self):
+        """Replay should increment recalled_count."""
+        db = _make_db()
+        m1 = _insert_memory(db, content="replay me", recalled_count=5)
+        from agentmemory.hippocampus import replay_memories
+        replay_memories(db, [{"id": m1, "salience_score": 0.8}])
+        row = db.execute("SELECT recalled_count FROM memories WHERE id=?", (m1,)).fetchone()
+        assert row["recalled_count"] == 6
+
+    def test_empty_candidates_returns_zero(self):
+        """Replaying empty list should return replayed=0."""
+        db = _make_db()
+        from agentmemory.hippocampus import replay_memories
+        result = replay_memories(db, [])
+        assert result["replayed"] == 0
