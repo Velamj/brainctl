@@ -5,6 +5,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-04-16
+
+Context-aware retrieval: memories now carry their encoding context and
+use it to boost retrieval relevance. Plus a spaced-review scheduler
+for optimal memory maintenance intervals.
+
+### Added
+
+- **Encoding context snapshot (migration 040).** Every memory now
+  captures a JSON snapshot of the agent's operational context at write
+  time (`encoding_task_context`) plus a SHA-256 hash
+  (`encoding_context_hash`) for fast matching. Context includes project,
+  agent_id, session_id. (Tulving & Thomson 1973; Heald et al. 2023)
+- **Context-matching reranker.** Search results now get a score boost
+  (up to 20%) when their encoding context matches the current search
+  context. Hash match gives +0.3 bonus; key-value Jaccard overlap gives
+  partial credit. Plugs into the existing RRF pipeline alongside FTS5,
+  vector, Thompson Sampling, and PageRank signals.
+  (Smith & Vela 2001; HippoRAG / Gutierrez et al. 2024)
+- **Spaced-review scheduler (migration 041).** `schedule_spaced_reviews`
+  computes optimal inter-study intervals (ISI = 15% of retention
+  interval, scaled by memory stability) and stamps `next_review_at` on
+  each memory. `process_due_reviews` replays due memories and
+  reschedules them at expanding intervals. Integrates with the
+  consolidation cycle. (Cepeda et al. 2006; Murre & Dros 2015)
+
+### Migrations
+
+- **040** — `encoding_task_context TEXT`, `encoding_context_hash TEXT`
+  on memories + partial index
+- **041** — `next_review_at TEXT` on memories + partial index
+
+### Tests
+
+- 24 new tests across 3 test files
+- Full suite: 150+ tests passing
+
 ## [1.7.0] — 2026-04-16
 
 Two bodies of work: neuroscience-grounded retrieval improvements (Tier A)
