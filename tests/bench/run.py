@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import sys
+
+random.seed(42)
 
 from tests.bench.eval import (
     compare_to_baseline,
