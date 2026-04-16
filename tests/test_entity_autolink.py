@@ -18,7 +18,7 @@ SRC = Path(__file__).resolve().parent.parent / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from agentmemory._impl import _fts5_entity_match, _AUTOLINK_MIN_NAME_LENGTH
+from agentmemory._impl import _fts5_entity_match, _AUTOLINK_MIN_NAME_LENGTH, _create_cooccurrence_edges
 from agentmemory.brain import Brain
 
 
@@ -249,3 +249,87 @@ class TestAutolinkCLI:
         assert result.returncode == 0, f"stderr: {result.stderr}"
         data = json.loads(result.stdout)
         assert data["layer"] == "fts5"
+
+
+# ---------------------------------------------------------------------------
+# Layer 3: Co-occurrence edges (SPRIG, Wang 2025)
+# ---------------------------------------------------------------------------
+
+
+def cooccur_edge_count(conn: sqlite3.Connection) -> int:
+    """Count all entity<->entity co_occurs edges."""
+    row = conn.execute(
+        "SELECT COUNT(*) FROM knowledge_edges "
+        "WHERE source_table='entities' AND target_table='entities' "
+        "AND relation_type='co_occurs'"
+    ).fetchone()
+    return row[0]
+
+
+class TestCooccurrenceEdges:
+    """Tests for _create_cooccurrence_edges (Layer 3)."""
+
+    def test_creates_edges_between_co_occurring_entities(self, brain):
+        """Memory that mentions 2 entities produces a co_occurs edge between them."""
+        conn = raw_conn(brain)
+
+        # Insert a memory mentioning two entities BEFORE creating entities
+        # (to bypass on-ingest auto-linker).
+        mem_id = insert_memory_raw(conn, "OpenClaw uses brainctl for memory storage.")
+        brain.entity("OpenClaw", "agent")
+        brain.entity("brainctl", "tool")
+
+        # Layer 1: create mentions edges.
+        _fts5_entity_match(conn)
+
+        # Verify both mentions edges were created.
+        assert edge_count(conn, mem_id) == 2
+
+        # Layer 3: create co-occurrence edges.
+        stats = _create_cooccurrence_edges(conn)
+
+        assert stats["memories_with_pairs"] >= 1
+        assert stats["edges_created"] >= 1
+        # Verify the co_occurs edge actually landed in the DB.
+        assert cooccur_edge_count(conn) >= 1
+        conn.close()
+
+    def test_no_self_edges(self, brain):
+        """Co-occurrence edges must never have source_id == target_id."""
+        conn = raw_conn(brain)
+
+        insert_memory_raw(conn, "Kokoro and CostClock are both key products.")
+        brain.entity("Kokoro", "agent")
+        brain.entity("CostClock", "project")
+
+        _fts5_entity_match(conn)
+        _create_cooccurrence_edges(conn)
+
+        self_edges = conn.execute(
+            "SELECT COUNT(*) FROM knowledge_edges "
+            "WHERE source_table='entities' AND target_table='entities' "
+            "AND relation_type='co_occurs' AND source_id = target_id"
+        ).fetchone()[0]
+        assert self_edges == 0
+        conn.close()
+
+    def test_idempotent_no_duplicates(self, brain):
+        """Running _create_cooccurrence_edges twice must not create duplicate edges."""
+        conn = raw_conn(brain)
+
+        insert_memory_raw(conn, "OpenClaw uses brainctl for agent memory.")
+        brain.entity("OpenClaw", "agent")
+        brain.entity("brainctl", "tool")
+
+        _fts5_entity_match(conn)
+
+        # First run creates the edge(s).
+        _create_cooccurrence_edges(conn)
+        count_after_first = cooccur_edge_count(conn)
+        assert count_after_first >= 1
+
+        # Second run must not increase the count.
+        _create_cooccurrence_edges(conn)
+        count_after_second = cooccur_edge_count(conn)
+        assert count_after_second == count_after_first
+        conn.close()

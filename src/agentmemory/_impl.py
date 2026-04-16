@@ -693,6 +693,54 @@ def _fts5_entity_match(db, agent_id="autolink"):
     }
 
 
+def _create_cooccurrence_edges(db, agent_id="autolink"):
+    """Layer 3: entity co-occurrence edges (SPRIG, Wang 2025).
+
+    For memories linked to 2+ entities, create entity<->entity edges.
+    This densifies the knowledge graph for PageRank traversal and
+    quantum interference scoring.
+
+    Args:
+        db: SQLite connection (row_factory = sqlite3.Row expected).
+        agent_id: Agent to record as creator of the new edges.
+
+    Returns:
+        dict with keys:
+            edges_created        – number of INSERT OR IGNORE calls attempted
+            memories_with_pairs  – number of memories that had 2+ entity links
+    """
+    rows = db.execute("""
+        SELECT ke.source_id as memory_id,
+               GROUP_CONCAT(ke.target_id) as entity_ids
+        FROM knowledge_edges ke
+        WHERE ke.source_table = 'memories' AND ke.target_table = 'entities'
+          AND ke.relation_type = 'mentions'
+        GROUP BY ke.source_id
+        HAVING COUNT(DISTINCT ke.target_id) >= 2
+    """).fetchall()
+
+    edges_created = 0
+    for row in rows:
+        eids = list(set(int(x) for x in row["entity_ids"].split(",")))
+        for i, e1 in enumerate(eids):
+            for e2 in eids[i + 1:]:
+                if e1 == e2:
+                    continue
+                src, tgt = min(e1, e2), max(e1, e2)
+                try:
+                    db.execute("""INSERT OR IGNORE INTO knowledge_edges
+                        (source_table, source_id, target_table, target_id,
+                         relation_type, agent_id, created_at)
+                        VALUES ('entities', ?, 'entities', ?, 'co_occurs', ?,
+                                strftime('%Y-%m-%dT%H:%M:%S','now'))""",
+                        (src, tgt, agent_id))
+                    edges_created += 1
+                except Exception:
+                    pass
+    db.commit()
+    return {"edges_created": edges_created, "memories_with_pairs": len(rows)}
+
+
 def cmd_entity_create(args):
     db = get_db()
     agent_id = args.agent or "unknown"
@@ -1460,11 +1508,17 @@ def find_entity_by_alias(db, candidate: str):
 
 
 def cmd_entity_autolink(args):
-    """Run FTS5 entity name matching against all unlinked memories."""
+    """Run entity name matching against all unlinked memories.
+
+    --layer fts5  (default): Run Layer 1 FTS5 substring matching only.
+    --layer all:             Run Layer 1 (FTS5) then Layer 3 (co-occurrence edges).
+    """
     db = get_db()
     layer = getattr(args, "layer", "fts5")
-    # Currently only layer 'fts5' is implemented; 'all' falls through to same.
     stats = _fts5_entity_match(db, agent_id="autolink")
+    if layer == "all":
+        cooccur_stats = _create_cooccurrence_edges(db, agent_id="autolink")
+        stats = {**stats, **cooccur_stats}
     json_out({"ok": True, "layer": layer, **stats})
 
 
