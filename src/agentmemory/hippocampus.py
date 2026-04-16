@@ -2038,6 +2038,75 @@ def mine_causal_chains(db, now=None, max_depth=5):
     return stats
 
 
+def run_phased_consolidation(db, downscale_factor=None, dry_run=False):
+    """7-phase consolidation pipeline (Diekelmann & Born 2010, Kim & Park 2025).
+    Phases run in strict NREM→REM order."""
+    phases = {}
+    pressure_before = compute_homeostatic_pressure(db)
+
+    if downscale_factor is None:
+        if pressure_before > 0:
+            downscale_factor = min(0.99, HOMEOSTATIC_SETPOINT / max(pressure_before, 0.01))
+        else:
+            downscale_factor = 0.95
+
+    # Phase 1: N2 — Synaptic tagging
+    phases["n2_tagging"] = apply_synaptic_tagging(db) if not dry_run else {"tagged": 0}
+
+    # Phase 2: N3 — Global proportional downscaling
+    phases["n3_downscaling"] = (
+        apply_proportional_downscaling(db, downscale_factor=downscale_factor)
+        if not dry_run else {"downscaled": 0, "retired": 0, "skipped": 0}
+    )
+
+    # Phase 3: Replay — entity-clustered with magnitude weighting
+    clusters = build_entity_clusters(db)
+    candidates = select_replay_candidates(db, top_k=20)
+    phases["replay"] = (
+        replay_memories(db, candidates)
+        if not dry_run else {"replayed": 0}
+    )
+    phases["replay"]["clusters_found"] = len(clusters)
+
+    # Phase 4: Coupling gate — only promote connected memories
+    episodic_ids = [r["id"] for r in db.execute("""
+        SELECT id FROM memories WHERE retired_at IS NULL
+        AND memory_type = 'episodic' AND confidence > 0.5
+    """).fetchall()]
+    passed, failed = coupling_gate(db, episodic_ids)
+    phases["coupling_gate"] = {"passed": len(passed), "failed": len(failed)}
+
+    # Phase 5: De-overlap
+    phases["deoverlap"] = deoverlap_pass(db) if not dry_run else {"pairs_checked": 0}
+
+    # Phase 6: REM — dream synthesis (call existing run_dream_pass if available)
+    try:
+        dream_stats = run_dream_pass(db) if not dry_run else {}
+    except Exception:
+        dream_stats = {"skipped": "dream_pass_not_available"}
+    phases["rem_dream"] = dream_stats
+
+    # Phase 7: Housekeeping
+    housekeeping = {}
+    if not dry_run:
+        try:
+            hebb_stats = run_hebbian_pass(db)
+            housekeeping["hebbian"] = hebb_stats
+        except Exception:
+            housekeeping["hebbian"] = {"skipped": True}
+    phases["housekeeping"] = housekeeping
+
+    pressure_after = compute_homeostatic_pressure(db)
+
+    return {
+        "ok": True,
+        "pressure_before": round(pressure_before, 4),
+        "pressure_after": round(pressure_after, 4),
+        "downscale_factor": round(downscale_factor, 4),
+        "phases": phases,
+    }
+
+
 def cmd_consolidation_cycle(args):
     """Full consolidation cycle: decay -> demotion -> contradictions -> merge -> compress -> event log.
 
@@ -2046,6 +2115,10 @@ def cmd_consolidation_cycle(args):
     event_type='consolidation_cycle'. Logs completion event to brain.db.
     """
     db = get_db()
+    if getattr(args, 'phased', False):
+        result = run_phased_consolidation(db, dry_run=getattr(args, 'dry_run', False))
+        print(json.dumps(result, indent=2))
+        return
     now = datetime.now()
     now_sql = now.strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -3735,6 +3808,8 @@ def build_parser() -> argparse.ArgumentParser:
     cycle.add_argument("--agent", default="hippocampus", help="Agent id for cycle event")
     cycle.add_argument("--project", default="agentmemory", help="Project tag for cycle event")
     cycle.add_argument("--quiet", action="store_true", help="Suppress JSON output")
+    cycle.add_argument("--phased", action="store_true",
+                        help="Use the neuroscience-principled 7-phase pipeline (v2)")
     cycle.set_defaults(func=cmd_consolidation_cycle)
 
     promote = sub.add_parser(

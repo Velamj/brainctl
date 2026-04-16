@@ -443,3 +443,58 @@ class TestDeOverlap:
         stats = deoverlap_pass(db)
         assert stats["pairs_checked"] == 0
         assert stats["discriminated"] == 0
+
+
+class TestPhasedPipeline:
+    def test_phases_run_in_order(self):
+        """The 7 phases must execute in strict sequence."""
+        db = _make_db()
+        _insert_memory(db, content="test memory 1", confidence=0.7)
+        _insert_memory(db, content="test memory 2", confidence=0.5)
+        from agentmemory.hippocampus import run_phased_consolidation
+        result = run_phased_consolidation(db)
+        phases = list(result["phases"].keys())
+        expected_order = [
+            "n2_tagging", "n3_downscaling", "replay",
+            "coupling_gate", "deoverlap", "rem_dream", "housekeeping"
+        ]
+        assert phases == expected_order
+
+    def test_pipeline_produces_stats(self):
+        """Pipeline should return per-phase statistics."""
+        db = _make_db()
+        _insert_memory(db, content="fact one", confidence=0.6)
+        from agentmemory.hippocampus import run_phased_consolidation
+        result = run_phased_consolidation(db)
+        assert result["ok"] is True
+        assert "pressure_before" in result
+        assert "pressure_after" in result
+        assert len(result["phases"]) == 7
+
+    def test_downscaling_before_dream(self):
+        """SWS (downscaling) must complete before REM (dream)."""
+        db = _make_db()
+        _insert_memory(db, content="test", confidence=0.8)
+        from agentmemory.hippocampus import run_phased_consolidation
+        result = run_phased_consolidation(db)
+        phase_list = list(result["phases"].keys())
+        assert phase_list.index("n3_downscaling") < phase_list.index("rem_dream")
+
+    def test_dry_run_skips_mutations(self):
+        """dry_run=True should not modify any memory."""
+        db = _make_db()
+        m = _insert_memory(db, content="untouched", confidence=0.8)
+        from agentmemory.hippocampus import run_phased_consolidation
+        result = run_phased_consolidation(db, dry_run=True)
+        row = db.execute("SELECT confidence FROM memories WHERE id=?", (m,)).fetchone()
+        assert abs(row["confidence"] - 0.8) < 0.001
+        assert result["ok"] is True
+
+    def test_pressure_decreases_after_consolidation(self):
+        """Homeostatic pressure should decrease after downscaling."""
+        db = _make_db()
+        for i in range(20):
+            _insert_memory(db, content=f"memory {i}", confidence=0.8)
+        from agentmemory.hippocampus import run_phased_consolidation
+        result = run_phased_consolidation(db, downscale_factor=0.8)
+        assert result["pressure_after"] < result["pressure_before"]
