@@ -246,3 +246,55 @@ class TestSynapticTagging:
         apply_synaptic_tagging(db, tag_cycles=3)
         row = db.execute("SELECT tag_cycles_remaining FROM memories WHERE id=1").fetchone()
         assert row["tag_cycles_remaining"] == 0
+
+
+class TestSpacingDecay:
+    def test_high_stability_decays_slower(self):
+        """Memories with high stability should retain more confidence."""
+        from agentmemory.hippocampus import compute_spacing_decay
+        high_stab = compute_spacing_decay(elapsed_days=30, stability=5.0, rate=0.03)
+        low_stab = compute_spacing_decay(elapsed_days=30, stability=1.0, rate=0.03)
+        assert high_stab > low_stab
+
+    def test_zero_elapsed_returns_one(self):
+        """No time elapsed = no decay."""
+        from agentmemory.hippocampus import compute_spacing_decay
+        assert compute_spacing_decay(elapsed_days=0, stability=1.0, rate=0.03) == 1.0
+
+    def test_result_bounded_zero_one(self):
+        """Decay factor always in [0, 1]."""
+        from agentmemory.hippocampus import compute_spacing_decay
+        for days in [0, 1, 10, 100, 1000]:
+            for stab in [0.1, 1.0, 5.0, 20.0]:
+                result = compute_spacing_decay(days, stab, 0.03)
+                assert 0.0 <= result <= 1.0
+
+    def test_update_stability_on_spaced_recall(self):
+        """Stability should increase when recall is well-spaced."""
+        db = _make_db()
+        m = _insert_memory(db, stability=1.0)
+        from agentmemory.hippocampus import update_memory_stability
+        update_memory_stability(db, m, days_since_last_recall=10.0,
+                                 temporal_class="medium")
+        row = db.execute("SELECT stability FROM memories WHERE id=?", (m,)).fetchone()
+        assert row["stability"] > 1.0
+
+    def test_stability_unchanged_on_massed_recall(self):
+        """Stability should not increase on rapid repeated recall."""
+        db = _make_db()
+        m = _insert_memory(db, stability=2.0)
+        from agentmemory.hippocampus import update_memory_stability
+        update_memory_stability(db, m, days_since_last_recall=0.01,
+                                 temporal_class="medium")
+        row = db.execute("SELECT stability FROM memories WHERE id=?", (m,)).fetchone()
+        assert row["stability"] <= 2.0
+
+    def test_stability_capped_at_twenty(self):
+        """Stability should not exceed 20.0."""
+        db = _make_db()
+        m = _insert_memory(db, stability=18.0)
+        from agentmemory.hippocampus import update_memory_stability
+        update_memory_stability(db, m, days_since_last_recall=30.0,
+                                 temporal_class="medium")
+        row = db.execute("SELECT stability FROM memories WHERE id=?", (m,)).fetchone()
+        assert row["stability"] <= 20.0

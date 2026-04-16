@@ -46,6 +46,17 @@ RETIREMENT_THRESHOLD = 0.05
 # (Frey & Morris 1997 [SHY-7]).
 DEFAULT_TAG_CYCLES = 3
 
+# Retention interval (days) for each temporal class — used by spacing-effect
+# decay to determine the optimal inter-stimulus interval (ISI).
+# Cepeda et al. 2006: optimal ISI is ~10-20% of the retention interval.
+_RETENTION_INTERVALS: Dict[str, float] = {
+    "ephemeral": 3.5,
+    "short": 10.0,
+    "medium": 23.0,
+    "long": 70.0,
+    "permanent": 365.0,
+}
+
 COMPRESS_PROMPT = (
     "You are an expert knowledge compressor. Given these N memories about [scope], "
     "reorganize them into the minimum number of dense, well-structured memories "
@@ -1034,6 +1045,42 @@ def apply_decay(conn: sqlite3.Connection, now: Optional[datetime] = None) -> Dic
 
     conn.commit()
     return stats
+
+
+def compute_spacing_decay(elapsed_days: float, stability: float = 1.0, rate: float = 0.03) -> float:
+    """Spacing-effect decay (Cepeda et al. 2006, Hou et al. 2024).
+
+    p(t) = exp(-rate * t / stability)
+
+    High stability = slower decay. Stability is increased by well-spaced recalls
+    (see update_memory_stability). Returns 1.0 when elapsed_days <= 0.
+    """
+    if elapsed_days <= 0:
+        return 1.0
+    s = max(0.1, stability)
+    return math.exp(-rate * elapsed_days / s)
+
+
+def update_memory_stability(
+    db: sqlite3.Connection,
+    memory_id: int,
+    days_since_last_recall: float,
+    temporal_class: str = "medium",
+) -> None:
+    """Increase stability for well-spaced recalls (ISI >= 15% of retention interval).
+
+    Cepeda et al. 2006: optimal ISI is ~10-20% of retention interval. Only
+    non-retired memories are updated; stability is capped at 20.0.
+    """
+    ri = _RETENTION_INTERVALS.get(temporal_class, 23.0)
+    optimal_isi = ri * 0.15
+    if days_since_last_recall >= optimal_isi:
+        db.execute(
+            """UPDATE memories SET stability = MIN(20.0, stability * 1.3)
+            WHERE id = ? AND retired_at IS NULL""",
+            (memory_id,),
+        )
+    db.commit()
 
 
 def apply_synaptic_tagging(db: sqlite3.Connection, tag_cycles: int = DEFAULT_TAG_CYCLES) -> Dict[str, int]:
