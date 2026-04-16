@@ -5,6 +5,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.9.0] — 2026-04-16
+
+Completes the full CLS (Complementary Learning Systems) architecture
+with adaptive memory utilities and pattern-driven consolidation.
+
+### Added
+
+- **Q-value utility scoring (migration 042).** Each memory now carries
+  a `q_value` updated via temporal-difference learning after retrieval
+  outcomes. Memories that contribute to task success get higher Q-values,
+  improving future retrieval ranking (0.8x to 1.2x score multiplier).
+  Q-values self-correct with every retrieval cycle.
+  (Zhang et al. 2026 / MemRL)
+- **Schema-accelerated consolidation.** Episodic memories with >= 3
+  knowledge_edges to entities are immediately promoted to semantic,
+  bypassing the normal holding period. Mirrors Tse et al.'s finding
+  that schema-consistent information consolidates 10x faster.
+  Integrated into the phased pipeline as a new phase between coupling
+  gate and de-overlap. (Tse et al. 2007, Science)
+- **Per-project retrieval presets.** `agent_orient` now returns a
+  `retrieval_preset` for the active project (if one has been saved).
+  Stored in `agent_state` key-value table. Enables MAML-style fast
+  adaptation — each project can tune its own retrieval weights.
+  (Finn et al. 2017)
+- **Access-pattern-driven replay.** Consolidation replay now prioritizes
+  memories that were created near high-importance events (within ±2h
+  window, importance >= 0.7). Replay weight = salience * event
+  importance. Replaces the flat salience-only ordering.
+  (Yang & Buzsaki 2024; Ramirez-Villegas et al. 2025)
+
+### Migrations
+
+- **042** — `q_value REAL DEFAULT 0.5` on memories
+
+### Tests
+
+- 29 new tests across 4 test files
+- Full suite: 180+ tests passing
+
 ## [1.8.0] — 2026-04-16
 
 Context-aware retrieval: memories now carry their encoding context and
