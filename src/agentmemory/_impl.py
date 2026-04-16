@@ -9,6 +9,7 @@ Database: $BRAIN_DB or $BRAINCTL_HOME/db/brain.db (default: ~/agentmemory/db/bra
 """
 
 import argparse
+import hashlib as _hashlib
 import json
 import logging
 import os
@@ -1682,6 +1683,53 @@ def _get_encoding_affect_id(db, agent_id):
     return row["id"] if row else None
 
 
+def _build_encoding_context(project=None, agent_id=None, session_id=None,
+                             goal=None, active_tool=None):
+    """Build a JSON snapshot of the agent's operational context at memory write time.
+
+    Based on Tulving & Thomson 1973 (encoding specificity principle): the context
+    present at encoding time is captured alongside the memory trace and can be used
+    to improve context-matched retrieval.
+
+    Args:
+        project: Project scope name (e.g. 'brainctl').
+        agent_id: Agent identifier string.
+        session_id: Session identifier string.
+        goal: Current agent goal (optional).
+        active_tool: Tool being used at write time (optional).
+
+    Returns:
+        JSON string with non-None fields, sorted by key.
+    """
+    ctx = {}
+    if project:
+        ctx["project"] = project
+    if agent_id:
+        ctx["agent_id"] = agent_id
+    if session_id:
+        ctx["session_id"] = session_id
+    if goal:
+        ctx["goal"] = goal
+    if active_tool:
+        ctx["active_tool"] = active_tool
+    return json.dumps(ctx, sort_keys=True)
+
+
+def _encoding_context_hash(project=None, agent_id=None, session_id=None):
+    """Compute a short SHA-256 hash of the encoding context for fast index matching.
+
+    Args:
+        project: Project scope name.
+        agent_id: Agent identifier string.
+        session_id: Session identifier string.
+
+    Returns:
+        First 16 hex characters of SHA-256(project:agent_id:session_id).
+    """
+    key = f"{project or ''}:{agent_id or ''}:{session_id or ''}"
+    return _hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
 def _affect_distance(v1, a1, d1, v2, a2, d2):
     """Euclidean distance in VAD (valence-arousal-dominance) space.
 
@@ -2013,6 +2061,21 @@ def cmd_memory_add(args):
                        (encoding_affect_id, memory_id))
     except Exception:
         pass  # column not yet migrated or affect_log unavailable — non-fatal
+
+    # Encoding context snapshot (Tulving & Thomson 1973):
+    # Capture project/agent/session context at write time for later context-matched retrieval.
+    try:
+        _enc_project = None
+        if hasattr(args, 'project') and args.project:
+            _enc_project = args.project
+        elif hasattr(args, 'scope') and args.scope and args.scope.startswith('project:'):
+            _enc_project = args.scope.split(':', 1)[1]
+        enc_ctx = _build_encoding_context(project=_enc_project, agent_id=args.agent)
+        enc_hash = _encoding_context_hash(project=_enc_project, agent_id=args.agent)
+        db.execute("UPDATE memories SET encoding_task_context=?, encoding_context_hash=? WHERE id=?",
+                   (enc_ctx, enc_hash, memory_id))
+    except Exception:
+        pass  # column not yet migrated — non-fatal
 
     log_access(db, args.agent, "write", "memories", memory_id)
     db.commit()

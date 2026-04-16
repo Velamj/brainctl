@@ -80,6 +80,8 @@ CREATE TABLE memories (
     encoding_affect_id INTEGER REFERENCES affect_log(id) DEFAULT NULL,
     tag_cycles_remaining INTEGER DEFAULT 0,
     stability REAL DEFAULT 1.0,
+    encoding_task_context TEXT DEFAULT NULL,
+    encoding_context_hash TEXT DEFAULT NULL,
     temporal_level TEXT NOT NULL DEFAULT 'moment'
         CHECK(temporal_level IN ('moment','session','day','week','month','quarter'))
 );
@@ -100,6 +102,9 @@ CREATE INDEX idx_memories_agent_time ON memories(agent_id, created_at DESC) WHER
 
 CREATE INDEX IF NOT EXISTS idx_memories_encoding_affect
     ON memories(encoding_affect_id) WHERE encoding_affect_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_memories_context_hash
+    ON memories(encoding_context_hash) WHERE encoding_context_hash IS NOT NULL;
 
 CREATE VIRTUAL TABLE memories_fts USING fts5(
     content,

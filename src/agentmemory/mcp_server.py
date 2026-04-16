@@ -775,6 +775,18 @@ def tool_memory_add(agent_id: str, content: str, category: str, scope: str = "gl
     except Exception:
         pass  # column not yet migrated or affect_log unavailable — non-fatal
 
+    # Encoding context snapshot (Tulving & Thomson 1973):
+    # Capture project/agent/session context at write time for later context-matched retrieval.
+    try:
+        from agentmemory._impl import _build_encoding_context, _encoding_context_hash
+        _enc_project = scope.split(':', 1)[1] if scope.startswith('project:') else None
+        enc_ctx = _build_encoding_context(project=_enc_project, agent_id=agent_id)
+        enc_hash = _encoding_context_hash(project=_enc_project, agent_id=agent_id)
+        db.execute("UPDATE memories SET encoding_task_context=?, encoding_context_hash=? WHERE id=?",
+                   (enc_ctx, enc_hash, mid))
+    except Exception:
+        pass  # column not yet migrated — non-fatal
+
     log_access(db, agent_id, "write", "memories", mid)
     # Embed on write — only for FULL_EVOLUTION tier
     embedded = False
