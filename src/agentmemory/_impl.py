@@ -768,7 +768,7 @@ def _create_cooccurrence_edges(db, agent_id="autolink"):
     return {"edges_created": edges_created, "memories_with_pairs": len(rows)}
 
 
-def _gliner_entity_extract(db, agent_id="autolink", model_name="gliner_medium-v2.1"):
+def _gliner_entity_extract(db, agent_id="autolink", model_name="urchade/gliner_medium-v2.1"):
     """Layer 2: optional NER via GLiNER (Zaratiana et al., NAACL 2024).
 
     Uses a 205M-parameter zero-shot NER model (CPU/ONNX) to extract entities
