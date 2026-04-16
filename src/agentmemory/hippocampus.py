@@ -1083,6 +1083,61 @@ def update_memory_stability(
     db.commit()
 
 
+def compute_review_interval_hours(temporal_class: str, stability: float = 1.0) -> float:
+    """Optimal ISI in hours (Cepeda et al. 2006). ISI ≈ 15% of retention interval,
+    scaled by stability."""
+    ri_days = _RETENTION_INTERVALS.get(temporal_class, 23.0)
+    base_isi_hours = ri_days * 0.15 * 24
+    return base_isi_hours * max(0.5, min(10.0, stability))
+
+
+def schedule_spaced_reviews(db: sqlite3.Connection, min_confidence: float = 0.3) -> Dict[str, int]:
+    """Schedule next_review_at for active memories that lack one."""
+    rows = db.execute("""
+        SELECT id, temporal_class, stability FROM memories
+        WHERE retired_at IS NULL AND next_review_at IS NULL
+        AND confidence >= ?
+    """, (min_confidence,)).fetchall()
+    scheduled = 0
+    for r in rows:
+        hours = compute_review_interval_hours(
+            r["temporal_class"] or "medium",
+            r["stability"] or 1.0,
+        )
+        db.execute("""UPDATE memories SET next_review_at =
+            strftime('%Y-%m-%dT%H:%M:%S', 'now', ? || ' hours')
+            WHERE id = ?""", (str(int(hours)), r["id"]))
+        scheduled += 1
+    db.commit()
+    return {"scheduled": scheduled}
+
+
+def process_due_reviews(db: sqlite3.Connection) -> Dict[str, int]:
+    """Process memories whose next_review_at has passed. Replay + reschedule."""
+    now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    rows = db.execute("""
+        SELECT id, temporal_class, stability FROM memories
+        WHERE retired_at IS NULL AND next_review_at IS NOT NULL
+        AND next_review_at <= ?
+    """, (now,)).fetchall()
+    reviewed = 0
+    for r in rows:
+        db.execute("""UPDATE memories SET
+            recalled_count = recalled_count + 1,
+            last_recalled_at = strftime('%Y-%m-%dT%H:%M:%S', 'now')
+            WHERE id = ?""", (r["id"],))
+        hours = compute_review_interval_hours(
+            r["temporal_class"] or "medium",
+            r["stability"] or 1.0,
+        )
+        db.execute("""UPDATE memories SET next_review_at =
+            strftime('%Y-%m-%dT%H:%M:%S', 'now', ? || ' hours')
+            WHERE id = ?""", (str(int(hours)), r["id"]))
+        reviewed += 1
+    db.commit()
+    return {"reviewed": reviewed}
+
+
 def apply_synaptic_tagging(db: sqlite3.Connection, tag_cycles: int = DEFAULT_TAG_CYCLES) -> Dict[str, int]:
     """Tag memories in active labile windows for protection from downscaling.
 

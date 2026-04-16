@@ -83,7 +83,8 @@ CREATE TABLE memories (
     encoding_task_context TEXT DEFAULT NULL,
     encoding_context_hash TEXT DEFAULT NULL,
     temporal_level TEXT NOT NULL DEFAULT 'moment'
-        CHECK(temporal_level IN ('moment','session','day','week','month','quarter'))
+        CHECK(temporal_level IN ('moment','session','day','week','month','quarter')),
+    next_review_at TEXT DEFAULT NULL
 );
 
 CREATE INDEX idx_memories_agent ON memories(agent_id);
@@ -105,6 +106,9 @@ CREATE INDEX IF NOT EXISTS idx_memories_encoding_affect
 
 CREATE INDEX IF NOT EXISTS idx_memories_context_hash
     ON memories(encoding_context_hash) WHERE encoding_context_hash IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_memories_next_review
+    ON memories(next_review_at) WHERE next_review_at IS NOT NULL AND retired_at IS NULL;
 
 CREATE VIRTUAL TABLE memories_fts USING fts5(
     content,
