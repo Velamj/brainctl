@@ -1588,9 +1588,21 @@ def tool_agent_orient(agent_id: str, project: str = None, query: str = None, **k
     try:
         brain = Brain(agent_id=agent_id or "default")
         snapshot = brain.orient(project=project, query=query)
-        return {"ok": True, **snapshot}
+        result = {"ok": True, **snapshot}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
+
+    if project:
+        try:
+            from agentmemory._impl import _load_project_preset  # noqa: PLC0415
+            db = get_db()
+            preset = _load_project_preset(db, agent_id or "default", project)
+            if preset:
+                result["retrieval_preset"] = preset
+        except Exception:
+            pass
+
+    return result
 
 
 def tool_agent_wrap_up(agent_id: str, summary: str, goal: str = None,

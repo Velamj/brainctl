@@ -1716,6 +1716,71 @@ def _should_open_labile_window(surprise, resistance):
     return surprise > resistance
 
 
+def _save_project_preset(db, agent_id, project, preset):
+    """Persist a per-project retrieval weight preset in agent_state.
+
+    Stores the preset dict as a JSON blob under the key
+    ``retrieval_preset:<project>`` for the given agent. Uses INSERT OR UPDATE
+    so subsequent calls overwrite the previous preset atomically.
+
+    Based on MAML (Finn et al. 2017): task-specific initialisation points let
+    the retrieval stack adapt to per-project distribution shifts without
+    retraining the global weights.
+
+    Args:
+        db: Active SQLite connection. Must have agent_state table.
+        agent_id: Owning agent identifier string.
+        project: Project scope name (e.g. ``'brainctl'``).
+        preset: Dict of retrieval weight overrides, e.g.
+            ``{"recency_weight": 0.4, "fts_weight": 0.6}``.
+
+    Side effects:
+        Upserts one row in agent_state and commits.
+    """
+    key = f"retrieval_preset:{project}"
+    value = json.dumps(preset, sort_keys=True)
+    db.execute(
+        """INSERT INTO agent_state (agent_id, key, value, updated_at)
+               VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%S','now'))
+               ON CONFLICT(agent_id, key) DO UPDATE SET value=excluded.value,
+               updated_at=excluded.updated_at""",
+        (agent_id, key, value),
+    )
+    db.commit()
+
+
+def _load_project_preset(db, agent_id, project):
+    """Load a per-project retrieval weight preset from agent_state.
+
+    Fetches the JSON blob stored by ``_save_project_preset`` and deserialises
+    it. Returns ``None`` when no preset exists or the stored value is
+    malformed, so callers can safely fall back to global defaults.
+
+    Based on MAML (Finn et al. 2017): per-project fast-adaptation weights are
+    loaded at orient() time and applied to the retrieval pipeline for the
+    duration of the session.
+
+    Args:
+        db: Active SQLite connection. Must have agent_state table.
+        agent_id: Owning agent identifier string.
+        project: Project scope name (e.g. ``'brainctl'``).
+
+    Returns:
+        Dict of retrieval weight overrides, or ``None`` if not found / invalid.
+    """
+    key = f"retrieval_preset:{project}"
+    row = db.execute(
+        "SELECT value FROM agent_state WHERE agent_id=? AND key=?",
+        (agent_id, key),
+    ).fetchone()
+    if not row:
+        return None
+    try:
+        return json.loads(row["value"])
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
 def _get_encoding_affect_id(db, agent_id):
     """Get the most recent affect_log ID for this agent at encoding time.
 
