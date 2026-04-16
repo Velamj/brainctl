@@ -7221,6 +7221,33 @@ def _report_entity(db, name, lines, h2, h3, p, bullet, blank, limit):
 
 
 # ---------------------------------------------------------------------------
+# GATE CALIBRATION — W(m) feedback health metric
+# ---------------------------------------------------------------------------
+
+def _gate_calibration_score(db):
+    """Pearson correlation between confidence-at-write and recalled_count.
+    Positive = gate is well-calibrated. Near-zero or negative = miscalibrated.
+    Returns None if insufficient data (< 10 memories)."""
+    rows = db.execute("""
+        SELECT confidence, recalled_count FROM memories
+        WHERE retired_at IS NULL AND recalled_count >= 0
+    """).fetchall()
+    if len(rows) < 10:
+        return None
+    confs = [r["confidence"] for r in rows]
+    recalls = [r["recalled_count"] for r in rows]
+    n = len(confs)
+    mean_c = sum(confs) / n
+    mean_r = sum(recalls) / n
+    cov = sum((c - mean_c) * (r - mean_r) for c, r in zip(confs, recalls)) / n
+    std_c = (sum((c - mean_c) ** 2 for c in confs) / n) ** 0.5
+    std_r = (sum((r - mean_r) ** 2 for r in recalls) / n) ** 0.5
+    if std_c == 0 or std_r == 0:
+        return 0.0
+    return cov / (std_c * std_r)
+
+
+# ---------------------------------------------------------------------------
 # LINT — brain health check
 # ---------------------------------------------------------------------------
 
@@ -7380,6 +7407,16 @@ def cmd_lint(args):
     except Exception:
         pass
 
+    # 9. W(m) gate calibration — Pearson(confidence, recalled_count)
+    gate_cal = _gate_calibration_score(db)
+    if gate_cal is not None and gate_cal < 0.1:
+        issues.append({
+            "check": "gate_calibration",
+            "severity": "warning",
+            "count": 1,
+            "description": f"W(m) gate may be miscalibrated (correlation={gate_cal:.2f})",
+        })
+
     # Summary
     critical = sum(1 for i in issues if i["severity"] == "critical")
     warnings = sum(1 for i in issues if i["severity"] == "warning")
@@ -7392,6 +7429,7 @@ def cmd_lint(args):
         "warnings": warnings,
         "info": infos,
         "fixed": fixed,
+        "gate_calibration": round(gate_cal, 4) if gate_cal is not None else None,
         "checks": issues,
     }
 
