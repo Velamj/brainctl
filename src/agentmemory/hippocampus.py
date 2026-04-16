@@ -57,6 +57,10 @@ _RETENTION_INTERVALS: Dict[str, float] = {
     "permanent": 365.0,
 }
 
+# Minimum number of knowledge_edges from a memory to entities required for
+# schema-accelerated promotion (Tse et al. 2007 [CLS-4]).
+SCHEMA_ACCELERATION_MIN_EDGES = 3
+
 COMPRESS_PROMPT = (
     "You are an expert knowledge compressor. Given these N memories about [scope], "
     "reorganize them into the minimum number of dense, well-structured memories "
@@ -2007,6 +2011,43 @@ def deoverlap_pass(db, similarity_threshold=0.8):
     return {"pairs_checked": pairs_checked, "discriminated": discriminated}
 
 
+def find_schema_consistent_memories(db, min_edges=SCHEMA_ACCELERATION_MIN_EDGES):
+    """Return IDs of episodic memories with >= min_edges links to entities.
+
+    High entity-link density is a proxy for schema consistency: memories
+    that connect to many existing knowledge-graph entities are likely
+    encoding schema-congruent content and can skip normal episodic holding
+    (Tse et al. 2007 [CLS-4]).
+    """
+    rows = db.execute("""
+        SELECT ke.source_id as memory_id, COUNT(*) as edge_count
+        FROM knowledge_edges ke
+        JOIN memories m ON m.id = ke.source_id
+        WHERE ke.source_table = 'memories' AND ke.target_table = 'entities'
+          AND m.retired_at IS NULL AND m.memory_type = 'episodic'
+        GROUP BY ke.source_id
+        HAVING COUNT(*) >= ?
+    """, (min_edges,)).fetchall()
+    return [r["memory_id"] for r in rows]
+
+
+def accelerate_schema_consistent(db, min_edges=SCHEMA_ACCELERATION_MIN_EDGES):
+    """Promote schema-consistent memories directly to semantic/long.
+
+    Memories with >= min_edges knowledge_edges to entities skip normal
+    episodic holding and are immediately promoted to semantic during
+    consolidation (Tse et al. 2007 [CLS-4]).
+    """
+    memory_ids = find_schema_consistent_memories(db, min_edges=min_edges)
+    if not memory_ids:
+        return {"promoted": 0}
+    placeholders = ",".join("?" * len(memory_ids))
+    db.execute(f"""UPDATE memories SET memory_type = 'semantic', temporal_class = 'long'
+        WHERE id IN ({placeholders}) AND retired_at IS NULL""", memory_ids)
+    db.commit()
+    return {"promoted": len(memory_ids)}
+
+
 def mine_causal_chains(db, now=None, max_depth=5):
     """Causal chain mining pass.
 
@@ -2131,7 +2172,10 @@ def run_phased_consolidation(db, downscale_factor=None, dry_run=False):
     passed, failed = coupling_gate(db, episodic_ids)
     phases["coupling_gate"] = {"passed": len(passed), "failed": len(failed)}
 
-    # Phase 5: De-overlap
+    # Phase 5: Schema acceleration — high entity-link density memories skip holding
+    phases["schema_acceleration"] = accelerate_schema_consistent(db) if not dry_run else {"promoted": 0}
+
+    # Phase 6: De-overlap
     phases["deoverlap"] = deoverlap_pass(db) if not dry_run else {"pairs_checked": 0}
 
     # Phase 6: REM — dream synthesis (call existing run_dream_pass if available)

@@ -456,7 +456,7 @@ class TestPhasedPipeline:
         phases = list(result["phases"].keys())
         expected_order = [
             "n2_tagging", "n3_downscaling", "replay",
-            "coupling_gate", "deoverlap", "rem_dream", "housekeeping"
+            "coupling_gate", "schema_acceleration", "deoverlap", "rem_dream", "housekeeping"
         ]
         assert phases == expected_order
 
@@ -469,7 +469,7 @@ class TestPhasedPipeline:
         assert result["ok"] is True
         assert "pressure_before" in result
         assert "pressure_after" in result
-        assert len(result["phases"]) == 7
+        assert len(result["phases"]) == 8
 
     def test_downscaling_before_dream(self):
         """SWS (downscaling) must complete before REM (dream)."""
