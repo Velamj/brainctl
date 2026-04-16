@@ -1451,10 +1451,15 @@ def _retrieval_practice_boost(db, memory_id, retrieval_prediction_error=0.0):
 
     Side effects:
         - Updates confidence, alpha, recalled_count, last_recalled_at, labile_until.
-        - Commits the change.
+        - Does NOT commit — the caller owns the transaction and commits after
+          processing all results (one commit per search, not one per row).
     """
     rpe = max(0.0, min(1.0, retrieval_prediction_error or 0.0))
     boost = _RETRIEVAL_PRACTICE_BASE_BOOST * (1.0 + rpe)
+    # Intentional decoupling: confidence gets a flat additive boost (testing-effect
+    # model, Roediger & Karpicke 2006) while alpha is incremented separately to
+    # record the evidence count. The two are no longer kept in sync via
+    # alpha / (alpha + beta) — the additive boost replaces the pure Bayesian update.
     db.execute(
         "UPDATE memories SET "
         "confidence = MIN(1.0, confidence + ?), "
@@ -1465,7 +1470,6 @@ def _retrieval_practice_boost(db, memory_id, retrieval_prediction_error=0.0):
         "WHERE id = ?",
         (boost, memory_id),
     )
-    db.commit()
 
 
 def cmd_memory_add(args):
@@ -4463,7 +4467,8 @@ def cmd_search(args):
             return []
         rows = db.execute(
             "SELECT m.id, 'memory' as type, m.category, m.content, m.confidence, m.scope, "
-            "m.created_at, m.recalled_count, m.temporal_class, m.last_recalled_at, f.rank as fts_rank "
+            "m.created_at, m.recalled_count, m.temporal_class, m.last_recalled_at, f.rank as fts_rank, "
+            "m.retrieval_prediction_error "
             "FROM memories m JOIN memories_fts f ON m.id = f.rowid "
             "WHERE memories_fts MATCH ? AND m.retired_at IS NULL ORDER BY rank LIMIT ?",
             (fts_query, fetch_limit)
@@ -4487,7 +4492,7 @@ def cmd_search(args):
         ph = ",".join("?" * len(rowids))
         src_rows = db_vec.execute(
             f"SELECT id, 'memory' as type, category, content, confidence, scope, "
-            f"created_at, recalled_count, temporal_class, last_recalled_at "
+            f"created_at, recalled_count, temporal_class, last_recalled_at, retrieval_prediction_error "
             f"FROM memories WHERE id IN ({ph}) AND retired_at IS NULL",
             rowids
         ).fetchall()
