@@ -1546,6 +1546,51 @@ def _apply_temporal_contiguity(candidates, retrieved_at, agent_id):
     return candidates
 
 
+def _modification_resistance(days_old, recalled_count, ewc_importance):
+    """Compute a memory's resistance to reconsolidation.
+
+    Resistance increases with age, recall count, and EWC (Elastic Weight
+    Consolidation) importance. A surprise signal must exceed this resistance
+    to open a labile reconsolidation window.
+
+    Based on O'Neill & Winters 2026, Neuroscience.
+
+    Args:
+        days_old: Number of days since the memory was created. Values < 0
+            are clamped to 0.
+        recalled_count: Number of times the memory has been recalled. Values
+            < 0 are clamped to 0.
+        ewc_importance: EWC importance weight in [0, 1]. Values outside this
+            range are clamped. None is treated as 0.0.
+
+    Returns:
+        A float in [0.0, 0.9] representing reconsolidation resistance.
+    """
+    age_term = 0.1 * math.log(1.0 + max(0, days_old))
+    recall_term = 0.05 * max(0, recalled_count)
+    ewc_term = 0.3 * max(0.0, min(1.0, ewc_importance or 0.0))
+    return min(0.9, age_term + recall_term + ewc_term)
+
+
+def _should_open_labile_window(surprise, resistance):
+    """Return True if the surprise signal is strong enough to open a labile window.
+
+    The reconsolidation window only opens when the incoming surprise (event
+    importance) strictly exceeds the memory's modification resistance.
+
+    Based on O'Neill & Winters 2026, Neuroscience.
+
+    Args:
+        surprise: Float in [0.0, 1.0] — the event importance / surprise signal.
+        resistance: Float in [0.0, 0.9] — the memory's modification resistance,
+            as returned by ``_modification_resistance``.
+
+    Returns:
+        True if ``surprise > resistance``, False otherwise.
+    """
+    return surprise > resistance
+
+
 def cmd_memory_add(args):
     db = get_db()
     # --reflexion shorthand: force category=lesson, inject 'reflexion' tag

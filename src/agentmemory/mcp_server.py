@@ -1016,26 +1016,53 @@ def tool_event_add(agent_id: str, summary: str, event_type: str, detail: str = N
         # Behavioral tagging retroactive rescue (Redondo & Morris 2011):
         # A high-salience event retroactively stabilizes memories written
         # in the preceding window by extending their decay immunity.
+        # Modification resistance (O'Neill & Winters 2026): each candidate
+        # memory has a resistance value based on age, recall count, and EWC
+        # importance. Only memories whose resistance is lower than the event
+        # importance get their labile window opened.
         from datetime import timedelta
+        from agentmemory._impl import _modification_resistance, _should_open_labile_window
         try:
             now_dt = datetime.fromisoformat(now_ts)
         except Exception:
             now_dt = datetime.utcnow()
         window_start = (now_dt - timedelta(hours=_LABILE_RESCUE_WINDOW_HOURS)).strftime("%Y-%m-%dT%H:%M:%S")
         labile_until = (now_dt + timedelta(hours=_LABILE_DURATION_HOURS)).strftime("%Y-%m-%dT%H:%M:%S")
-        rescued = db.execute(
+        # SELECT candidate memories rather than bulk-UPDATE, so we can filter
+        # by modification resistance before opening each labile window.
+        candidates = db.execute(
             """
-            UPDATE memories
-            SET labile_until = ?, labile_agent_id = ?
+            SELECT id, created_at, recalled_count, ewc_importance
+            FROM memories
             WHERE agent_id = ?
               AND created_at >= ?
               AND created_at <= ?
               AND retired_at IS NULL
               AND (labile_until IS NULL OR labile_until < ?)
             """,
-            (labile_until, agent_id, agent_id, window_start, now_ts, labile_until),
-        )
-        labile_rescued = rescued.rowcount
+            (agent_id, window_start, now_ts, labile_until),
+        ).fetchall()
+        qualifying_ids = []
+        for row in candidates:
+            try:
+                mem_dt = datetime.fromisoformat(str(row[1]).rstrip("Z"))
+                days_old = (now_dt - mem_dt).total_seconds() / 86400.0
+            except Exception:
+                days_old = 0.0
+            resistance = _modification_resistance(
+                days_old=days_old,
+                recalled_count=row[2] or 0,
+                ewc_importance=row[3],
+            )
+            if _should_open_labile_window(importance, resistance):
+                qualifying_ids.append(row[0])
+        if qualifying_ids:
+            placeholders = ",".join("?" * len(qualifying_ids))
+            db.execute(
+                f"UPDATE memories SET labile_until = ?, labile_agent_id = ? WHERE id IN ({placeholders})",
+                (labile_until, agent_id, *qualifying_ids),
+            )
+        labile_rescued = len(qualifying_ids)
 
     db.commit(); db.close()
     result = {"ok": True, "event_id": eid, "created_at": now_ts}
