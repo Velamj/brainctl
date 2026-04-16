@@ -5,6 +5,71 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-04-16
+
+**brainctl 2.0** — the full Complementary Learning Systems architecture.
+Auto entity linking, quantum cognition, belief collapse, typed causal
+reasoning, and temporal abstraction. Backed by 120 peer-reviewed papers.
+
+### Added — Auto Entity Linking (Pillar 1)
+
+- **FTS5 entity name matching (Layer 1).** `brainctl entity autolink`
+  scans all active memories for known entity name substrings.
+  Production result: **KG isolation 92% → 16%** (746 edges). Zero deps.
+- **GLiNER NER (Layer 2, optional).** Zero-shot NER via 205M-param
+  bidirectional transformer. Production result: **16% → 2% isolation**
+  (38 new entities, 58 edges). `pip install brainctl[ner]`.
+  (Zaratiana et al. 2024, NAACL)
+- **Entity co-occurrence edges (Layer 3).** Memories mentioning 2+
+  entities auto-generate entity↔entity edges. Production result:
+  **2,270 → 4,441 co-occurrence edges**. (SPRIG, Wang 2025)
+
+### Added — Quantum Integration (Pillar 2)
+
+- **Quantum schema deployed.** 548-line migration adding
+  confidence_phase, hilbert_projection, coherence_syndrome,
+  decoherence_rate columns + recovery_candidates, agent_entanglement,
+  agent_ghz_groups tables. Backward compatible.
+- **Phase-aware quantum amplitude scoring.** 50/50 classical+quantum
+  blend in the RRF pipeline. Constructive interference boosts;
+  destructive reduces. Gated on confidence_phase population.
+- **Belief collapse mechanics.** `_collapse_belief` resolves superposed
+  beliefs to definite states. Four collapse types: task_checkout,
+  direct_query, evidence_threshold, time_decoherence.
+  `_check_collapse_triggers` finds overdue superpositions.
+  (Quantum Wave 2, 02_collapse_dynamics.md)
+
+### Added — Frontier Capabilities (Pillar 3)
+
+- **Typed causal edges + counterfactual attribution.** `causes`,
+  `enables`, `prevents` edge types. `_trace_causal_chain` follows
+  causal paths forward; `_counterfactual_attribution` traces backward
+  from outcomes and boosts Q-values of contributing memories weighted
+  by edge strength. (Kang et al. 2025 / Hindsight)
+- **Temporal abstraction hierarchy.** `_assign_temporal_levels` maps
+  memories to 6 levels based on age (moment → session → day → week →
+  month → quarter). `_build_temporal_summary` creates hierarchical
+  summaries. Production distribution: week=106, day=45, moment=30,
+  session=3. (Shu et al. 2025 / TiMem)
+
+### Production consolidation results (enriched graph)
+
+- Entity clusters: 8 → **81** (10×)
+- Coupling gate pass rate: 25% → **97.6%**
+- Schema-accelerated promotions: 0 → **90**
+- Knowledge edges: ~5,000 → **7,963**
+- Entities: 248 → **286**
+
+### Migrations
+
+- Quantum schema (existing, newly deployed)
+- 042 — q_value (from v1.9.0, included in 2.0 release)
+
+### Tests
+
+- 46 new tests (collapse + causal + temporal)
+- Full suite: 220+ tests passing
+
 ## [2.0.0a1] — 2026-04-16
 
 First alpha toward v2.0. Fixes the 77% knowledge-graph isolation problem
