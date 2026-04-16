@@ -12,6 +12,7 @@ import argparse
 import json
 import logging
 import os
+import random
 import sqlite3
 import sys
 import math
@@ -210,6 +211,31 @@ DEDUP_CONTENT_SIMILARITY_THRESHOLD = 0.85  # Jaccard word overlap
 # Actual boost = BASE * (1 + clamp(retrieval_prediction_error, 0, 1)) so hard
 # retrievals (high prediction error) strengthen the trace more than easy ones.
 _RETRIEVAL_PRACTICE_BASE_BOOST = 0.02
+
+
+def _thompson_confidence(alpha=1.0, beta=1.0):
+    """Draw a confidence sample from Beta(alpha, beta) for Thompson Sampling retrieval.
+
+    Converts static point-estimate confidence into an explore/exploit learner:
+    - Memories with uncertain priors (low alpha+beta) explore broadly.
+    - Memories with strong positive evidence (high alpha, low beta) exploit
+      their established value.
+
+    Based on Thompson (1933) and Glowacka (2019) contextual bandit retrieval.
+
+    Args:
+        alpha: Bayesian positive evidence count (default 1.0 — uninformed prior).
+               None is treated as 1.0. Values < 0.01 are clamped to 0.01.
+        beta:  Bayesian negative/absence evidence count (default 1.0).
+               None is treated as 1.0. Values < 0.01 are clamped to 0.01.
+
+    Returns:
+        Float in [0, 1] sampled from Beta(alpha, beta).
+    """
+    a = max(0.01, alpha or 1.0)
+    b = max(0.01, beta or 1.0)
+    return random.betavariate(a, b)
+
 
 # ---------------------------------------------------------------------------
 # Temporal recency helpers
@@ -4468,7 +4494,7 @@ def cmd_search(args):
         rows = db.execute(
             "SELECT m.id, 'memory' as type, m.category, m.content, m.confidence, m.scope, "
             "m.created_at, m.recalled_count, m.temporal_class, m.last_recalled_at, f.rank as fts_rank, "
-            "m.retrieval_prediction_error "
+            "m.retrieval_prediction_error, m.alpha, m.beta "
             "FROM memories m JOIN memories_fts f ON m.id = f.rowid "
             "WHERE memories_fts MATCH ? AND m.retired_at IS NULL ORDER BY rank LIMIT ?",
             (fts_query, fetch_limit)
@@ -4492,7 +4518,7 @@ def cmd_search(args):
         ph = ",".join("?" * len(rowids))
         src_rows = db_vec.execute(
             f"SELECT id, 'memory' as type, category, content, confidence, scope, "
-            f"created_at, recalled_count, temporal_class, last_recalled_at, retrieval_prediction_error "
+            f"created_at, recalled_count, temporal_class, last_recalled_at, retrieval_prediction_error, alpha, beta "
             f"FROM memories WHERE id IN ({ph}) AND retired_at IS NULL",
             rowids
         ).fetchall()
@@ -4594,12 +4620,19 @@ def cmd_search(args):
 
             if use_adaptive_salience and _adaptive_weights and _SAL_AVAILABLE and r.get("recalled_count") is not None:
                 # Full adaptive salience formula: rrf_score → similarity input
+                # Thompson sampling: draw confidence from Beta(alpha, beta) instead
+                # of using the point estimate. Converts static confidence into an
+                # explore/exploit learner — uncertain memories explore, certain ones
+                # exploit their established value. (Thompson 1933, Glowacka 2019)
                 sim = r.get("rrf_score", 0.0)
                 salience = _sal.compute_salience(
                     similarity=sim,
                     last_recalled_at=r.get("last_recalled_at"),
                     created_at=r.get("created_at"),
-                    confidence=float(r.get("confidence") or 0.5),
+                    confidence=_thompson_confidence(
+                        alpha=r.get("alpha") or 1.0,
+                        beta=r.get("beta") or 1.0,
+                    ),
                     recalled_count=int(r.get("recalled_count") or 0),
                     max_recalls=max_recalls,
                     weights=_adaptive_weights,
