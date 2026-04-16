@@ -78,6 +78,8 @@ CREATE TABLE memories (
     labile_agent_id TEXT DEFAULT NULL,
     retrieval_prediction_error REAL DEFAULT NULL,
     encoding_affect_id INTEGER REFERENCES affect_log(id) DEFAULT NULL,
+    tag_cycles_remaining INTEGER DEFAULT 0,
+    stability REAL DEFAULT 1.0,
     temporal_level TEXT NOT NULL DEFAULT 'moment'
         CHECK(temporal_level IN ('moment','session','day','week','month','quarter'))
 );
