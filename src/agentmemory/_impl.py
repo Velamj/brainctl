@@ -1730,6 +1730,51 @@ def _encoding_context_hash(project=None, agent_id=None, session_id=None):
     return _hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
+def _context_match_score(memory_context, memory_hash, current_context, current_hash):
+    """Context-matching score for retrieval reranking (Smith & Vela 2001).
+
+    Hash match gives a strong bonus. Key-value overlap gives partial credit.
+
+    Based on Smith & Vela 2001 (environmental context effects) and
+    Heald et al. 2023 (context-dependent memory): memories encoded in a
+    similar context should receive a retrieval boost at search time.
+
+    Args:
+        memory_context: JSON string of context captured at memory write time
+            (the ``encoding_task_context`` column). None or empty → 0.0.
+        memory_hash: 16-char hex hash of the memory's encoding context
+            (the ``encoding_context_hash`` column). May be None.
+        current_context: JSON string of the current search context, built
+            via ``_build_encoding_context``. None or empty → 0.0.
+        current_hash: 16-char hex hash of the current search context, built
+            via ``_encoding_context_hash``. May be None.
+
+    Returns:
+        Float in [0.0, 1.0]. 0.3 for exact hash match, up to 0.7 for
+        key-value Jaccard overlap, capped at 1.0.
+    """
+    if not memory_context or not current_context:
+        return 0.0
+    score = 0.0
+    if memory_hash and current_hash and memory_hash == current_hash:
+        score += 0.3
+    try:
+        mem_ctx = json.loads(memory_context) if isinstance(memory_context, str) else {}
+        cur_ctx = json.loads(current_context) if isinstance(current_context, str) else {}
+    except (json.JSONDecodeError, TypeError):
+        return score
+    if not mem_ctx or not cur_ctx:
+        return score
+    matching_keys = 0
+    total_keys = len(set(mem_ctx.keys()) | set(cur_ctx.keys()))
+    for k in mem_ctx:
+        if k in cur_ctx and mem_ctx[k] == cur_ctx[k]:
+            matching_keys += 1
+    if total_keys > 0:
+        score += 0.7 * (matching_keys / total_keys)
+    return min(1.0, score)
+
+
 def _affect_distance(v1, a1, d1, v2, a2, d2):
     """Euclidean distance in VAD (valence-arousal-dominance) space.
 
@@ -4777,7 +4822,8 @@ def cmd_search(args):
         rows = db.execute(
             "SELECT m.id, 'memory' as type, m.category, m.content, m.confidence, m.scope, "
             "m.created_at, m.recalled_count, m.temporal_class, m.last_recalled_at, f.rank as fts_rank, "
-            "m.retrieval_prediction_error, m.alpha, m.beta, m.agent_id "
+            "m.retrieval_prediction_error, m.alpha, m.beta, m.agent_id, "
+            "m.encoding_task_context, m.encoding_context_hash "
             "FROM memories m JOIN memories_fts f ON m.id = f.rowid "
             "WHERE memories_fts MATCH ? AND m.retired_at IS NULL ORDER BY rank LIMIT ?",
             (fts_query, fetch_limit)
@@ -4801,7 +4847,8 @@ def cmd_search(args):
         ph = ",".join("?" * len(rowids))
         src_rows = db_vec.execute(
             f"SELECT id, 'memory' as type, category, content, confidence, scope, "
-            f"created_at, recalled_count, temporal_class, last_recalled_at, retrieval_prediction_error, alpha, beta, agent_id "
+            f"created_at, recalled_count, temporal_class, last_recalled_at, retrieval_prediction_error, alpha, beta, agent_id, "
+            f"encoding_task_context, encoding_context_hash "
             f"FROM memories WHERE id IN ({ph}) AND retired_at IS NULL",
             rowids
         ).fetchall()
@@ -4897,6 +4944,21 @@ def cmd_search(args):
         else:
             max_recalls = 1
 
+        # Build current search context once per call for context-matching reranking.
+        # (Smith & Vela 2001, Heald et al. 2023: encoding-context match at retrieval time)
+        try:
+            _current_ctx = _build_encoding_context(
+                project=getattr(args, "project", None),
+                agent_id=getattr(args, "agent", None),
+            )
+            _current_hash = _encoding_context_hash(
+                project=getattr(args, "project", None),
+                agent_id=getattr(args, "agent", None),
+            )
+        except Exception:
+            _current_ctx = None
+            _current_hash = None
+
         for r in merged:
             scope = scope_fn(r)
             r["age"] = _age_str(r.get("created_at"))
@@ -4943,6 +5005,19 @@ def cmd_search(args):
                 sw = _get_source_weight(db, r["agent_id"], mem_domain) if mem_domain else 1.0
                 r["source_weight"] = round(sw, 4)
                 r["final_score"] = round(r["final_score"] * (0.90 + 0.10 * sw), 8)
+
+            # Context-matching reranking boost: memories encoded in the same project/agent
+            # context receive up to 20% score boost. (Smith & Vela 2001, Heald et al. 2023,
+            # HippoRAG 2024: context overlap at retrieval time improves recall precision.)
+            try:
+                ctx_score = _context_match_score(
+                    r.get("encoding_task_context"), r.get("encoding_context_hash"),
+                    _current_ctx, _current_hash,
+                )
+                if ctx_score > 0:
+                    r["final_score"] = round(r["final_score"] * (1.0 + 0.2 * ctx_score), 8)
+            except Exception:
+                pass  # context-match boost is optional; never break search
 
         # PageRank reranking boost: score *= (1 + alpha * norm_pagerank)
         pr_alpha = getattr(args, "pagerank_boost", 0.0)
