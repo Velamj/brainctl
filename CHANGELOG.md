@@ -5,6 +5,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.0.0a1] — 2026-04-16
+
+First alpha toward v2.0. Fixes the 77% knowledge-graph isolation problem
+and deploys the quantum cognition schema.
+
+### Added
+
+- **Auto entity linking (Layer 1).** `brainctl entity autolink` scans
+  all active memories for known entity name substrings. Case-insensitive,
+  idempotent, zero dependencies. On production brain.db: **reduced KG
+  isolation from 92% to 16%** (746 new `mentions` edges). This unblocks
+  quantum interference, coupling gate promotion, and PageRank spreading
+  activation. (HippoRAG, Gutierrez et al. 2024)
+- **Entity co-occurrence edges (Layer 3).** Memories linked to 2+
+  entities automatically generate entity-to-entity `co_occurs` edges.
+  Created **2,270 entity-entity edges** on production brain.db, enabling
+  rich graph traversal. (SPRIG, Wang 2025)
+- **Quantum schema migration deployed.** 548-line migration adding
+  quantum cognition columns (`confidence_phase`, `hilbert_projection`,
+  `coherence_syndrome`, `decoherence_rate`) and tables
+  (`recovery_candidates`, `agent_entanglement`, `agent_ghz_groups`).
+  All columns have defaults; classical code paths unaffected.
+- **Phase-aware quantum amplitude scoring.** Integrated into the RRF
+  pipeline as a 50/50 classical+quantum blend, gated on
+  `confidence_phase` being populated. Constructive interference from
+  knowledge-graph neighbors boosts retrieval score; destructive
+  reduces it.
+
+### Tests
+
+- 19 new tests across entity autolink + quantum scoring
+- Full suite: 93+ tests passing, bench unchanged
+
 ## [1.9.0] — 2026-04-16
 
 Completes the full CLS (Complementary Learning Systems) architecture
