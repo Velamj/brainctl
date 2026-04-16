@@ -212,6 +212,11 @@ DEDUP_CONTENT_SIMILARITY_THRESHOLD = 0.85  # Jaccard word overlap
 # retrievals (high prediction error) strengthen the trace more than easy ones.
 _RETRIEVAL_PRACTICE_BASE_BOOST = 0.02
 
+# Temporal contiguity bonus: boost score of memories from the same agent within
+# a 30-minute window of the top retrieved memory (Dong et al. 2026, Trends Cog Sci).
+_CONTIGUITY_WINDOW_MINUTES = 30
+_CONTIGUITY_BONUS = 1.15
+
 
 def _thompson_confidence(alpha=1.0, beta=1.0):
     """Draw a confidence sample from Beta(alpha, beta) for Thompson Sampling retrieval.
@@ -1496,6 +1501,49 @@ def _retrieval_practice_boost(db, memory_id, retrieval_prediction_error=0.0):
         "WHERE id = ?",
         (boost, memory_id),
     )
+
+
+def _apply_temporal_contiguity(candidates, retrieved_at, agent_id):
+    """Boost retrieval scores of temporally adjacent memories from the same agent.
+
+    When a memory is retrieved, memories created within a 30-minute window (strictly
+    less than 30 min) by the same agent receive a 15% score multiplier. This models
+    the hippocampal tendency to recall events that occurred in temporal sequence.
+
+    Based on Dong et al. 2026, Trends in Cognitive Sciences.
+
+    Args:
+        candidates: List of result dicts, each with keys ``final_score``,
+            ``created_at`` (ISO format string), and ``agent_id``.
+        retrieved_at: A ``datetime`` object representing the reference timestamp
+            (typically the top result's ``created_at``). If ``None``, candidates
+            are returned unchanged.
+        agent_id: The agent ID whose memories should receive the bonus. Candidates
+            from a different agent are not boosted.
+
+    Returns:
+        The modified ``candidates`` list (same objects, scores updated in-place).
+    """
+    if retrieved_at is None:
+        return candidates
+
+    window = timedelta(minutes=_CONTIGUITY_WINDOW_MINUTES)
+
+    for candidate in candidates:
+        if candidate.get("agent_id") != agent_id:
+            continue
+        raw_ts = candidate.get("created_at")
+        if not raw_ts:
+            continue
+        try:
+            ts = datetime.fromisoformat(str(raw_ts).rstrip("Z"))
+        except (ValueError, TypeError):
+            continue
+        delta = abs(retrieved_at - ts)
+        if delta < window:
+            candidate["final_score"] = candidate["final_score"] * _CONTIGUITY_BONUS
+
+    return candidates
 
 
 def cmd_memory_add(args):
@@ -4494,7 +4542,7 @@ def cmd_search(args):
         rows = db.execute(
             "SELECT m.id, 'memory' as type, m.category, m.content, m.confidence, m.scope, "
             "m.created_at, m.recalled_count, m.temporal_class, m.last_recalled_at, f.rank as fts_rank, "
-            "m.retrieval_prediction_error, m.alpha, m.beta "
+            "m.retrieval_prediction_error, m.alpha, m.beta, m.agent_id "
             "FROM memories m JOIN memories_fts f ON m.id = f.rowid "
             "WHERE memories_fts MATCH ? AND m.retired_at IS NULL ORDER BY rank LIMIT ?",
             (fts_query, fetch_limit)
@@ -4518,7 +4566,7 @@ def cmd_search(args):
         ph = ",".join("?" * len(rowids))
         src_rows = db_vec.execute(
             f"SELECT id, 'memory' as type, category, content, confidence, scope, "
-            f"created_at, recalled_count, temporal_class, last_recalled_at, retrieval_prediction_error, alpha, beta "
+            f"created_at, recalled_count, temporal_class, last_recalled_at, retrieval_prediction_error, alpha, beta, agent_id "
             f"FROM memories WHERE id IN ({ph}) AND retired_at IS NULL",
             rowids
         ).fetchall()
@@ -4738,6 +4786,17 @@ def cmd_search(args):
             # MMR diversity reranking — applied after salience scoring, before graph expand
             if use_mmr and trimmed:
                 trimmed = _mmr_rerank(trimmed, lambda_mmr=mmr_lambda)
+            # Temporal contiguity bonus — boost temporally adjacent memories from the
+            # same agent within a 30-minute window (Dong et al. 2026, Trends Cog Sci).
+            # Applied post-scoring so it nudges final ranking without interfering with
+            # salience or recency decay weights.
+            if trimmed:
+                try:
+                    _tc_ref = datetime.fromisoformat(str(trimmed[0]["created_at"]).rstrip("Z"))
+                    _tc_agent = getattr(args, "agent", None) or "unknown"
+                    trimmed = _apply_temporal_contiguity(trimmed, _tc_ref, _tc_agent)
+                except Exception:
+                    pass  # contiguity bonus is optional; never break search
         if not no_graph:
             already = {r["id"] for r in trimmed}
             graph = _graph_expand(db, trimmed, "memories", already)
