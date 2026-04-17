@@ -85,10 +85,13 @@ def _policy_effective_confidence(confidence: float, half_life_days: int, last_va
     """Apply temporal decay to confidence based on time since last validation."""
     try:
         validated = datetime.fromisoformat(last_validated_at)
-        # Make both timezone-naive for comparison
-        if validated.tzinfo is not None:
-            validated = validated.replace(tzinfo=None)
-        age_days = (datetime.utcnow() - validated).days
+        # Promote naive DB timestamps to UTC-aware so both sides of the subtraction
+        # are TZ-aware. Previously this stripped tzinfo to compare against a naive
+        # utcnow(), which silently off-by-oned when the stored string carried a TZ
+        # offset (audit 2026-04-16, memory 1675).
+        if validated.tzinfo is None:
+            validated = validated.replace(tzinfo=timezone.utc)
+        age_days = (datetime.now(timezone.utc) - validated).days
         if half_life_days <= 0:
             return confidence
         decay = 0.5 ** (age_days / half_life_days)
@@ -141,7 +144,10 @@ def tool_policy_match(
     conn = _db()
     try:
         _ensure_policy_tables(conn)
-        now_str = datetime.utcnow().isoformat()
+        # Naive-UTC ISO to match column defaults (strftime in _ensure_policy_tables).
+        # SQL string comparison against expires_at would break if we mixed tz-aware
+        # (+00:00-suffixed) and tz-naive strings.
+        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
         # Neuromod mode: surface ALL policies when org is in incident/sprint state
         org_state = _neuromod_org_state(conn)
@@ -246,7 +252,8 @@ def tool_policy_add(
     try:
         _ensure_policy_tables(conn)
         policy_id = f"pol_{uuid.uuid4().hex[:12]}"
-        now = datetime.utcnow().isoformat()
+        # Naive-UTC ISO to match column defaults (see tool_policy_match).
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
         conn.execute(
             """INSERT INTO policy_memories
@@ -301,7 +308,8 @@ def tool_policy_feedback(
     conn = _db()
     try:
         _ensure_policy_tables(conn)
-        now = datetime.utcnow().isoformat()
+        # Naive-UTC ISO to match column defaults (see tool_policy_match).
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
         row = conn.execute(
             "SELECT * FROM policy_memories WHERE policy_id = ? OR name = ?", (policy_id, policy_id)

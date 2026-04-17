@@ -141,6 +141,44 @@ class TestMemoryPromote:
         conn.close()
         assert evt is not None
 
+    def test_event_insert_failure_warns_to_stderr_but_succeeds(
+        self, patch_db, capsys
+    ):
+        """If the memory_promoted event insert fails (e.g. events table missing
+        or FK violation), the promote itself must still succeed, and the failure
+        must surface to stderr instead of being silently dropped (audit memory
+        1675, 2.2.3 Item 2)."""
+        mid = _insert_memory(patch_db, write_tier="construct", indexed=0)
+
+        # Drop the events table so the post-promote INSERT raises
+        # OperationalError. The earlier UPDATE on memories still succeeds.
+        conn = sqlite3.connect(str(patch_db))
+        conn.execute("DROP TABLE IF EXISTS events")
+        conn.commit()
+        conn.close()
+
+        result = dmem.tool_memory_promote(agent_id="test-agent", memory_id=mid)
+
+        # Promote itself should still report success — event log failure is
+        # explicitly non-fatal.
+        assert result["ok"] is True
+        assert result["promoted"] is True
+
+        # The memory state was actually written (UPDATE survived the failed
+        # downstream INSERT).
+        conn = sqlite3.connect(str(patch_db))
+        row = conn.execute(
+            "SELECT write_tier, indexed FROM memories WHERE id = ?", (mid,)
+        ).fetchone()
+        conn.close()
+        assert row[0] == "full"
+        assert row[1] == 1
+
+        # The event-insert failure must be visible on stderr (no silent drop).
+        captured = capsys.readouterr()
+        assert "[mcp_tools_dmem] memory_promoted event insert failed" in captured.err
+        assert f"memory_id={mid}" in captured.err
+
 
 # ---------------------------------------------------------------------------
 # tier_stats tests

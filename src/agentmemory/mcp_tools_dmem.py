@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -49,6 +50,9 @@ def _embed(text: str) -> bytes | None:
         if vec:
             return _struct.pack(f"{len(vec)}f", *vec)
     except Exception:
+        # Documented graceful-fallback contract ("returns None if unavailable").
+        # Ollama being unreachable is the normal state in headless/CI envs;
+        # warning here would spam stderr on every promote call.
         pass
     return None
 
@@ -63,6 +67,8 @@ def _get_vec_db() -> sqlite3.Connection | None:
         conn.enable_load_extension(False)
         return conn
     except Exception:
+        # Documented graceful-fallback contract ("returns None if unavailable").
+        # sqlite-vec is an optional extension; absence is normal, not a bug.
         return None
 
 
@@ -135,7 +141,11 @@ def tool_memory_promote(
         )
         db.commit()
 
-        # Log a memory_promoted event
+        # Log a memory_promoted event. Failure is non-fatal: the promote already
+        # succeeded above, so we don't want a downstream FK violation, missing
+        # events table, or trigger error to roll back user-visible work. But the
+        # previous bare `pass` silently dropped audit-trail rows (audit memory
+        # 1675), so emit the failure to stderr for operator visibility.
         try:
             db.execute(
                 "INSERT INTO events (agent_id, event_type, summary, created_at) "
@@ -143,8 +153,12 @@ def tool_memory_promote(
                 (agent_id, f"Promoted memory {memory_id} to FULL_EVOLUTION", _now()),
             )
             db.commit()
-        except Exception:
-            pass
+        except Exception as exc:
+            print(
+                f"[mcp_tools_dmem] memory_promoted event insert failed for "
+                f"memory_id={memory_id}: {exc}",
+                file=sys.stderr,
+            )
 
         return {
             "ok": True,

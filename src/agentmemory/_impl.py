@@ -650,7 +650,7 @@ def cmd_agent_ping(args):
     db = get_db()
     db.execute("UPDATE agents SET last_seen_at = strftime('%Y-%m-%dT%H:%M:%S', 'now') WHERE id = ?", (args.agent,))
     db.commit()
-    json_out({"ok": True, "agent": args.agent, "pinged_at": datetime.utcnow().isoformat()})
+    json_out({"ok": True, "agent": args.agent, "pinged_at": datetime.now(timezone.utc).isoformat()})
 
 # ---------------------------------------------------------------------------
 # ENTITY commands — Knowledge graph entity registry
@@ -4907,8 +4907,10 @@ def _neuro_is_expired(state):
         return False
     try:
         exp = datetime.fromisoformat(state["expires_at"])
-        now = datetime.utcnow() if exp.tzinfo is None else datetime.now(timezone.utc)
-        return now > exp
+        # Promote naive DB timestamps to UTC-aware so the comparison is unambiguous.
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) > exp
     except Exception:
         return False
 
@@ -8345,7 +8347,8 @@ def cmd_lint(args):
                 "description": f"Access log has {log_count:,} entries — consider running brainctl prune-log",
             })
             if fix:
-                cutoff = (datetime.utcnow() - timedelta(days=30)).isoformat()
+                # Naive-UTC ISO to match access_log.created_at storage format.
+                cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
                 cursor = db.execute("DELETE FROM access_log WHERE created_at < ?", (cutoff,))
                 db.commit()
                 fixed += cursor.rowcount
@@ -8412,7 +8415,8 @@ def cmd_lint(args):
 def cmd_prune_access_log(args):
     db = get_db()
     days = args.days or 30
-    cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    # Naive-UTC ISO to match access_log.created_at storage format.
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
     cursor = db.execute("DELETE FROM access_log WHERE created_at < ?", (cutoff,))
     db.commit()
     json_out({"ok": True, "deleted": cursor.rowcount})
@@ -8587,7 +8591,8 @@ def cmd_reflexion_success(args):
     db = get_db()
     agent_id = args.agent or "unknown"
     lesson_ids = [int(x.strip()) for x in args.lesson_ids.split(",")]
-    now = datetime.utcnow().isoformat()
+    # Naive-UTC ISO to match reflexion_lessons timestamp column format.
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     archived, updated = [], []
     for lid in lesson_ids:
         row = db.execute("SELECT * FROM reflexion_lessons WHERE id = ?", (lid,)).fetchone()
@@ -8653,7 +8658,8 @@ def cmd_reflexion_retire(args):
     if not row:
         print(f"ERROR: lesson {lid} not found", file=sys.stderr)
         sys.exit(1)
-    now = datetime.utcnow().isoformat()
+    # Naive-UTC ISO to match reflexion_lessons.retired_at column format.
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     reason = args.reason or "manual retirement"
     db.execute(
         "UPDATE reflexion_lessons SET status='retired', retired_at=?, retirement_reason=? WHERE id=?",
@@ -9450,9 +9456,13 @@ def _ensure_policy_tables(db):
 
 def _policy_effective_confidence(confidence, half_life_days, last_validated_at):
     try:
-        from datetime import datetime as _dt
-        validated = _dt.fromisoformat(last_validated_at)
-        age_days = (_dt.utcnow() - validated).days
+        validated = datetime.fromisoformat(last_validated_at)
+        # Promote naive DB timestamps to UTC-aware so the subtraction is unambiguous.
+        # Previously _dt.utcnow() (naive) was compared against a parsed string that
+        # could be tz-aware, silently off-by-oning the age (audit memory 1675).
+        if validated.tzinfo is None:
+            validated = validated.replace(tzinfo=timezone.utc)
+        age_days = (datetime.now(timezone.utc) - validated).days
         if half_life_days <= 0:
             return confidence
         decay = 0.5 ** (age_days / half_life_days)
@@ -9467,7 +9477,8 @@ def cmd_policy_match(args):
     agent_id = args.agent or "unknown"
     context = args.context
     staleness_mode = args.staleness_mode or "warn"
-    now_str = datetime.utcnow().isoformat()
+    # Naive-UTC ISO to match policy_memories column defaults (strftime in _ensure_policy_tables).
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
     # Neuromod mode: surface ALL policies for scope when org_state is incident/urgent
     org_state = _neuromod_org_state(db)
@@ -9556,7 +9567,8 @@ def cmd_policy_add(args):
     _ensure_policy_tables(db)
     agent_id = args.agent or "unknown"
     policy_id = f"pol_{_uuid_mod.uuid4().hex[:12]}"
-    now = datetime.utcnow().isoformat()
+    # Naive-UTC ISO to match policy_memories column defaults.
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
     db.execute(
         """INSERT INTO policy_memories
@@ -9592,7 +9604,8 @@ def cmd_policy_feedback(args):
     _ensure_policy_tables(db)
     agent_id = args.agent or "unknown"
     pid = args.policy_id
-    now = datetime.utcnow().isoformat()
+    # Naive-UTC ISO to match policy_memories column defaults.
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
     row = db.execute(
         "SELECT * FROM policy_memories WHERE policy_id = ? OR name = ?", (pid, pid)
@@ -9669,7 +9682,9 @@ def cmd_policy_list(args):
     db = get_db()
     _ensure_policy_tables(db)
     agent_id = args.agent or "unknown"
-    now_str = datetime.utcnow().isoformat()
+    # Naive-UTC ISO so the `r['expires_at'] < now_str` string compare below
+    # matches policy_memories column default format.
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
     where = "1=1"
     params = []
@@ -13883,7 +13898,9 @@ def _reason_l3_infer(db, query: str, l1_memories, l2_expanded, agent_id: str = "
     # Policy rule evaluation
     matched_policies = []
     rules_evaluated = 0
-    now_str = datetime.utcnow().isoformat()
+    # Naive-UTC ISO so the `pm.expires_at > ?` SQL string compare matches
+    # policy_memories column default format (strftime in _ensure_policy_tables).
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     try:
         fts_q = " OR ".join(w for w in query.split() if len(w) > 3)
         if fts_q:
@@ -16054,7 +16071,7 @@ def _build_temporal_summary(db, level="day", date=None, agent_id="test"):
     import datetime as _dt
 
     if date is None:
-        date = _dt.datetime.utcnow().strftime("%Y-%m-%d")
+        date = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d")
 
     child_levels = _TEMPORAL_SUMMARY_CHILDREN.get(level, ("moment",))
 
