@@ -3799,67 +3799,20 @@ def cmd_trust_decay(args):
 
 
 def cmd_trust_update_contradiction(args):
-    """CLI mirror of mcp_tools_trust.tool_trust_update_contradiction.
+    """CLI wrapper around the shared trust-contradiction helper.
 
-    Bug 7 fix (2.2.0): the prior CLI implementation penalized memories by
-    *argument order*, not by who lost the contradiction. AGM prescribes that
-    the lower-trust side absorbs the larger penalty, while the higher-trust
-    side either holds steady (unresolved) or earns a small reinforcement
-    (resolved). Logic kept in lockstep with the MCP path; if you change one,
-    change the other.
+    Implementation lives in ``agentmemory.trust.apply_contradiction_penalty`` —
+    keep this surface thin. This wrapper only adapts argparse args to the
+    helper's signature and serialises the result via ``json_out``.
     """
+    from agentmemory.trust import apply_contradiction_penalty
+
     db = get_db()
-    id_a, id_b = args.memory_id_a, args.memory_id_b
     resolved = getattr(args, "resolved", False)
-
-    rows = db.execute(
-        "SELECT id, trust_score FROM memories WHERE id IN (?, ?)", (id_a, id_b)
-    ).fetchall()
-    if len(rows) != 2:
-        json_out({"ok": False, "error": f"Both memories must exist; found {len(rows)} of 2 (ids: {id_a}, {id_b})"})
-        return
-
-    scores = {int(r["id"]): float(r["trust_score"] or 1.0) for r in rows}
-    trust_a, trust_b = scores[id_a], scores[id_b]
-    tie = (trust_a == trust_b)
-    if tie:
-        loser_id, winner_id = None, None
-    elif trust_a < trust_b:
-        loser_id, winner_id = id_a, id_b
-    else:
-        loser_id, winner_id = id_b, id_a
-
-    loser_delta = -0.05 if resolved else -0.20
-    winner_delta = 0.02 if resolved else 0.0
-
-    def _apply(mem_id, delta):
-        db.execute(
-            "UPDATE memories SET "
-            "trust_score = ROUND(MIN(1.0, MAX(0.30, trust_score + ?)), 4), "
-            "updated_at = strftime('%Y-%m-%dT%H:%M:%S','now') WHERE id = ?",
-            (delta, mem_id),
-        )
-
-    if tie:
-        _apply(id_a, loser_delta)
-        _apply(id_b, loser_delta)
-    else:
-        _apply(loser_id, loser_delta)
-        if winner_delta != 0.0:
-            _apply(winner_id, winner_delta)
-
-    out_rows = db.execute(
-        "SELECT id, trust_score FROM memories WHERE id IN (?, ?)", (id_a, id_b)
-    ).fetchall()
-    db.commit()
-    json_out({
-        "ok": True,
-        "resolved": resolved,
-        "loser_id": loser_id,
-        "winner_id": winner_id,
-        "tie": tie,
-        "updated_memories": rows_to_list(out_rows),
-    })
+    result = apply_contradiction_penalty(
+        db, args.memory_id_a, args.memory_id_b, resolved
+    )
+    json_out(result)
 
 
 def cmd_trust_process_meb(args):
