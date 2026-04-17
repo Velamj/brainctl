@@ -5317,6 +5317,19 @@ def _rrf_fuse(fts_list, vec_list, k=60):
 
     Returns merged list sorted by RRF score descending, with each item
     annotated with ``rrf_score`` and ``source`` ("keyword"/"semantic"/"both").
+
+    Both input lists are dict-like rows keyed by ``"id"`` (the memories.id
+    primary key, NOT a raw sqlite-vec rowid). The id == rowid invariant is
+    preserved by the upstream _vec_memories() helper, which re-fetches rows
+    from the base ``memories`` table by id after harvesting raw rowids from
+    vec_memories. The PK was verified to be ``INTEGER PRIMARY KEY
+    AUTOINCREMENT`` in src/agentmemory/db/init_schema.sql, which makes
+    id == rowid hold by SQLite's default semantics. Bug 5 (2.2.0) fix:
+    add a deterministic ``id`` tie-breaker so ties produce stable ordering
+    across runs (otherwise dict iteration order leaks into search output
+    when two rows share the same RRF score). Empty input lists are
+    naturally handled — the merged output is simply whichever side is
+    populated, sorted by score.
     """
     scores = {}
     sources = {}
@@ -5332,7 +5345,11 @@ def _rrf_fuse(fts_list, vec_list, k=60):
         sources[rid] = "both" if rid in sources else "semantic"
         if rid not in rows:
             rows[rid] = row
-    sorted_ids = sorted(scores, key=lambda x: scores[x], reverse=True)
+    # Deterministic ordering: primary -score (descending), secondary id
+    # (ascending) to break ties stably. Mixing -score with a positive id
+    # in a single key tuple lets `sorted` ascend on both — equivalent to
+    # descending score, ascending id.
+    sorted_ids = sorted(scores, key=lambda rid: (-scores[rid], rid))
     out = []
     for rid in sorted_ids:
         r = rows[rid].copy()
