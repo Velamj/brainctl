@@ -5,6 +5,97 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-04-16
+
+### Fixed — correctness audit, ten bugs across the stack
+
+A focused correctness pass following the 2.1.x crash-risk hardening. Five
+parallel workers, isolated git worktrees, ten bugs closed, +75 tests, no
+file conflicts at merge time. Test suite: 1712 passed, 0 failed.
+
+**Critical**
+
+- **Duplicate migration version numbers (Bug 1).** Five pairs of migrations
+  shared four version numbers (`012`, `013`, `017`, `023`). The runner
+  sorted alphabetically and silently skipped the second of each pair on
+  fresh DBs — `agent_beliefs`, `belief_conflicts`, `agent_perspective_models`,
+  `agent_bdi_state`, `workspace_*`, `memory_rbac`, `agent_uncertainty_log`
+  search columns, and `agents.attention_class` were never created on new
+  installs. Renamed to versions 043–047, made all CREATE/ALTER idempotent,
+  added a duplicate-version detector to the migration runner that fails
+  loud on regression. The 5th dupe (`021_attention_class.sql`) was caught
+  by the new detector during this fix.
+- **Defense-in-depth: trigger update SQL hardening (Bug 2).**
+  `mcp_server.py:1383`'s `f"UPDATE memory_triggers SET {', '.join(updates)}"`
+  pattern was empirically not exploitable on 2.1.x (kwargs are dispatcher-
+  filtered), but the f-string-over-runtime-list shape is fragile and a
+  future generic-update refactor would re-introduce the sink. Replaced
+  with an allowlist + parameterized helper, plus a sweep of the rest of
+  `mcp_server.py` for sibling patterns (none found).
+- **Vector index stale on memory update (Bug 3).** `cmd_memory_update`
+  updated `content` but never re-embedded; semantic search returned
+  results for the OLD text. Now mirrors the `cmd_memory_add` indexing path
+  with stderr-warn-and-continue if the vec extension is absent.
+
+**High**
+
+- **Bayesian alpha/beta runaway (Bug 4).** Recall incremented `alpha` but
+  never `beta`, so a memory recalled 100 times had a `Beta(101, 1)`
+  posterior near 0.99 regardless of actual quality, and Thompson sampling
+  exploited the inflation. Adopted an anti-attractor prior:
+  `_BETA_PRIOR_INCREMENT = 0.1` per recall, capped at `_AB_PRIOR_CAP = 1000.0`.
+  Posterior after 100 recalls is now ~0.91 vs old runaway ~0.99. Updates
+  are atomic (single `UPDATE` with `CASE`) — no read-modify-write window.
+- **RRF rank-by-id consistency (Bug 5).** Verified the
+  `id == rowid` invariant from `init_schema.sql` (INTEGER PRIMARY KEY
+  AUTOINCREMENT) so the audit's id-vs-rowid concern is moot at the fusion
+  layer; added a deterministic tie-breaker (`(-score, id)`) so identical
+  RRF scores produce stable order across runs.
+- **Entity merge orphans `knowledge_edges` (Bug 6).** Both merge paths
+  (`merge.py._merge_entities` cross-DB and `mcp_tools_reconcile.tool_entity_merge`
+  in-DB) failed to redirect knowledge_edges referencing the dropped
+  entity. `merge.py` now threads an `entity_id_map` through to a new
+  `_merge_knowledge_edges` that uses the existing `uq_knowledge_edges_relation`
+  unique index for ON CONFLICT MAX(weight) folding; `mcp_tools_reconcile`
+  was rewritten to a gather → plan → execute pipeline that dedupes
+  collisions and drops self-loops. Conflict rule: HIGHEST WEIGHT WINS.
+- **Trust contradiction penalty asymmetric (Bug 7).** `tool_trust_update_contradiction`
+  in `mcp_tools_trust.py` and the parallel CLI copy in `_impl.py` both
+  penalized memories by argument order, not by who lost. AGM-correct now:
+  loser-by-trust eats the heavier penalty; winner gets +0.02 only on
+  resolved=True (premature reinforcement during live conflict was wrong).
+  Both implementations updated together with comments cross-referencing
+  each other so they stay in lockstep.
+- **EWC protection asymmetric (Bug 8).** `hippocampus.resolve_contradictions`
+  only checked `ewc_importance` on the loser. A high-EWC memory that
+  happened to have higher confidence (the winner) could be silently
+  retired in a later contradiction. Now checks EWC on both sides; if
+  either is protected and similarity is below threshold, emits a
+  `warning` event and queues for review instead of retiring.
+- **Q-value RMW race (Bug 9).** `_update_q_value` did `SELECT … UPDATE`
+  without `BEGIN IMMEDIATE`. Collapsed to a single atomic `UPDATE` with
+  inline TD-error math; race window eliminated entirely.
+- **PII recency gate inverted (Bug 10).** New memories were inserted with
+  `alpha=alpha_floor` but `beta=NULL` (treated as 1.0), creating a
+  `Beta(N, 1)` prior with mean ~0.75 — favoring the new memory and
+  defeating the gate's purpose of defending high-PII incumbents. Now
+  seeds `beta = alpha_floor` so the prior is symmetric `Beta(N, N)`
+  with mean 0.5 ("we're not yet sure").
+
+### Notes for future maintainers
+
+- `mcp_tools_trust.tool_trust_update_contradiction` and
+  `_impl.cmd_trust_update_contradiction` share the same logic across
+  the MCP and CLI surfaces. Keep them in lockstep; consider a shared
+  helper in 2.2.x.
+- `_merge_memories` in `merge.py` has the same id-remap shape as the
+  Bug 6a fix to `_merge_entities` — knowledge_edges referencing memories
+  by id will be orphaned after cross-DB memory merges. Out of this wave's
+  scope; deferred to 2.2.1.
+- The 28 `mcp_tools_*.py` modules registered through `_EXT_MODULES` were
+  not part of Worker C's SQLi sweep (scope was `mcp_server.py` only).
+  Recommended for the next correctness pass.
+
 ## [2.1.2] — 2026-04-16
 
 ### Fixed — MCP server connection pooling
