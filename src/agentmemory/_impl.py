@@ -2747,13 +2747,20 @@ def cmd_memory_add(args):
 
     file_path = getattr(args, "file_path", None)
     file_line = getattr(args, "file_line", None)
+    # Bug 10 fix (2.2.0): seed beta = alpha_floor on the new memory so it
+    # starts with a symmetric Beta(N, N) prior — "we are not yet sure". The
+    # prior version only seeded alpha, leaving beta at the default 1.0,
+    # which produced Beta(N, 1) and inverted the gate's intent (the new
+    # memory was favored over a high-PII incumbent rather than penalized).
+    # Symmetric priors mean the new memory must accumulate real recall
+    # evidence before it can outrank the incumbent during Thompson sampling.
     cursor = db.execute(
         "INSERT INTO memories (agent_id, category, scope, content, confidence, tags, source_event_id, "
-        "memory_type, supersedes_id, alpha, file_path, file_line, write_tier, indexed, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "memory_type, supersedes_id, alpha, beta, file_path, file_line, write_tier, indexed, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (args.agent, args.category, args.scope or "global", args.content,
          effective_confidence, tags_json, args.source_event, memory_type,
-         supersedes_id, float(alpha_floor), file_path, file_line,
+         supersedes_id, float(alpha_floor), float(alpha_floor), file_path, file_line,
          write_tier, do_index, _now_ts(), _now_ts())
     )
     memory_id = cursor.lastrowid
@@ -2925,7 +2932,9 @@ def cmd_memory_add(args):
     if auto_linked:
         out["auto_linked_entities"] = auto_linked
     if pii_info:
-        out["pii_gate"] = {**pii_info, "alpha_floor": alpha_floor}
+        # beta_floor mirrors alpha_floor (Bug 10 fix) — exposed for callers
+        # that audit the gate's decision.
+        out["pii_gate"] = {**pii_info, "alpha_floor": alpha_floor, "beta_floor": alpha_floor}
     json_out(out)
 
 def cmd_memory_search(args):
