@@ -155,7 +155,7 @@ def tool_abstract_summarize(
             params.append(category)
 
         rows = db.execute(
-            f"SELECT * FROM memories WHERE {' AND '.join(conditions)} ORDER BY created_at ASC",
+            f"SELECT * FROM memories WHERE {' AND '.join(conditions)} ORDER BY created_at ASC",  # nosec B608 - conditions list contains source-literal predicates only
             params,
         ).fetchall()
         children = [dict(r) for r in rows]
@@ -367,7 +367,7 @@ def tool_temporal_map(
         rows = db.execute(
             f"SELECT temporal_level, COUNT(*) as count, "
             f"MIN(created_at) as earliest, MAX(created_at) as latest "
-            f"FROM memories WHERE {' AND '.join(conditions)} "
+            f"FROM memories WHERE {' AND '.join(conditions)} "  # nosec B608 - conditions list contains source-literal predicates only
             f"GROUP BY temporal_level",
             params,
         ).fetchall()

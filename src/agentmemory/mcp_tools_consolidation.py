@@ -166,7 +166,7 @@ def tool_replay_queue(
         rows = db.execute(
             f"SELECT id, content, category, scope, confidence, "
             f"replay_priority, ripple_tags, recalled_count, created_at, last_recalled_at "
-            f"FROM memories WHERE {where} "
+            f"FROM memories WHERE {where} "  # nosec B608 - where built from source-literal predicates only
             f"ORDER BY replay_priority DESC LIMIT ?",
             params + [limit],
         ).fetchall()
@@ -369,7 +369,7 @@ def tool_consolidation_run(
 
         rows = db.execute(
             f"SELECT id, memory_type, ripple_tags, confidence, replay_priority "
-            f"FROM memories WHERE {where} ORDER BY replay_priority DESC LIMIT ?",
+            f"FROM memories WHERE {where} ORDER BY replay_priority DESC LIMIT ?",  # nosec B608 - where built from source-literal predicates only
             params + [limit],
         ).fetchall()
 
@@ -396,7 +396,7 @@ def tool_consolidation_run(
         if processed_ids:
             placeholders = ",".join("?" * len(processed_ids))
             db.execute(
-                f"UPDATE memories SET replay_priority = 0.0 WHERE id IN ({placeholders})",
+                f"UPDATE memories SET replay_priority = 0.0 WHERE id IN ({placeholders})",  # nosec B608 - placeholders is "?,?,..." count-only
                 processed_ids,
             )
 
@@ -422,7 +422,7 @@ def tool_consolidation_run(
                 # Extract entities linked to processed memories (via entity_relations or knowledge_edges)
                 placeholder = ",".join("?" * len(processed_ids))
                 linked_entities = db.execute(
-                    f"SELECT DISTINCT entity_id FROM entity_relations WHERE memory_id IN ({placeholder})",
+                    f"SELECT DISTINCT entity_id FROM entity_relations WHERE memory_id IN ({placeholder})",  # nosec B608 - placeholder is "?,?,..." count-only
                     processed_ids,
                 ).fetchall()
                 linked_entity_ids = [r["entity_id"] if hasattr(r, "keys") else r[0] for r in linked_entities]
@@ -539,30 +539,30 @@ def tool_consolidation_stats(
             params_base = [scope]
 
         total = db.execute(
-            f"SELECT COUNT(*) FROM memories WHERE {where_active}", params_base
+            f"SELECT COUNT(*) FROM memories WHERE {where_active}", params_base  # nosec B608 - where_active built from source-literal predicates only
         ).fetchone()[0]
 
         queued = db.execute(
-            f"SELECT COUNT(*) FROM memories WHERE {where_active} AND replay_priority >= 0.1",
+            f"SELECT COUNT(*) FROM memories WHERE {where_active} AND replay_priority >= 0.1",  # nosec B608 - where_active built from source-literal predicates only
             params_base,
         ).fetchone()[0]
 
         high_priority = db.execute(
-            f"SELECT COUNT(*) FROM memories WHERE {where_active} AND replay_priority >= 2.0",
+            f"SELECT COUNT(*) FROM memories WHERE {where_active} AND replay_priority >= 2.0",  # nosec B608 - where_active built from source-literal predicates only
             params_base,
         ).fetchone()[0]
 
         avg_priority = db.execute(
-            f"SELECT AVG(replay_priority) FROM memories WHERE {where_active}", params_base
+            f"SELECT AVG(replay_priority) FROM memories WHERE {where_active}", params_base  # nosec B608 - where_active built from source-literal predicates only
         ).fetchone()[0] or 0.0
 
         total_ripple = db.execute(
-            f"SELECT SUM(ripple_tags) FROM memories WHERE {where_active}", params_base
+            f"SELECT SUM(ripple_tags) FROM memories WHERE {where_active}", params_base  # nosec B608 - where_active built from source-literal predicates only
         ).fetchone()[0] or 0
 
         now_sql = _now_sql()
         labile_count = db.execute(
-            f"SELECT COUNT(*) FROM memories WHERE {where_active} "
+            f"SELECT COUNT(*) FROM memories WHERE {where_active} "  # nosec B608 - where_active built from source-literal predicates only
             f"AND labile_until IS NOT NULL AND labile_until > ?",
             params_base + [now_sql],
         ).fetchone()[0]
@@ -993,7 +993,7 @@ def tool_memory_calibration(
 
         rows = db.execute(
             f"SELECT id, category, confidence, recalled_count, updated_at, memory_type "
-            f"FROM memories WHERE {where}",
+            f"FROM memories WHERE {where}",  # nosec B608 - where built from source-literal predicates only
             params,
         ).fetchall()
 
@@ -1240,7 +1240,7 @@ def tool_free_energy_check(
         rows = db.execute(
             f"SELECT id, gap_topic, domain, free_energy, query, result_count, "
             f"avg_confidence, temporal_class, created_at, resolved_at, resolved_by "
-            f"FROM agent_uncertainty_log WHERE {where} "
+            f"FROM agent_uncertainty_log WHERE {where} "  # nosec B608 - where built from source-literal predicates only
             f"ORDER BY free_energy DESC NULLS LAST LIMIT ?",
             params + [limit],
         ).fetchall()

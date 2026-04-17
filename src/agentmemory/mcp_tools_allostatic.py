@@ -262,7 +262,7 @@ def tool_demand_forecast(
                 JOIN memories m ON m.id = f.memory_id
                 WHERE {' AND '.join(conditions)}
                 ORDER BY f.confidence DESC, f.predicted_demand_at ASC
-                LIMIT ?""",
+                LIMIT ?""",  # nosec B608 - conditions list contains source-literal predicates only
             params + [limit],
         ).fetchall()
         items = [dict(r) for r in rows]

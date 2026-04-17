@@ -492,7 +492,7 @@ def _lint(fix: bool = False) -> dict:
                 for d in dupes:
                     ids = [int(x) for x in d["ids"].split(",")]
                     rows = db.execute(
-                        f"SELECT id, confidence FROM entities WHERE id IN ({','.join('?' * len(ids))}) ORDER BY confidence DESC",
+                        f"SELECT id, confidence FROM entities WHERE id IN ({','.join('?' * len(ids))}) ORDER BY confidence DESC",  # nosec B608 - join expands "?,?,..." count-only
                         ids,
                     ).fetchall()
                     keep = rows[0]["id"]

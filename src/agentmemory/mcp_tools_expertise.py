@@ -600,7 +600,7 @@ def tool_whosknows(
             GROUP BY e.agent_id
             ORDER BY total_score DESC
             LIMIT ?
-            """,
+            """,  # nosec B608 - like_clauses repeats source-literal "e.domain LIKE ?" with ?-placeholder bindings
             like_params + [min_strength, top_n],
         ).fetchall()
 

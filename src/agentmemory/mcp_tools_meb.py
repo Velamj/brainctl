@@ -443,7 +443,7 @@ def tool_push(
             ph = ",".join("?" * len(rowids))
             src_rows = db_vec.execute(
                 f"SELECT id, 'memory' as type, category, content, confidence, scope, created_at "
-                f"FROM memories WHERE id IN ({ph}) AND retired_at IS NULL",
+                f"FROM memories WHERE id IN ({ph}) AND retired_at IS NULL",  # nosec B608 - ph is "?,?,..." count-only
                 rowids,
             ).fetchall()
             out = [dict(r) | {"distance": round(dist_map.get(r["id"], 1.0), 4)} for r in src_rows]
@@ -471,7 +471,7 @@ def tool_push(
         if memory_ids:
             ph = ",".join("?" * len(memory_ids))
             snap_rows = db.execute(
-                f"SELECT id, recalled_count FROM memories WHERE id IN ({ph})", memory_ids
+                f"SELECT id, recalled_count FROM memories WHERE id IN ({ph})", memory_ids  # nosec B608 - ph is "?,?,..." count-only
             ).fetchall()
             recalled_snapshot = {r["id"]: r["recalled_count"] or 0 for r in snap_rows}
 
@@ -543,7 +543,7 @@ def tool_push_report(push_id: str) -> dict:
 
         ph = ",".join("?" * len(memory_ids))
         current_rows = db.execute(
-            f"SELECT id, content, recalled_count FROM memories WHERE id IN ({ph})", memory_ids
+            f"SELECT id, content, recalled_count FROM memories WHERE id IN ({ph})", memory_ids  # nosec B608 - ph is "?,?,..." count-only
         ).fetchall()
 
         report = []
@@ -609,10 +609,14 @@ def tool_vsearch(
         candidate_limit = limit
 
         def _vsearch_table(vec_table, src_table, text_col, extra_cols, fts_table):
+            # All five identifier args are passed only as hardcoded literals from
+            # the call sites below ("vec_memories" / "memories" / "content" / etc.).
+            # Caller code does NOT forward user input here. See call sites at
+            # lines 681-697 — closure scope guarantees no external invocation path.
             fetch_n = limit * 3
             try:
                 vec_rows = db_vec.execute(
-                    f"SELECT rowid, distance FROM {vec_table} WHERE embedding MATCH ? AND k=?",
+                    f"SELECT rowid, distance FROM {vec_table} WHERE embedding MATCH ? AND k=?",  # nosec B608 - vec_table is a source-literal call-site argument
                     (q_blob, fetch_n),
                 ).fetchall()
             except Exception:
@@ -628,7 +632,7 @@ def tool_vsearch(
             if vec_only or not fts_table:
                 src_rows = db_vec.execute(
                     f"SELECT id, {text_col}{', ' + extra_cols if extra_cols else ''} "
-                    f"FROM {src_table} WHERE id IN ({placeholder}){retired_filter}",
+                    f"FROM {src_table} WHERE id IN ({placeholder}){retired_filter}",  # nosec B608 - text_col/extra_cols/src_table are source-literal call-site args; placeholder is "?,?,..."
                     rowids,
                 ).fetchall()
                 out = []
@@ -643,7 +647,7 @@ def tool_vsearch(
             if _fts_q:
                 fts_rows = db_vec.execute(
                     f"SELECT f.rowid, f.rank FROM {fts_table} f "
-                    f"WHERE {fts_table} MATCH ? AND f.rowid IN ({placeholder})",
+                    f"WHERE {fts_table} MATCH ? AND f.rowid IN ({placeholder})",  # nosec B608 - fts_table is source-literal; placeholder is "?,?,..."
                     [_fts_q] + rowids,
                 ).fetchall()
             else:
@@ -652,7 +656,7 @@ def tool_vsearch(
 
             src_rows = db_vec.execute(
                 f"SELECT id, {text_col}{', ' + extra_cols if extra_cols else ''} "
-                f"FROM {src_table} WHERE id IN ({placeholder}){retired_filter}",
+                f"FROM {src_table} WHERE id IN ({placeholder}){retired_filter}",  # nosec B608 - text_col/extra_cols/src_table source-literal; placeholder is "?,?,..."
                 rowids,
             ).fetchall()
 
@@ -738,7 +742,7 @@ def tool_vsearch(
                     f"confidence = MIN(1.0, confidence + 0.15 * (1.0 - confidence)), "
                     f"replay_priority = MIN(10.0, replay_priority + ?), "
                     f"ripple_tags = ripple_tags + ?"
-                    f"{lability_sql} "
+                    f"{lability_sql} "  # nosec B608 - lability_sql is one of two source-literal templates chosen by a boolean
                     f"WHERE id = ?",
                     [now_sql, replay_delta, int(is_high_salience)]
                     + ([agent or "unknown", round(distance, 4)] if open_lability else [])

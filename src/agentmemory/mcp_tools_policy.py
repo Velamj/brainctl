@@ -170,7 +170,7 @@ def tool_policy_match(
                         JOIN policy_memories pm ON pm.rowid = pmf.rowid
                         WHERE pmf MATCH ? AND {base_where}
                         ORDER BY pmf.rank
-                        LIMIT ?""",
+                        LIMIT ?""",  # nosec B608 - base_where built from source-literal predicates only
                     [fts_query] + base_params + [effective_top_k * 2],
                 ).fetchall()
         except Exception:
@@ -178,7 +178,7 @@ def tool_policy_match(
 
         if not fts_rows:
             fts_rows = conn.execute(
-                f"SELECT *, NULL as fts_rank FROM policy_memories WHERE {base_where}"
+                f"SELECT *, NULL as fts_rank FROM policy_memories WHERE {base_where}"  # nosec B608 - base_where built from source-literal predicates only
                 " ORDER BY priority DESC, confidence_threshold DESC LIMIT ?",
                 base_params + [effective_top_k * 2],
             ).fetchall()
@@ -394,7 +394,7 @@ def tool_policy_list(
             params.append(scope)
 
         rows = conn.execute(
-            f"SELECT * FROM policy_memories WHERE {where} ORDER BY priority DESC, confidence_threshold DESC",
+            f"SELECT * FROM policy_memories WHERE {where} ORDER BY priority DESC, confidence_threshold DESC",  # nosec B608 - where built from source-literal predicates only
             params,
         ).fetchall()
 
