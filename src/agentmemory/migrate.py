@@ -73,9 +73,28 @@ MIGRATIONS_DIR = Path(__file__).parent.parent.parent / "db" / "migrations"
 # Errors that mean "this DDL already happened, treat as no-op". Matched
 # case-insensitively against the SQLite error text. Empirically observed
 # error messages from sqlite 3.51.x are listed; see _apply_sql below.
+#
+# DELIBERATELY NARROW: every fragment here is a load-bearing claim that
+# the matching error proves the DDL already happened. Don't add general
+# "object exists" wording or you'll start swallowing real bugs (e.g. a
+# misspelled column in a SELECT).
 _IDEMPOTENT_ERROR_FRAGMENTS = (
     "duplicate column name",  # ALTER TABLE ADD COLUMN of existing column
 )
+
+# Per-statement-kind tolerated errors. Looser than the global list because
+# they only apply when we know the surrounding DDL kind makes the error
+# semantically a no-op:
+#   * CREATE INDEX on a missing column on an existing table = the table
+#     was created by an earlier migration with a different column shape,
+#     and the new index simply can't apply. Logging is the right answer;
+#     crashing the whole migration breaks the user's upgrade for a
+#     legacy column rename they may not even use.
+#   * CREATE TRIGGER, same logic.
+_PER_KIND_TOLERATED_FRAGMENTS = {
+    "CREATE INDEX": ("no such column",),
+    "CREATE TRIGGER": ("no such column",),
+}
 
 
 def _utc_now_iso() -> str:
@@ -157,6 +176,30 @@ def _get_applied(conn: sqlite3.Connection) -> set[int]:
         return set()
 
 
+def _strip_line_comment(line: str) -> str:
+    """Return ``line`` with any trailing ``-- comment`` removed.
+
+    SQLite line comments start at the first unquoted ``--``. We don't fully
+    parse string literals — none of our migrations end a logical statement
+    inside one, but we do correctly skip inline comments AFTER a terminating
+    ``;``, which is what tripped up the splitter on the
+    ``('enabled', '1');     -- kill switch`` line in 044_global_workspace.
+    """
+    in_single = False
+    i = 0
+    n = len(line)
+    while i < n:
+        c = line[i]
+        if c == "'":
+            # Toggle quoted-string state. Doubled '' inside a literal is
+            # SQLite's escape and remains "in" the string.
+            in_single = not in_single
+        elif not in_single and c == "-" and i + 1 < n and line[i + 1] == "-":
+            return line[:i].rstrip()
+        i += 1
+    return line.rstrip()
+
+
 def _split_sql_statements(sql: str) -> list[str]:
     """Split a SQL script into individual statements.
 
@@ -164,14 +207,16 @@ def _split_sql_statements(sql: str) -> list[str]:
     error recovery so an idempotent ``ALTER TABLE ADD COLUMN`` whose column
     already exists doesn't abort the whole migration. The split is naive but
     handles the constructs our migrations use (multi-line CREATE TABLE,
-    CREATE TRIGGER ... BEGIN ... END;, comments, blank lines).
+    CREATE TRIGGER ... BEGIN ... END;, comments, blank lines, and inline
+    line comments after terminating ``;``).
 
     Notes for future maintainers:
       * BEGIN/END blocks (triggers) are recognized and kept as one statement
         until matching END;.
-      * String literals containing ';' are not perfectly handled. None of our
-        migrations have semicolons inside quoted strings; if you add one,
-        either escape it or extend this splitter.
+      * Inline ``-- comment`` after a terminating ``;`` is handled via
+        ``_strip_line_comment``. A semicolon hidden inside a quoted string
+        literal still won't terminate the statement (we'd need a real
+        tokenizer for that); none of our migrations rely on that.
     """
     statements: list[str] = []
     current: list[str] = []
@@ -179,9 +224,6 @@ def _split_sql_statements(sql: str) -> list[str]:
 
     for raw_line in sql.splitlines():
         line = raw_line.rstrip()
-        # Strip leading/trailing whitespace for keyword detection only;
-        # preserve original indentation in `current` for readable error
-        # messages.
         stripped_upper = line.strip().upper()
         if not in_trigger_body and (
             stripped_upper.startswith("CREATE TRIGGER")
@@ -190,15 +232,19 @@ def _split_sql_statements(sql: str) -> list[str]:
             in_trigger_body = True
         current.append(line)
         if in_trigger_body:
-            # BEGIN ... END; ends a trigger body. We look for "END;" on its
-            # own (stripped) — the END token followed by an optional
-            # semicolon. Migration files always use "END;" on its own line.
-            if stripped_upper in ("END;", "END ;"):
+            # BEGIN ... END; ends a trigger body. Strip any inline comment
+            # before checking so e.g. "END;  -- close" still matches.
+            tail = _strip_line_comment(line).strip().upper()
+            if tail in ("END;", "END ;"):
                 statements.append("\n".join(current).strip())
                 current = []
                 in_trigger_body = False
         else:
-            if line.rstrip().endswith(";"):
+            # A statement terminates on a `;` that is not inside a comment.
+            # Strip inline `-- ...` first so the very common pattern
+            # `...);    -- inline note` is detected as a terminator.
+            cleaned = _strip_line_comment(line)
+            if cleaned.endswith(";"):
                 statements.append("\n".join(current).strip())
                 current = []
 
@@ -211,8 +257,9 @@ def _split_sql_statements(sql: str) -> list[str]:
     # ``execute`` but generate noisy "incomplete input" if they slip through).
     out = []
     for s in statements:
-        # Strip block comments; if nothing meaningful remains, skip.
-        non_comment = re.sub(r"--[^\n]*", "", s).strip()
+        # Strip both line and block comments (block via -- line by line);
+        # if nothing meaningful remains, skip.
+        non_comment = "\n".join(_strip_line_comment(l) for l in s.splitlines()).strip()
         if non_comment:
             out.append(s)
     return out
@@ -239,10 +286,26 @@ def _apply_sql(conn: sqlite3.Connection, sql: str, file_label: str) -> tuple[int
             run_count += 1
         except sqlite3.OperationalError as exc:
             msg = str(exc).lower()
+            first_line = stmt.strip().splitlines()[0][:100]
+
+            # Globally idempotent errors — true regardless of statement kind.
             if any(frag in msg for frag in _IDEMPOTENT_ERROR_FRAGMENTS):
-                first_line = stmt.strip().splitlines()[0][:100]
                 skipped.append(f"{file_label}: idempotent skip — {exc}: `{first_line}`")
                 continue
+
+            # Per-statement-kind tolerance: only when the leading DDL
+            # keyword matches a known-safe pattern AND the error text is on
+            # that pattern's tolerated list. The leading-token detection
+            # collapses whitespace so multi-line CREATE statements still
+            # match.
+            leading = " ".join(stmt.strip().split()[:2]).upper()
+            kind_tolerated = _PER_KIND_TOLERATED_FRAGMENTS.get(leading, ())
+            if any(frag in msg for frag in kind_tolerated):
+                skipped.append(
+                    f"{file_label}: tolerated {leading} skip — {exc}: `{first_line}`"
+                )
+                continue
+
             raise
     conn.commit()
     return run_count, skipped
