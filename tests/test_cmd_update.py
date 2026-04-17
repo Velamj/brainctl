@@ -295,6 +295,39 @@ class TestFlagInteractions:
 # ── upgrade failure path ────────────────────────────────────────────────────
 
 
+class TestDevInstallPath:
+    def test_dev_install_runs_migrate_without_upgrading(self):
+        """The primary developer path: `pip install -e .` user runs
+        `brainctl update`. Skip the upgrade step (their git is theirs)
+        but still run doctor + migrate so they pick up new schema.
+        """
+        with patch.object(upd, "detect_install_mode",
+                          return_value=("dev", {"reason": "editable",
+                                                "editable_location": "/repo",
+                                                "location": "/repo/src"})), \
+             patch.object(upd, "run_pip_upgrade") as mock_pip, \
+             patch.object(upd, "run_pipx_upgrade") as mock_pipx, \
+             patch.object(upd, "run_brainctl_version", return_value="2.2.4-dev"), \
+             patch.object(upd, "run_doctor_json",
+                          return_value={"ok": True, "migrations": {"state": "pending"}}) as mock_doctor, \
+             patch.object(upd, "run_brainctl_migrate",
+                          return_value={"ok": True, "applied": 2,
+                                        "_subprocess": {"kind": "migrate", "cmd": [],
+                                                        "returncode": 0, "stderr": ""}}) as mock_migrate:
+            rc, stdout, _ = _capture_stdout(cmd_update, _ns(json=True))
+        assert rc == 0
+        # Upgrade must NOT fire on dev installs
+        mock_pip.assert_not_called()
+        mock_pipx.assert_not_called()
+        # But doctor + migrate must
+        mock_doctor.assert_called_once()
+        mock_migrate.assert_called_once()
+        data = json.loads(stdout)
+        assert data["install_mode"] == "dev"
+        assert data["upgrade"]["action"] == "skip"
+        assert data["migrations_applied"] == 2
+
+
 class TestUpgradeFailure:
     def test_pip_upgrade_failure_aborts_before_migrate(self):
         with patch.object(upd, "detect_install_mode",

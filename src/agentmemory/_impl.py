@@ -15940,10 +15940,18 @@ def cmd_update(args):
         print(f"brainctl update — detected install mode: {mode} ({info.get('reason')})")
 
     # 2. plan upgrade step
-    if mode == "dev" or mode == "unknown":
+    if mode == "dev":
         msg = (
             f"Dev install detected at {info.get('editable_location') or info.get('location') or '<unknown>'}. "
             "Update via `git pull` + `pip install -e .`. Skipping auto-upgrade."
+        )
+        summary["upgrade"] = {"action": "skip", "reason": msg}
+        if not as_json:
+            print(msg)
+    elif mode == "unknown":
+        msg = (
+            "Install mode could not be determined (pip show brainctl returned no usable output). "
+            "Skipping auto-upgrade — update brainctl manually, then re-run this command if needed."
         )
         summary["upgrade"] = {"action": "skip", "reason": msg}
         if not as_json:
