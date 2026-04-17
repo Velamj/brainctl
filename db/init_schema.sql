@@ -65,6 +65,15 @@ CREATE TRIGGER memories_fts_insert AFTER INSERT ON memories BEGIN
     INSERT INTO memories_fts(rowid, content, category, tags) VALUES (new.id, new.content, new.category, new.tags);
 END;
 
+-- Note: this dev-checkout init_schema.sql still uses the single
+-- memories_fts_update trigger (delete-then-reinsert in one body). The
+-- packaged init_schema (src/agentmemory/db/init_schema.sql) was migrated
+-- to the split memories_fts_update_delete + memories_fts_update_insert
+-- pattern in v1.x, with a `WHEN ... AND new.retired_at IS NULL` guard
+-- on the insert leg so retired rows do not re-index. Migration 048
+-- converges existing dev-style brain.db files to the split pattern.
+-- Fresh dev installs from this file get the convergence on first
+-- `brainctl migrate` run.
 CREATE TRIGGER memories_fts_update AFTER UPDATE ON memories BEGIN
     INSERT INTO memories_fts(memories_fts, rowid, content, category, tags) VALUES('delete', old.id, old.content, old.category, old.tags);
     INSERT INTO memories_fts(rowid, content, category, tags) VALUES (new.id, new.content, new.category, new.tags);
@@ -1505,4 +1514,58 @@ CREATE INDEX idx_affect_agent_time ON affect_log(agent_id, created_at DESC);
 CREATE INDEX idx_affect_safety ON affect_log(safety_flag) WHERE safety_flag IS NOT NULL;
 
 CREATE INDEX idx_affect_cluster ON affect_log(cluster, created_at DESC);
+
+-- ===========================================================================
+-- FK INTEGRITY DELETE TRIGGERS  (mirrored from migration 048)
+-- ===========================================================================
+-- See db/migrations/048_fk_integrity_fts_retire_trigger.sql for full
+-- rationale, scope, and divergence notes. Summary: SQLite FK actions
+-- default to NO ACTION; with `PRAGMA foreign_keys = ON` (set above and in
+-- every connection opener) this rejects orphan-creating parent DELETEs
+-- outright. These triggers fire only when FK enforcement is OFF — raw SQL
+-- maintenance, or merge.py:586 which deliberately disables FK during merge.
+--
+-- nullable FK column → SET NULL (preserves history)
+-- NOT NULL FK to memories/entities/events → cascade-DELETE (edges meaningless
+--   without referent; can't SET NULL on a NOT NULL column via trigger)
+-- NOT NULL agent_id on memories/events/decisions/entities → out of scope;
+--   soft-delete (agents.status='retired') is the contract.
+
+CREATE TRIGGER trg_agent_delete_nullify_validation
+AFTER DELETE ON agents
+BEGIN
+    UPDATE memories
+       SET validation_agent_id = NULL
+     WHERE validation_agent_id = OLD.id;
+END;
+
+CREATE TRIGGER trg_memory_delete_cascade_edges
+AFTER DELETE ON memories
+BEGIN
+    DELETE FROM knowledge_edges
+     WHERE (source_table = 'memories' AND source_id = OLD.id)
+        OR (target_table = 'memories' AND target_id = OLD.id);
+END;
+
+CREATE TRIGGER trg_entity_delete_cascade_edges
+AFTER DELETE ON entities
+BEGIN
+    DELETE FROM knowledge_edges
+     WHERE (source_table = 'entities' AND source_id = OLD.id)
+        OR (target_table = 'entities' AND target_id = OLD.id);
+END;
+
+CREATE TRIGGER trg_event_delete_cascade_edges
+AFTER DELETE ON events
+BEGIN
+    DELETE FROM knowledge_edges
+     WHERE (source_table = 'events' AND source_id = OLD.id)
+        OR (target_table = 'events' AND target_id = OLD.id);
+END;
+
+-- FTS5 retire-aware re-index is handled by migration 048's split-pair
+-- conversion (memories_fts_update_delete + memories_fts_update_insert with
+-- `WHEN ... AND new.retired_at IS NULL` on the insert leg). Fresh dev
+-- installs from this file get the conversion on first `brainctl migrate`
+-- run; the packaged init_schema already ships in the split layout.
 
