@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -34,7 +34,7 @@ def _insert_memory(db_file, content, temporal_level="moment", created_at=None, a
     conn = sqlite3.connect(str(db_file))
     conn.execute("PRAGMA foreign_keys = ON")
     ta._ensure_temporal_level_col(conn)
-    ts = created_at or datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+    ts = created_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     conn.execute(
         "INSERT INTO memories (content, category, confidence, agent_id, temporal_level, created_at) "
         "VALUES (?, ?, ?, ?, ?, ?)",
