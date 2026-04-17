@@ -8,9 +8,25 @@ regression is introduced so CI stops changes that silently degrade recall.
 """
 from __future__ import annotations
 
+import random
+
 import pytest
 
 from tests.bench import eval as bench_eval
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _seed_thompson_rng():
+    """Seed Python's stdlib RNG before the bench fixture runs.
+
+    ``cmd_search``'s Thompson-sampling step calls ``random.betavariate``
+    via ``_apply_recency_and_trim``; without a seed the bench's p_at_1
+    metric drifts ~0.40-0.45 across runs and the regression gate flakes
+    ~50% of the time. The CLI entry at ``tests/bench/run.py`` already
+    seeds at module top with ``random.seed(42)``; mirror that here so
+    pytest invocations are equally deterministic.
+    """
+    random.seed(42)
 
 
 @pytest.fixture(scope="module")

@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.2.2] — 2026-04-17
+
+### Fixed
+
+- **`tests/test_search_quality_bench.py::test_no_regression` flake.** The
+  bench's CLI entry at `tests/bench/run.py:16` seeds `random.seed(42)`
+  at module top, but the pytest test imports `tests.bench.eval` directly
+  and never triggered that seed — so `cmd_search`'s downstream Thompson-
+  sampling step (`_apply_recency_and_trim` → `random.betavariate`) ran
+  with whatever entropy pytest happened to leave around. `p_at_1` drifted
+  0.40-0.45 across runs and the regression gate failed ~50% of the time
+  (pre-existing on every 2.x release). Added a module-scoped autouse
+  fixture in the test file that mirrors `run.py`'s seed before the
+  bench fixture runs. Verified: 5/5 consecutive pytest invocations pass
+  cleanly post-fix.
+
 ## [2.2.1] — 2026-04-17
 
 ### Fixed — follow-up to the 2.2.0 correctness wave
