@@ -14123,8 +14123,7 @@ def build_parser():
                     "  graph         Knowledge graph operations\n"
                     "  report        Compile brain knowledge into markdown reports\n"
                     "  lint          Health check — find issues, suggest fixes\n"
-                    "  neurostate    Neuromodulation state management\n"
-                    "  ui            Web dashboard (port 3939)\n",
+                    "  neurostate    Neuromodulation state management\n",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--agent", "-a", default=os.environ.get("AGENT_ID", "default"), help="Agent ID for attribution (default: $AGENT_ID or 'default')")
@@ -14784,11 +14783,6 @@ def build_parser():
     prune.add_argument("--days", type=int, default=30)
 
     sub.add_parser("temporal-context", help="Print compact temporal orientation summary for agents")
-
-    # --- ui ---
-    ui_p = sub.add_parser("ui", help="Open web dashboard at localhost:3939")
-    ui_p.add_argument("--port", type=int, default=3939, help="Port to serve on (default: 3939)")
-    ui_p.add_argument("--no-browser", action="store_true", help="Don't auto-open browser")
 
     health = sub.add_parser("health", help="Memory SLO health dashboard (coverage, freshness, precision, diversity, temporal)")
     health.add_argument("--json", action="store_true", help="Output raw JSON instead of dashboard")
@@ -16211,16 +16205,6 @@ def main():
         fn = dispatch.get(args.affect_cmd)
     elif args.command == "whosknows":
         fn = cmd_whosknows
-    elif args.command == "ui":
-        try:
-            from agentmemory.ui.server import serve as _ui_serve
-        except ImportError:
-            # Fallback for dev checkout
-            import sys as _sys
-            _sys.path.insert(0, str(Path.home() / "agentmemory" / "ui"))
-            from server import serve as _ui_serve
-        _ui_serve(port=args.port, db_path=str(DB_PATH), open_browser=not args.no_browser)
-        return
     elif args.command == "push":
         push_dispatch = {
             "run": cmd_push,

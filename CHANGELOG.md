@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-04-16
+
+### Removed
+
+- **Bundled web dashboard (`brainctl ui` subcommand).** The local
+  `http.server`-based dashboard with the Explorer + Neural Map views has
+  been removed. The forward-facing UI for brainctl is now Obsidian via
+  `brainctl obsidian` (export your vault, browse natively, sync back).
+  The Neural Map's WebGL render was heavy enough to crash GPUs on warm
+  laptops; the Obsidian path is lighter, native, and roundtrippable.
+  Deleted: `src/agentmemory/ui/`, top-level `ui/` duplicate, the `ui`
+  argparse subcommand, and the `ui/static/*` package-data lines.
+
 ## [2.0.0] — 2026-04-16
 
 **brainctl 2.0** — the full Complementary Learning Systems architecture.
@@ -813,4 +826,4 @@ Stable release. Every feature verified end-to-end on clean pip install.
 - Consolidation engine (confidence decay, dream synthesis, Hebbian learning)
 - Prospective memory triggers
 - Multi-agent support with per-agent attribution
-- Web dashboard on port 3939
+- ~~Web dashboard on port 3939~~ (removed in 2.1.0 — Obsidian is the user-facing UI; see `brainctl obsidian`)

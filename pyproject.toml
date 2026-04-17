@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "brainctl"
-version = "2.0.2"
+version = "2.1.0"
 description = "Context engineering for AI agents — persistent memory, knowledge graph, affect tracking, and MCP server. Single SQLite file, zero LLM cost."
 readme = "README.md"
 license = {text = "MIT"}
@@ -47,4 +47,4 @@ Documentation = "https://github.com/TSchonleber/brainctl/blob/main/docs/AGENT_ON
 where = ["src"]
 
 [tool.setuptools.package-data]
-agentmemory = ["db/*.sql", "ui/static/*.html", "ui/static/*.css", "ui/static/*.js"]
+agentmemory = ["db/*.sql"]
