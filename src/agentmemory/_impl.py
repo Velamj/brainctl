@@ -230,6 +230,13 @@ def _update_q_value(db, memory_id, contributed, learning_rate=_Q_LEARNING_RATE):
     (Zhang et al. 2026). reward=1.0 on positive contribution, 0.0 otherwise.
     Q-value is clamped to [0, 1] after each update.
 
+    Bug 9 fix (2.2.0): collapsed prior SELECT-then-UPDATE into a single
+    atomic UPDATE that performs the TD step inline using SQLite arithmetic.
+    The old read-modify-write was racy under concurrent agents — two writers
+    could both read q_old before either wrote q_new, losing one update. The
+    new form is a single statement and atomic at the SQLite page level.
+    Retired memories are still skipped via the WHERE clause.
+
     Args:
         db: Active sqlite3 connection. Commits after updating.
         memory_id: Integer PK of the memory being updated.
@@ -237,18 +244,17 @@ def _update_q_value(db, memory_id, contributed, learning_rate=_Q_LEARNING_RATE):
         learning_rate: TD step size alpha (default _Q_LEARNING_RATE = 0.1).
 
     Side effects:
-        Updates q_value for the memory and commits.
+        Updates q_value for the memory and commits. No-op (silently) if
+        the memory does not exist or has been retired.
     """
     reward = 1.0 if contributed else 0.0
-    row = db.execute(
-        "SELECT q_value FROM memories WHERE id=? AND retired_at IS NULL",
-        (memory_id,),
-    ).fetchone()
-    if not row:
-        return
-    q_old = row["q_value"] if row["q_value"] is not None else 0.5
-    q_new = max(0.0, min(1.0, q_old + learning_rate * (reward - q_old)))
-    db.execute("UPDATE memories SET q_value = ? WHERE id = ?", (q_new, memory_id))
+    db.execute(
+        "UPDATE memories "
+        "   SET q_value = max(0.0, min(1.0, "
+        "       COALESCE(q_value, 0.5) + ? * (? - COALESCE(q_value, 0.5)))) "
+        " WHERE id = ? AND retired_at IS NULL",
+        (learning_rate, reward, memory_id),
+    )
     db.commit()
 
 
