@@ -3,12 +3,12 @@
 ## What This Is
 Unified agent memory system. SQLite-backed (brain.db) with FTS5, vector embeddings (sqlite-vec + Ollama nomic-embed-text), knowledge graph, affect tracking, belief collapse mechanics, and AGM conflict resolution.
 
-Published as `brainctl` on PyPI (v1.6.1).
+Published as `brainctl` on PyPI (v2.2.1+).
 
 ## Key Paths
-- **DB:** `db/brain.db` (WAL mode, foreign keys ON)
+- **DB:** `db/brain.db` (WAL mode, foreign keys ON, 61 user-facing tables, 47 migrations)
 - **CLI:** `bin/brainctl` — main CLI entry
-- **MCP server:** `bin/brainctl-mcp` — stdio MCP server (199 tools). Run with `python3`
+- **MCP server:** canonical entry is `agentmemory.mcp_server:run` (199 tools across `mcp_server.py` + 28 `mcp_tools_*.py` modules). Installed as the `brainctl-mcp` console script via pip. The legacy standalone `bin/brainctl-mcp` only registers a subset and is being phased out.
 - **Bench:** `bin/brainctl-bench` — retrieval eval harness (P@k / MRR / nDCG@k regression gate, fixtures under `tests/bench/`)
 - **Source:** `src/agentmemory/` — Python package
 - **Config:** `config/` — quiet hours, consolidation schedules
@@ -16,12 +16,12 @@ Published as `brainctl` on PyPI (v1.6.1).
 
 ## Build & Test
 ```bash
-pip install -e .                           # dev install
-brainctl stats                             # verify DB
-brainctl search "test"                     # test search
-python3 bin/brainctl-mcp --list-tools      # verify MCP (needs mcp module)
-python3 -m tests.bench.run                 # retrieval quality benchmark
-python3 -m tests.bench.run --check         # fail on >2% regression vs baseline
+pip install -e .                                      # dev install
+brainctl stats                                        # verify DB
+brainctl search "test"                                # test search
+python3 -m agentmemory.mcp_server --list-tools        # full 199-tool MCP surface
+python3 -m tests.bench.run                            # retrieval quality benchmark
+python3 -m tests.bench.run --check                    # fail on >2% regression vs baseline
 ```
 
 ## Architecture

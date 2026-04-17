@@ -5,6 +5,87 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.2.1] — 2026-04-17
+
+### Fixed — follow-up to the 2.2.0 correctness wave
+
+The 2.2.0 audit closed ten bugs but left three open loops it had created or
+revealed. Three more parallel workers, three more isolated worktrees,
+five more items closed.
+
+- **`_merge_memories` orphans `knowledge_edges` (Bug 6c).** Worker D's
+  2.2.0 fix to `_merge_entities` taught the merge to thread an
+  `entity_id_map` through to `_merge_knowledge_edges`. The same shape
+  bug existed in the memory path — `_merge_memories` inserted memories
+  into the target DB without tracking the id remap, so any edge
+  referencing a memory by id was orphaned across cross-DB merges.
+  `_merge_memories` now returns a `memory_id_map` populated in both
+  the dedup-match and fresh-insert branches; `_merge_knowledge_edges`
+  uses it to redirect `*_table='memories'` edges with the same
+  HIGHEST-WEIGHT-WINS conflict rule. Self-loops produced by remap
+  collapse are dropped.
+- **SQLi sweep across all 28 `mcp_tools_*.py` modules.** Worker C's
+  2.2.0 sweep covered `mcp_server.py` only. This patch extends the same
+  methodology to the 29 extension modules registered through
+  `_EXT_MODULES` (the brief said 28 — actual count was 29; deferred to
+  the registry to prevent future drift). **Zero real injection vectors
+  found**: the audit's heuristic ("f-string + `', '.join` near
+  `execute(`") flagged predicates that are source-literal-only, not
+  caller-controlled. Hardened two sites (`tool_task_update`,
+  `tool_expertise_update`) with allowlist + parameterized helpers
+  matching Worker C's 2.2.0 pattern, parameterized one `LIMIT` clause,
+  and added `# nosec B608` markers with rationale to every
+  defense-in-depth f-string SQL. New `tests/test_sqli_tool_modules.py`
+  includes an AST-level static linter that REQUIRES the marker on any
+  f-string passed to `.execute()/.executemany()/.executescript()` — a
+  future violation fails the test.
+- **Trust contradiction logic factored into `agentmemory.trust`.**
+  Bug 7's fix in 2.2.0 lived in two parallel implementations
+  (`mcp_tools_trust.tool_trust_update_contradiction` for the MCP path
+  and `_impl.cmd_trust_update_contradiction` for the CLI path). They
+  were kept in lockstep manually — a maintenance bomb. New module
+  `agentmemory.trust` exposes `apply_contradiction_penalty(db, a, b,
+  resolved)`; both surfaces shrunk to ~14-line wrappers. Pure refactor,
+  zero behavior change. Connection lifecycle stays caller-owned.
+
+### Maintenance
+
+- **`bin/brainctl-mcp --list-tools` now flags the undercount.** The
+  legacy standalone script registers a subset of tools (it doesn't
+  merge `_EXT_MODULES`). Added a stderr note pointing users at the
+  canonical `python3 -m agentmemory.mcp_server --list-tools` (or the
+  pip-installed `brainctl-mcp` console script) for the full 199-tool
+  surface. Phasing out the standalone fully is a 2.3.0 task.
+- **`CLAUDE.md` (in-repo) refreshed.** Was claiming v1.6.1 and pointing
+  at the legacy MCP standalone. Updated to v2.2.1+, current schema
+  numbers (61 tables, 47 migrations), and the canonical MCP entry.
+
+### Known issue
+
+- `tests/test_search_quality_bench.py::test_no_regression` flakes ~50%
+  of runs (Thompson sampling stochastic noise; baseline `p_at_1=0.45`,
+  samples drift to 0.40). Pre-existing on every 2.x release; not
+  caused by 2.2.0/2.2.1 changes. Fix is to seed the RNG in the bench
+  fixture; deferred to 2.2.2.
+
+### Notes for 2.3.0 (the design-decision wave)
+
+- `datetime.utcnow()` deprecation across `mcp_tools_policy.py`,
+  `_impl.py:13933`, and one test file (mechanical fix).
+- W(m) surprise score returns 1.0 on `fts5_no_matches` — near-duplicates
+  with different vocabulary pass as novel; needs design choice on a
+  saner fallback (likely ~0.5).
+- Add `ON DELETE` clauses across the 47 migrations (only 2 declare them
+  today); per-table choice between CASCADE and SET NULL.
+- `memories_fts` DELETE trigger when `retired_at` is set (FTS index
+  bloats with orphan rows).
+- `mcp_tools_dmem.py:146` silent `except Exception: pass` swallows
+  `memory_promoted` event failures.
+- `intent_classifier` external path missing the `entity_lookup` rule.
+- Batched `vec_purge_retired` (still ~30 min stalls on large retired
+  sets — from 2.1.x crash audit).
+- `affect_log` retention policy.
+
 ## [2.2.0] — 2026-04-16
 
 ### Fixed — correctness audit, ten bugs across the stack
