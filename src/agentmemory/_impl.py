@@ -222,6 +222,35 @@ _CONTIGUITY_BONUS = 1.15
 # Q-learning rate for temporal-difference memory utility updates (Zhang et al. 2026 / MemRL).
 _Q_LEARNING_RATE = 0.1
 
+# Bayesian alpha/beta runaway guardrails (Bug 4 fix, 2.2.0). Each successful
+# recall used to only increment alpha, which meant a memory recalled 100 times
+# reached Beta(101, 1) — posterior mean ~0.99 regardless of actual quality.
+# Downstream Thompson sampling in _apply_recency_and_trim (~line 5680) then
+# let popular-but-wrong memories crowd out correct but less-recalled ones.
+#
+# DESIGN DECISION (2.2.0): option (c) — "anti-attractor prior".
+#   Each recall increments alpha by 1.0 AND beta by _BETA_PRIOR_INCREMENT,
+#   but only while (alpha + beta) < _AB_PRIOR_CAP. Both increments stop
+#   together once the cap fires so the alpha/beta ratio the memory has
+#   earned by then is preserved rather than drifting.
+#
+# Rejected alternatives (documented for future maintainers):
+#   (a) Hard-cap alpha at 50 — simpler but discards the retrieval-practice
+#       signal past that point and produces a discontinuity at the cap.
+#   (b) Logarithmic alpha increment — changes the scale of every downstream
+#       consumer of alpha (posterior mean, Thompson variance, gap-scanner
+#       thresholds). Too invasive for a 2.2.0 correctness wave.
+#   (d) Revert to alpha/(alpha+beta) and add explicit recall-outcome
+#       instrumentation — requires new telemetry plumbing and is out of
+#       scope for a correctness release. Flagged for a future evolution.
+#
+# The numeric values below are deliberately tunable without churning this
+# release: a 0.1 beta increment per recall gives a ~10x penalty on a single
+# recall that is actually wrong, and the 1000 cap means a memory must be
+# recalled ~900 times before the guard fires — well beyond normal use.
+_BETA_PRIOR_INCREMENT = 0.1
+_AB_PRIOR_CAP = 1000.0
+
 
 def _update_q_value(db, memory_id, contributed, learning_rate=_Q_LEARNING_RATE):
     """TD update: q_new = q_old + lr * (reward - q_old).
@@ -2162,19 +2191,31 @@ def _retrieval_practice_boost(db, memory_id, retrieval_prediction_error=0.0):
     """
     rpe = max(0.0, min(1.0, retrieval_prediction_error or 0.0))
     boost = _RETRIEVAL_PRACTICE_BASE_BOOST * (1.0 + rpe)
-    # Intentional decoupling: confidence gets a flat additive boost (testing-effect
-    # model, Roediger & Karpicke 2006) while alpha is incremented separately to
-    # record the evidence count. The two are no longer kept in sync via
-    # alpha / (alpha + beta) — the additive boost replaces the pure Bayesian update.
+    # Bug 4 fix (2.2.0): every recall now also increments beta by
+    # _BETA_PRIOR_INCREMENT (anti-attractor prior). Both increments are
+    # gated on (alpha + beta) < _AB_PRIOR_CAP via a CASE expression so the
+    # whole update is one atomic statement. Confidence still gets the
+    # additive testing-effect boost (Roediger & Karpicke 2006); the
+    # Bayesian alpha/beta now also moves in step with each recall, so a
+    # popular-but-wrong memory cannot inflate to Beta(101, 1) → mean ~0.99
+    # and crowd out correct competitors during Thompson sampling. See the
+    # module-level constants block above for the rejected alternatives
+    # (a hard alpha cap, log increment, full revert with explicit recall
+    # outcome telemetry) and the rationale for option (c).
     db.execute(
         "UPDATE memories SET "
         "confidence = MIN(1.0, confidence + ?), "
-        "alpha = COALESCE(alpha, 1.0) + 1.0, "
+        "alpha = CASE WHEN COALESCE(alpha, 1.0) + COALESCE(beta, 1.0) >= ? "
+        "             THEN COALESCE(alpha, 1.0) "
+        "             ELSE COALESCE(alpha, 1.0) + 1.0 END, "
+        "beta  = CASE WHEN COALESCE(alpha, 1.0) + COALESCE(beta, 1.0) >= ? "
+        "             THEN COALESCE(beta,  1.0) "
+        "             ELSE COALESCE(beta,  1.0) + ? END, "
         "recalled_count = recalled_count + 1, "
         "last_recalled_at = strftime('%Y-%m-%dT%H:%M:%S', 'now'), "
         "labile_until = strftime('%Y-%m-%dT%H:%M:%S', 'now', '+2 hours') "
         "WHERE id = ?",
-        (boost, memory_id),
+        (boost, _AB_PRIOR_CAP, _AB_PRIOR_CAP, _BETA_PRIOR_INCREMENT, memory_id),
     )
     # Q-value TD update: successful retrieval implies contribution (Zhang et al. 2026 / MemRL).
     _update_q_value(db, memory_id, contributed=True)
