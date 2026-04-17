@@ -16,9 +16,11 @@
 --  * Indexes use IF NOT EXISTS.
 --
 -- HISTORICAL NOTE: the original file (023_uncertainty_log_search_columns.sql)
--- ended with `ALTER TABLE access_log ADD COLUMN IF NOT EXISTS tokens_consumed`
--- which is a SQLite syntax error. That line was a duplicate of the column
--- already added in 023_attention_budget.sql, and is removed here.
+-- ended with an "ADD COLUMN IF NOT EXISTS" statement against access_log.
+-- tokens_consumed which is a SQLite syntax error. That line was a
+-- duplicate of the column already added in 023_attention_budget.sql, and
+-- is removed here. (The literal SQL is paraphrased above so the
+-- status_verbose ADD COLUMN regex does not capture this comment.)
 
 ALTER TABLE agent_uncertainty_log ADD COLUMN domain         TEXT;
 ALTER TABLE agent_uncertainty_log ADD COLUMN query          TEXT;

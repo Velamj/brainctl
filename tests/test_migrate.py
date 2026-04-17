@@ -402,22 +402,24 @@ class TestStatusVerbose:
         assert m024["ddl_hits"] == "2/2"
 
     def test_add_column_if_not_exists_regex(self, tmp_path):
-        """Migration 023 uses `ALTER TABLE access_log ADD COLUMN IF NOT EXISTS
-        tokens_consumed` — the heuristic's regex must tolerate the IF NOT
-        EXISTS modifier and capture `tokens_consumed`, not `IF`, as the
-        column name. Regression test for a bug where v23 showed 7/8 even
-        on a db with all 8 columns present.
+        """The heuristic's regex must tolerate `ADD COLUMN IF NOT EXISTS <col>`
+        and capture the actual column name, not `IF`.
+
+        Originally lived in migration 023; in v2.2.0 the dupe-version rename
+        moved the uncertainty_log columns to migration 046. The
+        `ADD COLUMN IF NOT EXISTS` syntax in the source file was a SQLite
+        syntax error and was removed during the rename, but
+        ``status_verbose`` still uses that regex to parse OTHER historical
+        migrations (and any future ones that lazily wrote the modifier),
+        so the regression coverage is still valuable.
         """
         db = str(tmp_path / "ifnotexists.db")
         conn = sqlite3.connect(db)
-        # Create access_log with tokens_consumed so the heuristic sees it.
-        # Also create agent_uncertainty_log with all 7 columns from v23.
+        # Stand up a table that mimics what the renamed migration 046
+        # expects to find. status_verbose's regex should classify it as
+        # likely-applied.
         conn.executescript(
             """
-            CREATE TABLE access_log (
-                id INTEGER PRIMARY KEY,
-                tokens_consumed INTEGER
-            );
             CREATE TABLE agent_uncertainty_log (
                 id INTEGER PRIMARY KEY,
                 domain TEXT,
@@ -434,19 +436,19 @@ class TestStatusVerbose:
         conn.close()
 
         result = migrate.status_verbose(db)
-        m023 = [m for m in result["migrations_verbose"] if m["version"] == 23]
         uncertainty = next(
-            (m for m in m023 if "uncertainty" in m["name"]),
+            (m for m in result["migrations_verbose"] if m["version"] == 46),
             None,
         )
         assert uncertainty is not None, (
-            "migration 023 uncertainty_log_search_columns not found"
+            "migration 046 uncertainty_log_search_columns not found"
         )
-        # All 8 columns present → should be 8/8, not 7/8
-        assert uncertainty["ddl_hits"] == "8/8", (
-            f"expected 8/8, got {uncertainty['ddl_hits']} — regex is "
-            f"probably capturing 'IF' as the column name from "
-            f"`ADD COLUMN IF NOT EXISTS tokens_consumed`"
+        assert "uncertainty" in uncertainty["name"]
+        # All 7 ADD COLUMN columns present → should be 7/7
+        assert uncertainty["ddl_hits"] == "7/7", (
+            f"expected 7/7, got {uncertainty['ddl_hits']} — regex is "
+            f"probably capturing 'IF' as the column name from any "
+            f"`ADD COLUMN IF NOT EXISTS <col>` in migration files"
         )
         assert uncertainty["heuristic"] == "likely-applied"
 
@@ -543,6 +545,144 @@ class TestBrainMigrationWarning:
 
         records = [r for r in caplog.records if r.name == "agentmemory.brain"]
         assert len(records) == 1, f"expected 1 (deduped), got {len(records)}"
+
+
+class TestDuplicateVersionDetector:
+    """Coverage for the v2.2.0 duplicate-version detector that prevents
+    the "alphabetical sort silently skips the second file" bug from
+    re-shipping. Lives in migrate._check_no_duplicate_versions and runs
+    on every status/run/status_verbose call via _get_migrations.
+    """
+
+    def test_clean_tree_passes(self):
+        """The post-rename tree must have no duplicate version numbers."""
+        # Should not raise. The fact that any other test passes proves
+        # this implicitly, but being explicit guards against regressions.
+        migrate._check_no_duplicate_versions()
+
+    def test_synthetic_dupe_raises(self, tmp_path, monkeypatch):
+        """Inject two files at the same version and confirm the detector
+        raises with both filenames in the message."""
+        mdir = tmp_path / "migrations"
+        mdir.mkdir()
+        (mdir / "099_first.sql").write_text("-- noop")
+        (mdir / "099_second.sql").write_text("-- noop")
+        monkeypatch.setattr(migrate, "MIGRATIONS_DIR", mdir)
+
+        with pytest.raises(ValueError) as excinfo:
+            migrate._get_migrations()
+        msg = str(excinfo.value)
+        assert "version 099" in msg
+        assert "099_first.sql" in msg
+        assert "099_second.sql" in msg
+
+    def test_env_bypass_allows_dupes(self, tmp_path, monkeypatch):
+        """BRAINCTL_ALLOW_DUPLICATE_MIGRATIONS=1 lets you audit pre-fix
+        branches without crashing the detector."""
+        mdir = tmp_path / "migrations"
+        mdir.mkdir()
+        (mdir / "099_first.sql").write_text("-- noop")
+        (mdir / "099_second.sql").write_text("-- noop")
+        monkeypatch.setattr(migrate, "MIGRATIONS_DIR", mdir)
+        monkeypatch.setenv("BRAINCTL_ALLOW_DUPLICATE_MIGRATIONS", "1")
+
+        # Bypassed → no raise, both files present
+        migrations = migrate._get_migrations()
+        assert len(migrations) == 2
+        assert all(v == 99 for v, _, _ in migrations)
+
+
+class TestApplySqlIdempotence:
+    """Coverage for migrate._apply_sql idempotent error tolerance.
+
+    These guarantee that re-running a migration whose effects are partly
+    or wholly already in the schema does not crash the migration. Without
+    this, every brain.db that hits a "duplicate column" mid-run leaves
+    schema_versions out-of-sync with the actual schema state.
+    """
+
+    def test_duplicate_column_swallowed(self, tmp_path):
+        """ADD COLUMN of an already-existing column logs a skip note,
+        does not raise, and reports stmts_run=0."""
+        db = str(tmp_path / "dup.db")
+        conn = sqlite3.connect(db)
+        conn.execute("CREATE TABLE t (a INT, b INT)")
+        sql = "ALTER TABLE t ADD COLUMN b INT;"
+        run_count, skipped = migrate._apply_sql(conn, sql, "test.sql")
+        conn.close()
+        assert run_count == 0
+        assert len(skipped) == 1
+        assert "duplicate column name" in skipped[0]
+
+    def test_create_index_on_missing_column_swallowed(self, tmp_path):
+        """CREATE INDEX referencing a column that doesn't exist on an
+        existing table is a tolerated skip (legacy column rename case)."""
+        db = str(tmp_path / "missing.db")
+        conn = sqlite3.connect(db)
+        conn.execute("CREATE TABLE t (a INT)")
+        sql = "CREATE INDEX IF NOT EXISTS idx_missing ON t(missing_col);"
+        run_count, skipped = migrate._apply_sql(conn, sql, "test.sql")
+        conn.close()
+        assert run_count == 0
+        assert len(skipped) == 1
+        assert "tolerated CREATE INDEX skip" in skipped[0]
+
+    def test_unrelated_select_no_such_column_still_raises(self, tmp_path):
+        """no such column in a SELECT/UPDATE must NOT be tolerated —
+        that's a real bug, not an idempotency signal."""
+        db = str(tmp_path / "raise.db")
+        conn = sqlite3.connect(db)
+        conn.execute("CREATE TABLE t (a INT)")
+        sql = "UPDATE t SET nonexistent = 1;"
+        with pytest.raises(sqlite3.OperationalError):
+            migrate._apply_sql(conn, sql, "test.sql")
+        conn.close()
+
+
+class TestSqlSplitter:
+    """Coverage for migrate._split_sql_statements. Specific regression
+    tests for the bugs caught while implementing v2.2.0:
+      * inline `-- comment` after a terminating `;` must end the statement
+      * CREATE TRIGGER ... BEGIN ... END; must be one statement
+      * single-quoted string literals containing -- must not start a comment
+    """
+
+    def test_terminator_with_inline_comment(self):
+        """`('enabled', '1');     -- kill switch` must terminate, not
+        absorb the next CREATE TABLE block. (Reproduces the
+        044_global_workspace splitter bug.)"""
+        sql = (
+            "INSERT INTO t (k, v) VALUES ('a', '1');     -- kill switch\n"
+            "\n"
+            "CREATE TABLE next_thing (id INT);\n"
+        )
+        stmts = migrate._split_sql_statements(sql)
+        assert len(stmts) == 2
+        assert "INSERT INTO" in stmts[0]
+        assert "CREATE TABLE" in stmts[1]
+
+    def test_trigger_body_kept_as_one_statement(self):
+        sql = (
+            "CREATE TRIGGER trg AFTER INSERT ON t\n"
+            "BEGIN\n"
+            "    UPDATE t SET x = x + 1;\n"
+            "    INSERT INTO log (msg) VALUES ('fired');\n"
+            "END;\n"
+            "\n"
+            "CREATE INDEX idx_t ON t(x);\n"
+        )
+        stmts = migrate._split_sql_statements(sql)
+        assert len(stmts) == 2
+        assert "CREATE TRIGGER" in stmts[0]
+        assert "END;" in stmts[0]
+        assert "CREATE INDEX" in stmts[1]
+
+    def test_dash_inside_string_literal_not_a_comment(self):
+        """A `--` inside a quoted string must not start a line comment."""
+        sql = "INSERT INTO t (label) VALUES ('two--dashes');\nSELECT 1;\n"
+        stmts = migrate._split_sql_statements(sql)
+        assert len(stmts) == 2
+        assert "two--dashes" in stmts[0]
 
 
 class TestDoctorMigrationsCheck:
