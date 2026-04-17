@@ -1346,6 +1346,68 @@ def tool_trigger_check(agent_id: str, query: str) -> dict:
     return {"ok": True, "query": query, "matched_triggers": matches, "count": len(matches)}
 
 
+# --- memory_triggers UPDATE: column allowlist ---------------------------------
+# Defense-in-depth for tool_trigger_update. The current handler signature uses
+# fixed kwargs so wire-input keys cannot reach this code path directly, but the
+# UPDATE statement is built by string-joining column predicates. Any future
+# refactor that iterates an arbitrary dict (e.g. a generic update helper, or a
+# **kw signature added for forward-compat) would turn this into a textbook
+# CWE-89 (SQL injection via column name) vector.
+#
+# Locking the set of writable columns to a hardcoded allowlist makes the
+# invariant statically auditable: SQL fragments are only ever assembled from
+# known-safe identifiers sourced from this constant, never from caller input.
+# Source of truth: db/init_schema.sql memory_triggers definition. id and
+# created_at are intentionally excluded (write-only-once / managed by SQLite).
+_TRIGGER_UPDATE_ALLOWED_COLUMNS = frozenset({
+    "trigger_condition",
+    "trigger_keywords",
+    "action",
+    "entity_id",
+    "memory_id",
+    "priority",
+    "status",
+    "fired_at",
+    "expires_at",
+})
+
+# CHECK-constraint mirrors from the schema. Values are bound positionally, but
+# we still enforce here to keep error messages helpful and to fail fast before
+# round-tripping the DB.
+_TRIGGER_PRIORITY_VALUES = frozenset({"low", "medium", "high", "critical"})
+_TRIGGER_STATUS_VALUES = frozenset({"active", "fired", "expired", "cancelled"})
+
+
+def _build_trigger_update_sql(incoming: dict) -> tuple[str | None, list, list, list]:
+    """Build a parameterized UPDATE for memory_triggers from a column-keyed dict.
+
+    Returns (sql, params, accepted_columns, rejected_keys).
+    `sql` is None when no allowed columns are present (caller decides how to
+    surface that — typically as a "no fields to update" error).
+
+    Pure function — no DB handle, no I/O — so the SQL-shape invariant is
+    testable in isolation. The fragment ", ".join(f"{c} = ?" for c in cols) is
+    safe BECAUSE every `c` is a key intersected with the hardcoded allowlist
+    above; no caller-supplied identifier ever reaches the SQL string.
+    """
+    accepted: list[str] = []
+    params: list = []
+    rejected: list[str] = []
+    for key, value in incoming.items():
+        if value is None:
+            continue
+        if key in _TRIGGER_UPDATE_ALLOWED_COLUMNS:
+            accepted.append(key)
+            params.append(value)
+        else:
+            rejected.append(key)
+    if not accepted:
+        return None, params, accepted, rejected
+    set_clause = ", ".join(f"{col} = ?" for col in accepted)  # nosec B608 - cols allowlisted above
+    sql = f"UPDATE memory_triggers SET {set_clause} WHERE id = ?"  # nosec B608
+    return sql, params, accepted, rejected
+
+
 def tool_trigger_update(agent_id: str, trigger_id: int, condition: str = None,
                         keywords: str = None, action: str = None,
                         priority: str = None, status: str = None,
@@ -1356,34 +1418,36 @@ def tool_trigger_update(agent_id: str, trigger_id: int, condition: str = None,
     if not row:
         db.close()
         return {"ok": False, "error": f"Trigger {trigger_id} not found"}
-    updates = []
-    params = []
-    if condition is not None:
-        updates.append("trigger_condition=?"); params.append(condition)
-    if keywords is not None:
-        updates.append("trigger_keywords=?"); params.append(keywords)
-    if action is not None:
-        updates.append("action=?"); params.append(action)
-    if priority is not None:
-        if priority not in ("low", "medium", "high", "critical"):
-            db.close()
-            return {"ok": False, "error": f"Invalid priority: {priority}"}
-        updates.append("priority=?"); params.append(priority)
-    if status is not None:
-        if status not in ("active", "fired", "expired", "cancelled"):
-            db.close()
-            return {"ok": False, "error": f"Invalid status: {status}"}
-        updates.append("status=?"); params.append(status)
-    if expires is not None:
-        updates.append("expires_at=?"); params.append(expires)
-    if not updates:
+    if priority is not None and priority not in _TRIGGER_PRIORITY_VALUES:
+        db.close()
+        return {"ok": False, "error": f"Invalid priority: {priority}"}
+    if status is not None and status not in _TRIGGER_STATUS_VALUES:
+        db.close()
+        return {"ok": False, "error": f"Invalid status: {status}"}
+    incoming = {
+        "trigger_condition": condition,
+        "trigger_keywords": keywords,
+        "action": action,
+        "priority": priority,
+        "status": status,
+        "expires_at": expires,
+    }
+    sql, params, accepted, rejected = _build_trigger_update_sql(incoming)
+    if rejected:
+        # Defense-in-depth: log unexpected keys so a future bad caller path is
+        # at least visible in operator logs even though we silently drop them.
+        logger.warning(
+            "tool_trigger_update: dropping non-allowlisted columns %s "
+            "(trigger_id=%s, agent=%s)",
+            rejected, trigger_id, agent_id,
+        )
+    if sql is None:
         db.close()
         return {"ok": False, "error": "No fields to update"}
-    params.append(trigger_id)
-    db.execute(f"UPDATE memory_triggers SET {', '.join(updates)} WHERE id=?", params)
+    db.execute(sql, [*params, trigger_id])
     log_access(db, agent_id, "write", "memory_triggers", trigger_id)
     db.commit(); db.close()
-    return {"ok": True, "trigger_id": trigger_id, "updated_fields": [u.split("=")[0] for u in updates]}
+    return {"ok": True, "trigger_id": trigger_id, "updated_fields": accepted}
 
 
 def tool_trigger_delete(agent_id: str, trigger_id: int) -> dict:
