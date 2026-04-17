@@ -66,14 +66,52 @@ For each conversation:
    results, score against the `evidence` list.
 4. Aggregate per-conversation, per-category, and overall (weighted by QA count).
 
+## Backends
+
+The runner can swap retrieval pipelines via `--backend`:
+
+| backend | wraps | what it tests |
+|---|---|---|
+| `brain` (default) | `Brain.search` | FTS5-only OR-expanded keyword path |
+| `cmd` | `_impl.cmd_search` | full production path: FTS5 (+ vector RRF if vec ext loaded), intent routing, adaptive salience, recency, Q-value, RRF blend |
+
+```bash
+python3 -m tests.bench.locomo.runner --backend brain   # FTS5-only baseline
+python3 -m tests.bench.locomo.runner --backend cmd     # production pipeline
+```
+
+### Finding: cmd_search underperforms Brain.search on LOCOMO
+
+On conv-26 (197 QA), the production `cmd_search` path scored
+**Hit@5 0.03 vs FTS5-only 0.56**. Disabling recency reranking
+(`no_recency=True`) recovered some ground (Hit@5 ~0.03 → 0.03; marginal)
+but the gap remained. The same OperationalErrors appear on a handful of
+queries (3/197) regardless of args.
+
+Why this matters: brainctl's production reranking — recency decay,
+adaptive salience, Q-value exploitation — is tuned for live-use scenarios
+where recent memories are usually more relevant. LOCOMO inverts that
+assumption: gold evidence is uniformly distributed across all sessions
+(often in the *first* session), and every memory is encoded at the same
+synthetic timestamp, so salience/recency signals carry no information
+and the rerankers actively scramble the FTS ranking.
+
+The honest read: **on this benchmark, the simpler FTS5 path beats the
+hybrid path** because LOCOMO's cold-start synthetic structure defeats the
+priors the hybrid path is built around. Production traffic looks nothing
+like LOCOMO, so this isn't a generic regression, but it does suggest a
+"benchmark mode" preset (`brainctl search --benchmark`) that flattens
+recency/salience would be worth adding.
+
 ## Caveats / next steps
 
-- `Brain.search` is FTS5-only. The production retrieval path (`cmd_search` /
-  MCP `memory_search`) blends FTS5 with vector RRF and intent-routed rerankers.
-  Swapping in that path is a one-line change to `run_convo` and would be the
-  obvious next experiment.
-- No hybrid → vector comparison yet; nomic-embed-text via Ollama would run
-  fully local, still no API budget required.
+- No vector-only or vector+FTS RRF run yet — sqlite-vec extension needs
+  to be loaded and the bench DB embedded with nomic-embed before that's
+  meaningful. Still free (Ollama local), worth doing next.
 - Category label map is inferred (`1 single-hop, 2 temporal, 3 multi-hop,
   4 open-domain, 5 adversarial`); verify against the LOCOMO paper before
   quoting externally.
+- End-to-end QA accuracy (the metric the published Mem0/Zep/LangMem
+  numbers use) requires plugging a generator + judge LLM into the QA loop.
+  Skipped here for cost; the retrieval ceiling we measure is an upper
+  bound on what an end-to-end run could achieve.

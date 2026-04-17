@@ -48,6 +48,66 @@ DATA_PATH = Path(__file__).parent / "locomo10.json"
 KEY_RE = re.compile(r"\[key=(D\d+:\d+)\]")
 KS = (1, 5, 10, 20)
 
+
+def _build_cmd_search_fn(db_path: Path):
+    """Wrap the full cmd_search hybrid pipeline (FTS5 + vector RRF + intent
+    routing + adaptive salience). Mirrors tests/bench/eval._build_cmd_search_fn
+    but parameterised for an arbitrary DB path that the caller already seeded.
+    """
+    import contextlib
+    import io
+    import types
+    import gc
+    import agentmemory._impl as _impl
+    _impl.DB_PATH = db_path
+
+    def search_fn(query: str, k: int):
+        captured: list = []
+
+        def _capture(data, compact=False):
+            captured.append(data)
+
+        args = types.SimpleNamespace(
+            query=query, limit=k,
+            tables="memories,events,context",
+            # LOCOMO evidence skews to early sessions; recency reranking
+            # actively buries the gold turns. Disable it for the bench.
+            no_recency=True, no_graph=True,
+            budget=None, min_salience=None,
+            mmr=False, mmr_lambda=0.7, explore=False,
+            profile=None, pagerank_boost=0.0,
+            quantum=False, benchmark=False,
+            agent="bench-agent", format="json",
+            oneline=False, verbose=False,
+        )
+        saved_json = _impl.json_out
+        saved_oneline = _impl.oneline_out
+        _impl.json_out = _capture
+        _impl.oneline_out = _capture
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                try:
+                    _impl.cmd_search(args)
+                except Exception as exc:
+                    search_fn.errors[type(exc).__name__] = search_fn.errors.get(type(exc).__name__, 0) + 1
+                    return []
+        finally:
+            _impl.json_out = saved_json
+            _impl.oneline_out = saved_oneline
+            gc.collect()
+
+        if not captured:
+            return []
+        payload = captured[0] if isinstance(captured[0], dict) else {}
+        flat = []
+        for bucket in ("memories", "events", "context", "entities", "decisions"):
+            flat.extend(payload.get(bucket, []) or [])
+        flat.sort(key=lambda r: r.get("final_score", 0.0), reverse=True)
+        return flat[:k]
+
+    search_fn.errors = {}
+    return search_fn
+
 # LOCOMO QA category labels (inferred from paper/repo conventions).
 CATEGORY_LABELS = {
     1: "single-hop",
@@ -99,11 +159,11 @@ def ingest_conversation(brain: Brain, convo: dict) -> int:
     return n
 
 
-def score_qa(qa: dict, brain: Brain, k_max: int = 20) -> QAResult:
+def score_qa(qa: dict, search_fn, k_max: int = 20) -> QAResult:
     question = qa.get("question", "")
     gold = list(qa.get("evidence") or [])
     category = int(qa.get("category", 0))
-    results = brain.search(question, limit=k_max) if question else []
+    results = search_fn(question, k_max) if question else []
     ranked_keys = [k for k in (_key_for(r) for r in results) if k]
     qr = QAResult(question=question, category=category, gold=gold, ranked_keys=ranked_keys)
     gold_set = set(gold)
@@ -120,7 +180,7 @@ def score_qa(qa: dict, brain: Brain, k_max: int = 20) -> QAResult:
     return qr
 
 
-def run_convo(convo: dict, k_max: int = 20) -> Dict[str, Any]:
+def run_convo(convo: dict, k_max: int = 20, backend: str = "brain") -> Dict[str, Any]:
     sample_id = convo.get("sample_id", "?")
     qa_pairs = [q for q in convo.get("qa", []) if q.get("evidence")]
     skipped = len(convo.get("qa", [])) - len(qa_pairs)
@@ -132,11 +192,34 @@ def run_convo(convo: dict, k_max: int = 20) -> Dict[str, Any]:
         n_turns = ingest_conversation(brain, convo)
         t_ingest = time.perf_counter() - t0
 
+        if backend == "cmd":
+            # Release Brain's writer connection + checkpoint WAL so cmd_search
+            # can open its own connection without fighting for the write lock.
+            try:
+                conn = brain._get_conn()
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                pass
+            try:
+                brain.close()
+            except Exception:
+                pass
+            import gc
+            gc.collect()
+            search_fn = _build_cmd_search_fn(db_path)
+        else:
+            def _brain_search(q, k):
+                return brain.search(q, limit=k)
+            _brain_search.errors = {}
+            search_fn = _brain_search
+
         rows: List[QAResult] = []
         t0 = time.perf_counter()
         for qa in qa_pairs:
-            rows.append(score_qa(qa, brain, k_max=k_max))
+            rows.append(score_qa(qa, search_fn, k_max=k_max))
         t_query = time.perf_counter() - t0
+        if getattr(search_fn, "errors", None):
+            print(f"  [warn] {sample_id} search errors: {dict(search_fn.errors)}", flush=True)
 
     n = len(rows) or 1
     summary = {
@@ -217,10 +300,12 @@ def aggregate(per_convo: List[Dict[str, Any]]) -> Dict[str, Any]:
     return overall
 
 
-def _fmt_table(per_convo: List[Dict[str, Any]], overall: Dict[str, Any]) -> str:
+def _fmt_table(per_convo: List[Dict[str, Any]], overall: Dict[str, Any], backend: str = "brain") -> str:
     lines = []
     lines.append("=" * 88)
-    lines.append("LOCOMO retrieval-only benchmark — brainctl Brain.search (FTS5)")
+    label = ("Brain.search (FTS5-only)" if backend == "brain"
+             else "cmd_search (hybrid FTS5+vector RRF + intent routing)")
+    lines.append(f"LOCOMO retrieval-only benchmark — brainctl {label}")
     lines.append("=" * 88)
     lines.append(f"{'sample_id':<12} {'turns':>6} {'qa':>5} "
                  f"{'hit@1':>7} {'hit@5':>7} {'hit@10':>7} {'hit@20':>7} "
@@ -261,6 +346,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--convo", type=int, default=None,
                    help="Run only conversation index N (0-9). Default: all.")
     p.add_argument("--k-max", type=int, default=20, help="Max top-K to retrieve per question")
+    p.add_argument("--backend", choices=("brain", "cmd"), default="brain",
+                   help="Retrieval backend: 'brain' (FTS5-only Brain.search) or "
+                        "'cmd' (full hybrid cmd_search: FTS5 + vector RRF + intent routing)")
     p.add_argument("--json", dest="json_out", default=None,
                    help="Write per-convo + overall results to this JSON file")
     args = p.parse_args(argv)
@@ -280,12 +368,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         sid = c.get("sample_id", "?")
         print(f"[locomo] running {sid} ({sum(len(v) for k,v in c['conversation'].items() if isinstance(v, list))} turns, {len(c['qa'])} qa)...",
               flush=True)
-        per_convo.append(run_convo(c, k_max=args.k_max))
+        per_convo.append(run_convo(c, k_max=args.k_max, backend=args.backend))
     elapsed = time.perf_counter() - t_total
     overall = aggregate(per_convo)
 
     print()
-    print(_fmt_table(per_convo, overall))
+    print(_fmt_table(per_convo, overall, backend=args.backend))
     print(f"\n[locomo] total wall time: {elapsed:.1f}s")
 
     if args.json_out:
