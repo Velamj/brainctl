@@ -283,7 +283,8 @@ class TestBudgetStatus:
             "VALUES ('worker1', 'Worker One', 'test', 'active', 3, strftime('%Y-%m-%dT%H:%M:%S','now'), strftime('%Y-%m-%dT%H:%M:%S','now'))"
         )
         # Insert two access_log entries today with tokens_consumed
-        today = __import__("datetime").datetime.utcnow().strftime("%Y-%m-%d")
+        _dt = __import__("datetime")
+        today = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d")
         for tokens in (100, 200):
             conn.execute(
                 "INSERT INTO access_log (agent_id, action, tokens_consumed, created_at) "

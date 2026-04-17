@@ -113,8 +113,9 @@ def _neuro_is_expired(state: dict) -> bool:
         return False
     try:
         exp = datetime.fromisoformat(state["expires_at"])
-        now = datetime.utcnow() if exp.tzinfo is None else datetime.now(timezone.utc)
-        return now > exp
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) > exp
     except Exception:
         return False
 

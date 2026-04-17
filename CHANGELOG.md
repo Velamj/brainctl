@@ -5,6 +5,92 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.2.3] — 2026-04-17
+
+### Fixed — design wave (medium-tier audit findings)
+
+Three parallel workers + 2 inline cleanup edits. Closes the medium-tier
+correctness items from the 2026-04-16 audit. Test suite: 1786 passed.
+
+**Mechanical correctness**
+
+- **`datetime.utcnow()` deprecation purged.** 18 sites across `_impl.py`
+  (13 sites — the audit only counted the obvious one), `mcp_tools_policy.py`
+  (4 sites including a `replace(tzinfo=None)` off-by-one bug), `mcp_tools_neuro.py`
+  (1 site), `tests/test_mcp_tools_temporal_abstraction.py`, and
+  `tests/test_mcp_tools_health.py`. All converted to `datetime.now(timezone.utc)`
+  with explicit TZ-awareness on both sides of every comparison. Deprecation
+  warnings dropped from 60 → 0.
+- **`mcp_tools_dmem.py:146` no longer swallows event-insertion failures.**
+  `memory_promoted` event insert errors now print to stderr; promote path
+  remains non-fatal (audit log being down shouldn't block the promotion
+  itself). `_embed` and `_get_vec_db` graceful-fallback contracts left
+  intentionally silent — they're documented as such.
+- **`bin/intent_classifier.py` gained an `entity_lookup` rule.** The
+  builtin fallback in `_impl.py` had it; the external classifier didn't,
+  so "Who is Alice?" fell through to `general` intent and the wrong
+  rerank profile when external loaded. Mirrors the builtin keyword set
+  with confidence 0.8 and the same table routes.
+
+**Schema integrity (migration 048)**
+
+- **FK cascade triggers** for the high-leverage parents: `agents` delete
+  nullifies `memories.validation_agent_id`; hard-deleting a memory,
+  entity, or event cascades the orphan rows in `knowledge_edges`. The
+  audit flagged 47 migrations declare ON DELETE inconsistently; this
+  pragmatic fix protects against accidental hard-deletes via raw SQL
+  without the destructive table-rebuild that "real" ON DELETE clauses
+  would require under SQLite's no-ALTER-CONSTRAINT rule.
+- **FTS5 retire convergence.** When a memory is retired (`retired_at`
+  set), the corresponding `memories_fts` row is now removed by the
+  `memories_fts_update_insert` trigger's `WHEN new.retired_at IS NULL`
+  guard preventing re-insert. Discovery: the naive
+  "AFTER UPDATE … DELETE FROM memories_fts" approach corrupted FTS5
+  content-linked segments ("database disk image is malformed"); only
+  the prevent-the-reinsert path is safe. The user's brain.db was on
+  the legacy single-trigger form (migration 031 marked
+  `(backfilled)`) — migration 048 retroactively converges it.
+- Mirrored into `db/init_schema.sql` and `src/agentmemory/db/init_schema.sql`
+  so fresh installs ship with the new triggers.
+
+**Design fixes (W(m) gate, vec batch, affect retention — migration 049)**
+
+- **W(m) surprise score: neutral fallback (0.5) when novelty cannot be
+  assessed.** The audit flagged `fts5_no_matches` returning `1.0` (false
+  positive on near-duplicates with different vocabulary). Worker C found
+  the same class bug at `cosine_no_neighbors` and fixed both. New
+  vec-fallback path: when FTS5 finds nothing AND a vector blob was
+  supplied, computes `1 - max_cosine` against existing vectors. When no
+  blob (the common hot path), falls through to `0.5` — neutral, not
+  inflated — and lets W(m) decide on other signals. Method tags now
+  carry the observed signal (`cosine_max_sim_0.78`,
+  `vec_fallback_max_sim_0.65`, `*_neutral`) so debuggers can tell what
+  path fired.
+- **`vec_purge_retired` is now chunked.** Was a per-row DELETE loop
+  (~30 min on 50k retired memories). Now does chunked `IN (...)` deletes
+  of 500 ids per round to stay under `SQLITE_MAX_VARIABLE_NUMBER`. New
+  `--limit N` flag bounds total wall-time per invocation. Verified
+  ~15× speedup on 1k retired rows.
+- **`affect_log` retention policy.** New `agentmemory.affect.prune_affect_log(db, days, max_rows, dry_run)` and `brainctl affect prune` CLI.
+  Default policy: keep last 90 days OR last 100k rows, whichever is
+  more permissive (union — keeps the broader set). Never auto-runs;
+  only the explicit CLI call (or a user cron) deletes data. Migration
+  049 adds an `idx_affect_created_at` index needed for cross-agent
+  time-range deletes.
+
+### Notes for 2.2.4
+
+- Worker A's mcp_tools_neuro.py inline fix changed the comparison shape
+  slightly — verify no downstream caller relied on the old "naive when
+  exp is naive" behavior. (Pytest is green so probably fine, but worth
+  a closer look.)
+- `cursor.rowcount` on sqlite-vec virtual tables can be -1 — Worker C's
+  vec_purge fallback uses input-id count when rowcount is unreliable.
+  Verify against a real sqlite-vec-loaded brain.db before broader use.
+- Worker C's affect retention uses union semantics ("more permissive
+  policy survives") — if intersection is preferred, it's a one-line
+  swap.
+
 ## [2.2.2] — 2026-04-17
 
 ### Fixed
