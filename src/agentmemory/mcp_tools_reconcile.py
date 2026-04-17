@@ -276,96 +276,169 @@ def tool_entity_merge(
             }
 
         # === WRITE ===
-        edges_redirected = 0
-        for edge in edges_to_redirect:
-            eid = edge["id"]
-            if edge["direction"] == "source":
-                # New source would be primary_id
-                new_src_id = primary_id
-                conflict = conn.execute(
+        # Bug 6b fix (2.2.0): the previous implementation processed source-side
+        # and target-side edge redirects independently, so a cross-direction
+        # collision (e.g. edge `dup -> X` and edge `X -> dup` both with the
+        # same relation_type) could end up writing two rows that collide on
+        # the unique business key after redirect. We now plan ALL redirects
+        # up front, fold cross-direction collisions into a single resolution
+        # pass, and apply them inside one transaction.
+        #
+        # Conflict-resolution rule: HIGHEST WEIGHT WINS. When two edges would
+        # collapse onto the same (source_table, source_id, target_table,
+        # target_id, relation_type) tuple after redirect, we keep the one
+        # with the higher weight (ties: keep the existing target-side edge
+        # if any, else any one of the colliding loser-side edges). Rationale:
+        # weight is the strongest local quality signal; this preserves the
+        # strongest evidence and is symmetric with merge.py.
+        #
+        # Self-loops produced by the redirect collapse (an edge between two
+        # entities both being merged into the same primary) are dropped —
+        # almost always noise, and would otherwise trip the unique index.
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            # Compute the post-redirect tuple for every loser-referencing edge.
+            # planned_targets keys an edge by its post-redirect business key;
+            # value is the (chosen) source row (loser-side edge id + weight).
+            planned_targets: dict[tuple, dict] = {}
+            edges_to_drop: set[int] = set()  # loser-side edge ids to delete
+
+            for edge in edges_to_redirect:
+                eid = edge["id"]
+                if edge["direction"] == "source":
+                    new_src = primary_id
+                    new_tgt = edge["target_id"]
+                    new_src_table = "entities"
+                    new_tgt_table = edge["target_table"]
+                else:  # direction == "target"
+                    new_src = edge["source_id"]
+                    new_tgt = primary_id
+                    new_src_table = edge["source_table"]
+                    new_tgt_table = "entities"
+
+                # Self-loop check: if both ends are entities and resolve to the
+                # same id (covers both "edge points at primary already" and
+                # "edge between two losers being merged into the same primary").
+                if (
+                    new_src_table == "entities"
+                    and new_tgt_table == "entities"
+                    and new_src == new_tgt
+                ):
+                    edges_to_drop.add(eid)
+                    continue
+
+                key = (new_src_table, new_src, new_tgt_table, new_tgt, edge["relation_type"])
+                prior = planned_targets.get(key)
+                if prior is None:
+                    planned_targets[key] = {
+                        "edge_id": eid,
+                        "weight": edge["weight"],
+                        "new_src": new_src,
+                        "new_tgt": new_tgt,
+                        "new_src_table": new_src_table,
+                        "new_tgt_table": new_tgt_table,
+                    }
+                else:
+                    # Cross-direction or same-direction collision among loser edges.
+                    # Keep the higher-weight one; drop the other.
+                    if edge["weight"] > prior["weight"]:
+                        edges_to_drop.add(prior["edge_id"])
+                        planned_targets[key] = {
+                            "edge_id": eid,
+                            "weight": edge["weight"],
+                            "new_src": new_src,
+                            "new_tgt": new_tgt,
+                            "new_src_table": new_src_table,
+                            "new_tgt_table": new_tgt_table,
+                        }
+                    else:
+                        edges_to_drop.add(eid)
+
+            # For each planned target, check whether the destination edge
+            # already exists in the table (i.e. an edge that wasn't part of
+            # the loser set but lives at the post-redirect key). If so, fold
+            # by highest weight and drop the redundant loser edge.
+            edges_redirected = 0
+            for key, plan in planned_targets.items():
+                new_src_table, new_src, new_tgt_table, new_tgt, rel = key
+                existing = conn.execute(
                     "SELECT id, weight FROM knowledge_edges "
-                    "WHERE source_table='entities' AND source_id=? "
-                    "AND target_table=? AND target_id=? AND relation_type=?",
-                    (new_src_id, edge["target_table"], edge["target_id"], edge["relation_type"]),
+                    "WHERE source_table=? AND source_id=? AND target_table=? "
+                    "AND target_id=? AND relation_type=?",
+                    (new_src_table, new_src, new_tgt_table, new_tgt, rel),
                 ).fetchone()
-                if conflict:
-                    # Keep higher weight, delete duplicate's edge
-                    if edge["weight"] > conflict["weight"]:
+
+                if existing and existing["id"] != plan["edge_id"]:
+                    # Destination edge already exists — keep MAX(weight) on it,
+                    # drop the loser-side edge.
+                    if plan["weight"] > existing["weight"]:
                         conn.execute(
                             "UPDATE knowledge_edges SET weight=? WHERE id=?",
-                            (edge["weight"], conflict["id"]),
+                            (plan["weight"], existing["id"]),
                         )
-                    conn.execute("DELETE FROM knowledge_edges WHERE id=?", (eid,))
+                    edges_to_drop.add(plan["edge_id"])
+                    edges_redirected += 1
                 else:
+                    # Safe to redirect in place. Update both ends in one statement
+                    # so we never hit the unique index in an intermediate state.
                     conn.execute(
-                        "UPDATE knowledge_edges SET source_id=? WHERE id=?",
-                        (new_src_id, eid),
+                        "UPDATE knowledge_edges SET source_table=?, source_id=?, "
+                        "target_table=?, target_id=? WHERE id=?",
+                        (new_src_table, new_src, new_tgt_table, new_tgt, plan["edge_id"]),
                     )
-            else:
-                # New target would be primary_id
-                new_tgt_id = primary_id
-                conflict = conn.execute(
-                    "SELECT id, weight FROM knowledge_edges "
-                    "WHERE source_table=? AND source_id=? "
-                    "AND target_table='entities' AND target_id=? AND relation_type=?",
-                    (edge["source_table"], edge["source_id"], new_tgt_id, edge["relation_type"]),
-                ).fetchone()
-                if conflict:
-                    if edge["weight"] > conflict["weight"]:
-                        conn.execute(
-                            "UPDATE knowledge_edges SET weight=? WHERE id=?",
-                            (edge["weight"], conflict["id"]),
-                        )
-                    conn.execute("DELETE FROM knowledge_edges WHERE id=?", (eid,))
-                else:
-                    conn.execute(
-                        "UPDATE knowledge_edges SET target_id=? WHERE id=?",
-                        (new_tgt_id, eid),
-                    )
-            edges_redirected += 1
+                    edges_redirected += 1
 
-        # Update primary entity with merged data
-        conn.execute(
-            "UPDATE entities SET observations=?, properties=?, "
-            "updated_at=strftime('%Y-%m-%dT%H:%M:%S','now') WHERE id=?",
-            (json.dumps(merged_obs), json.dumps(merged_props), primary_id),
-        )
+            # Drop everything we marked for deletion (collisions + self-loops).
+            for eid in edges_to_drop:
+                conn.execute("DELETE FROM knowledge_edges WHERE id=?", (eid,))
 
-        # Soft-delete duplicates
-        for dup in dup_rows:
+            # Update primary entity with merged data
             conn.execute(
-                "UPDATE entities SET retired_at=strftime('%Y-%m-%dT%H:%M:%S','now'), "
+                "UPDATE entities SET observations=?, properties=?, "
                 "updated_at=strftime('%Y-%m-%dT%H:%M:%S','now') WHERE id=?",
-                (dup["id"],),
+                (json.dumps(merged_obs), json.dumps(merged_props), primary_id),
             )
 
-        # Ensure agent exists for the event log
-        conn.execute(
-            "INSERT OR IGNORE INTO agents (id, display_name, agent_type, status, created_at, updated_at) "
-            "VALUES (?, ?, 'mcp', 'active', strftime('%Y-%m-%dT%H:%M:%S','now'), strftime('%Y-%m-%dT%H:%M:%S','now'))",
-            (agent_id, agent_id),
-        )
+            # Soft-delete duplicates
+            for dup in dup_rows:
+                conn.execute(
+                    "UPDATE entities SET retired_at=strftime('%Y-%m-%dT%H:%M:%S','now'), "
+                    "updated_at=strftime('%Y-%m-%dT%H:%M:%S','now') WHERE id=?",
+                    (dup["id"],),
+                )
 
-        # Log memory_merged event
-        meta = json.dumps({
-            "primary_id": primary_id,
-            "duplicate_ids": duplicate_ids,
-            "merged_count": len(dup_rows),
-            "observations_combined": len(merged_obs),
-            "edges_redirected": edges_redirected,
-        })
-        conn.execute(
-            "INSERT INTO events (agent_id, event_type, summary, metadata, importance, created_at) "
-            "VALUES (?, 'memory_merged', ?, ?, 0.7, strftime('%Y-%m-%dT%H:%M:%S','now'))",
-            (
-                agent_id,
-                f"Merged {len(dup_rows)} duplicate(s) into entity #{primary_id} ({primary['name']})",
-                meta,
-            ),
-        )
+            # Ensure agent exists for the event log
+            conn.execute(
+                "INSERT OR IGNORE INTO agents (id, display_name, agent_type, status, created_at, updated_at) "
+                "VALUES (?, ?, 'mcp', 'active', strftime('%Y-%m-%dT%H:%M:%S','now'), strftime('%Y-%m-%dT%H:%M:%S','now'))",
+                (agent_id, agent_id),
+            )
 
-        conn.commit()
-        conn.close()
+            # Log memory_merged event
+            meta = json.dumps({
+                "primary_id": primary_id,
+                "duplicate_ids": duplicate_ids,
+                "merged_count": len(dup_rows),
+                "observations_combined": len(merged_obs),
+                "edges_redirected": edges_redirected,
+                "edges_dropped": len(edges_to_drop),
+            })
+            conn.execute(
+                "INSERT INTO events (agent_id, event_type, summary, metadata, importance, created_at) "
+                "VALUES (?, 'memory_merged', ?, ?, 0.7, strftime('%Y-%m-%dT%H:%M:%S','now'))",
+                (
+                    agent_id,
+                    f"Merged {len(dup_rows)} duplicate(s) into entity #{primary_id} ({primary['name']})",
+                    meta,
+                ),
+            )
+
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
         return {
             "ok": True,
@@ -374,6 +447,7 @@ def tool_entity_merge(
             "merged_count": len(dup_rows),
             "observations_combined": len(merged_obs),
             "edges_redirected": edges_redirected,
+            "edges_dropped": len(edges_to_drop),
         }
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
