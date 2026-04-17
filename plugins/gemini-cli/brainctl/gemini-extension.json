@@ -1,0 +1,14 @@
+{
+  "name": "brainctl",
+  "version": "2.2.4",
+  "description": "brainctl agent memory layer — 199 MCP tools, SQLite-backed, local-first.",
+  "mcpServers": {
+    "brainctl": {
+      "command": "brainctl-mcp",
+      "args": [],
+      "env": { "BRAINCTL_DB": "${HOME}/agentmemory/db/brain.db" },
+      "timeout": 30000
+    }
+  },
+  "contextFileName": "GEMINI.md"
+}

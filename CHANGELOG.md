@@ -5,6 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.2.4] — 2026-04-17
+
+### Added
+
+- **`brainctl update` CLI command.** One-shot upgrade path: detects install
+  mode (pip / pipx / editable dev), shells out to the right package
+  manager to upgrade, then hands off to the newly-installed binary to run
+  `brainctl migrate`. Handles the "virgin tracker + schema drift" edge
+  case from the README — if `brainctl doctor --json` reports the
+  dangerous drift state, the command prints the recovery workflow and
+  exits cleanly instead of crashing the user's brain.db. Flags:
+  `--dry-run`, `--pre` (accept pre-releases), `--skip-migrate`, `--json`.
+  Lives in `src/agentmemory/update.py` + `cmd_update` in `_impl.py`;
+  16 new unit tests in `tests/test_cmd_update.py` all passing.
+
+- **Gemini CLI plugin** at `plugins/gemini-cli/brainctl/`. Brings
+  brainctl's 199-tool MCP surface into Google's Gemini CLI via the
+  extension-install pattern (`~/.gemini/extensions/brainctl/`). Ships:
+  `gemini-extension.json` (MCP server + context-file manifest),
+  `hooks/hooks.json` (wires `SessionStart`/`SessionEnd`/`AfterTool`),
+  three hook scripts ported from the Claude Code plugin with `_common.py`
+  adapted for Gemini's stdin schema, an `install.py` with `--mcp-only`
+  (for users who want MCP without hooks) / `--dry-run` / `--uninstall`
+  modes, a `GEMINI.md` per-session context brief, and a README. No direct
+  equivalent for `UserPromptSubmit` (Gemini's `BeforeModel` fires on
+  every model turn — different semantics), so that event is intentionally
+  not wired. Requires Gemini CLI ≥ 0.26.0 for hook support.
+
 ## [2.2.3] — 2026-04-17
 
 ### Fixed — design wave (medium-tier audit findings)

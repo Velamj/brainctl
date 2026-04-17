@@ -1,0 +1,44 @@
+{
+  "SessionStart": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "python3 ${extensionPath}/hooks/session_start.py",
+          "name": "brainctl-orient",
+          "description": "Inject prior-session handoff + top memories into Gemini context.",
+          "timeout": 15000
+        }
+      ]
+    }
+  ],
+  "SessionEnd": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "python3 ${extensionPath}/hooks/session_end.py",
+          "name": "brainctl-wrap-up",
+          "description": "Write a handoff packet summarizing this Gemini session.",
+          "timeout": 15000
+        }
+      ]
+    }
+  ],
+  "AfterTool": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "python3 ${extensionPath}/hooks/post_tool_use.py",
+          "name": "brainctl-log-tool",
+          "description": "Log each tool execution as an observation event.",
+          "timeout": 5000
+        }
+      ]
+    }
+  ]
+}
