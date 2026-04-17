@@ -758,6 +758,22 @@ def tool_memory_add(agent_id: str, content: str, category: str, scope: str = "gl
     mid = cur.lastrowid
     db.commit()  # ensure the INSERT (and FTS trigger) is committed
 
+    # Workaround: FTS5 content-external tables may not build the inverted index
+    # from trigger INSERTs on some SQLite versions. Force a re-index for this memory.
+    if do_index:
+        try:
+            db.execute(
+                "INSERT INTO memories_fts(memories_fts, rowid, content, category, tags) "
+                "VALUES('delete', ?, ?, ?, ?)",
+                (mid, content, category, tags_json or ''))
+            db.execute(
+                "INSERT INTO memories_fts(rowid, content, category, tags) "
+                "VALUES (?, ?, ?, ?)",
+                (mid, content, category, tags_json or ''))
+            db.commit()
+        except Exception:
+            pass  # non-fatal
+
     # Record gated_from_memory_id if column exists (migration 025)
     if supersedes_id:
         try:

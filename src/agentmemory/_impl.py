@@ -2753,6 +2753,22 @@ def cmd_memory_add(args):
     memory_id = cursor.lastrowid
     db.commit()  # ensure the INSERT (and FTS trigger) is committed before subprocess exit
 
+    # Workaround: FTS5 content-external tables may not build the inverted index
+    # from trigger INSERTs on some SQLite versions. Force a re-index for this memory.
+    if do_index:
+        try:
+            db.execute(
+                "INSERT INTO memories_fts(memories_fts, rowid, content, category, tags) "
+                "VALUES('delete', ?, ?, ?, ?)",
+                (memory_id, args.content, args.category, tags_json or ''))
+            db.execute(
+                "INSERT INTO memories_fts(rowid, content, category, tags) "
+                "VALUES (?, ?, ?, ?)",
+                (memory_id, args.content, args.category, tags_json or ''))
+            db.commit()
+        except Exception:
+            pass  # non-fatal: FTS trigger may have already handled it
+
     # Record gated_from_memory_id audit trail if column exists (migration 025)
     if supersedes_id:
         try:
