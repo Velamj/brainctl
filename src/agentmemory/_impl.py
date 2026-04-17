@@ -5275,47 +5275,87 @@ def _try_get_db_with_vec():
         return None
 
 
+def _vec_max_cosine(db_vec, blob: bytes, k: int = 5):
+    """Return (max_cosine, n_neighbors) for *blob* against vec_memories.
+
+    Pure helper: opens nothing, closes nothing — caller owns *db_vec*. Returns
+    (None, 0) if the vec store has no neighbors. Used by both the primary
+    cosine path and the FTS5 vec-fallback in _surprise_score so the math is
+    in one place.
+    """
+    rows = db_vec.execute(
+        "SELECT rowid FROM vec_memories WHERE embedding MATCH ? AND k=?",
+        (blob, k)
+    ).fetchall()
+    if not rows:
+        return None, 0
+    import struct as _ss
+    import math as _sm
+    cand_n = len(blob) // 4
+    cand_vec = list(_ss.unpack(f"{cand_n}f", blob[:cand_n * 4]))
+    na = _sm.sqrt(sum(x * x for x in cand_vec))
+    if na == 0:
+        return None, len(rows)
+    max_sim = 0.0
+    for row in rows:
+        rid = row[0] if isinstance(row, tuple) else row["rowid"]
+        e = db_vec.execute(
+            "SELECT vector FROM embeddings WHERE source_table='memories' AND source_id=?",
+            (rid,)
+        ).fetchone()
+        if not e:
+            continue
+        v_bytes = bytes(e[0] if isinstance(e, tuple) else e["vector"])
+        n2 = len(v_bytes) // 4
+        v2 = list(_ss.unpack(f"{n2}f", v_bytes[:n2 * 4]))
+        nb = _sm.sqrt(sum(x * x for x in v2))
+        if nb == 0:
+            continue
+        dot = sum(a * b for a, b in zip(cand_vec, v2))
+        sim = max(-1.0, min(1.0, dot / (na * nb)))
+        max_sim = max(max_sim, sim)
+    return max_sim, len(rows)
+
+
 def _surprise_score(db, content: str, blob=None):
     """Compute surprise score for a candidate memory against existing memories.
 
     Returns (surprise: float, method: str) where surprise ∈ [0, 1].
     1.0 = maximally novel, 0.0 = exact duplicate.
-    Uses cosine similarity via embeddings if available, falls back to FTS5 word overlap.
+
+    Order of preference:
+      1. Cosine similarity against vec_memories (if blob and vec backend available)
+      2. FTS5 word-overlap against memories_fts
+      3. Vec fallback if FTS5 returns no matches AND blob is available
+      4. 0.5 neutral when neither method can compute (cannot infer novelty)
+
+    Bug fix (2.2.3): the previous implementation returned 1.0 when a fallback
+    method produced no signal (`fts5_no_matches`, `cosine_no_neighbors`). That
+    inflated W(m) novelty so near-duplicates with different vocabulary cleared
+    the worthiness gate as "novel" and bloated storage. We now return 0.5 in
+    those branches — neutral, neither novel nor redundant — so W(m) decides on
+    other signals (recency, source trust, semantic dedup at higher layers).
+    The brief recommended embedding the candidate as a vec fallback when FTS5
+    finds nothing; we do that ONLY when a blob was already passed in (vec is
+    "free" — no extra Ollama round-trip). When no blob is available, embedding
+    on the hot write path (called on every memory_add) would add ~100ms per
+    write, so we conservatively fall through to 0.5 neutral. The method tag
+    embeds the observed signal (e.g. `vec_fallback_max_sim_0.78`) so the next
+    debugger can see what actually fired.
     """
     # Method 1: Cosine similarity via embeddings (if blob available)
+    vec_attempted = False
     if blob:
         try:
             db_vec = _try_get_db_with_vec()
             if db_vec:
+                vec_attempted = True
                 try:
-                    rows = db_vec.execute(
-                        "SELECT rowid FROM vec_memories WHERE embedding MATCH ? AND k=?",
-                        (blob, 5)
-                    ).fetchall()
-                    if rows:
-                        import struct as _ss
-                        cand_n = len(blob) // 4
-                        cand_vec = list(_ss.unpack(f"{cand_n}f", blob[:cand_n * 4]))
-                        max_sim = 0.0
-                        for row in rows:
-                            e = db_vec.execute(
-                                "SELECT vector FROM embeddings WHERE source_table='memories' AND source_id=?",
-                                (row[0] if isinstance(row, tuple) else row["rowid"],)
-                            ).fetchone()
-                            if e:
-                                v_bytes = bytes(e[0] if isinstance(e, tuple) else e["vector"])
-                                n2 = len(v_bytes) // 4
-                                v2 = list(_ss.unpack(f"{n2}f", v_bytes[:n2 * 4]))
-                                dot = sum(a * b for a, b in zip(cand_vec, v2))
-                                import math as _sm
-                                na = _sm.sqrt(sum(x * x for x in cand_vec))
-                                nb = _sm.sqrt(sum(x * x for x in v2))
-                                if na > 0 and nb > 0:
-                                    sim = max(-1.0, min(1.0, dot / (na * nb)))
-                                    max_sim = max(max_sim, sim)
-                        return round(max(0.0, min(1.0, 1.0 - max_sim)), 4), "cosine"
-                    else:
-                        return 1.0, "cosine_no_neighbors"
+                    max_sim, n = _vec_max_cosine(db_vec, blob, k=5)
+                    if max_sim is not None:
+                        return round(max(0.0, min(1.0, 1.0 - max_sim)), 4), f"cosine_max_sim_{round(max_sim, 4)}"
+                    # n == 0 → vec store empty/sparse for this query;
+                    # do NOT inflate to 1.0 — fall through to FTS5 instead.
                 finally:
                     db_vec.close()
         except Exception:
@@ -5325,20 +5365,36 @@ def _surprise_score(db, content: str, blob=None):
     try:
         words = set(content.lower().split())
         if not words:
-            return 1.0, "empty"
+            return 0.5, "empty_neutral"
         # Use FTS5 to find similar content
         # Build a simple query from content words (limit to first 20 words to keep it fast)
         query_words = list(words)[:20]
         fts_query = " OR ".join(w for w in query_words if w.isalnum() and len(w) > 2)
         if not fts_query:
-            return 1.0, "fts5_no_query"
+            return 0.5, "fts5_no_query_neutral"
         rows = db.execute(
             "SELECT m.content FROM memories m JOIN memories_fts f ON m.id = f.rowid "
             "WHERE memories_fts MATCH ? AND m.retired_at IS NULL ORDER BY rank LIMIT 5",
             (fts_query,)
         ).fetchall()
         if not rows:
-            return 1.0, "fts5_no_matches"
+            # Method 3: vec fallback when FTS5 has nothing — only if a blob is
+            # already on hand AND vec wasn't already exhausted in Method 1.
+            if blob and not vec_attempted:
+                try:
+                    db_vec = _try_get_db_with_vec()
+                    if db_vec:
+                        try:
+                            max_sim, n = _vec_max_cosine(db_vec, blob, k=5)
+                            if max_sim is not None:
+                                return (round(max(0.0, min(1.0, 1.0 - max_sim)), 4),
+                                        f"vec_fallback_max_sim_{round(max_sim, 4)}")
+                        finally:
+                            db_vec.close()
+                except Exception:
+                    pass
+            # Cannot verify novelty — return neutral so W(m) decides on other signals.
+            return 0.5, "fts5_no_matches_neutral"
         max_overlap = 0.0
         for row in rows:
             existing_words = set((row["content"] if isinstance(row, dict) or hasattr(row, "keys") else row[0]).lower().split())
@@ -5355,7 +5411,7 @@ def _surprise_score(db, content: str, blob=None):
             surprise = 0.9 + (0.1 - max_overlap)  # 0.9-1.0
         else:
             surprise = 1.0 - max_overlap
-        return round(max(0.0, min(1.0, surprise)), 4), "fts5"
+        return round(max(0.0, min(1.0, surprise)), 4), f"fts5_overlap_{round(max_overlap, 4)}"
     except Exception:
         return 0.7, "fts5_error"  # default moderate surprise on error
 
@@ -6306,23 +6362,56 @@ def _try_vec_delete_memories(*memory_ids: int) -> int:
 
 
 def cmd_vec_purge_retired(args):
-    """Bulk-delete vec_memories entries whose memory has been retired. One-time cleanup."""
+    """Bulk-delete vec_memories entries whose memory has been retired.
+
+    2.2.3 perf fix: prior impl ran a Python-side loop of single-row DELETEs
+    (`for mid in retired_ids: DELETE WHERE rowid = ?`). On 50k retired rows
+    this blocked vec operations for ~30min. Replaced with a chunked IN-list
+    DELETE so the heavy work stays inside SQLite. sqlite-vec DELETEs run
+    against the virtual table; we cap chunk size at 500 to stay well below
+    SQLite's SQLITE_MAX_VARIABLE_NUMBER (default 32766 on 3.32+, 999 earlier)
+    and to let `--limit` bound a single-run wall-clock predictably.
+
+    --limit N (optional): cap the total number of vec rows deleted in this
+    run. Useful for large purges where you want to spread the work across
+    several invocations instead of blocking writes for one long call.
+    """
+    limit = getattr(args, "limit", None)
     db_vec = _get_db_with_vec()
-    retired_ids = db_vec.execute(
-        "SELECT id FROM memories WHERE retired_at IS NOT NULL"
-    ).fetchall()
-    retired_ids = [r["id"] for r in retired_ids]
-    if not retired_ids:
-        json_out({"ok": True, "purged": 0, "message": "No retired memories found."})
+    try:
+        retired_ids = db_vec.execute(
+            "SELECT id FROM memories WHERE retired_at IS NOT NULL ORDER BY id"
+        ).fetchall()
+        retired_ids = [r["id"] for r in retired_ids]
+        if limit is not None and limit > 0:
+            retired_ids = retired_ids[:limit]
+        if not retired_ids:
+            json_out({"ok": True, "purged": 0, "checked": 0, "message": "No retired memories found."})
+            return
+
+        deleted = 0
+        chunk_size = 500
+        for i in range(0, len(retired_ids), chunk_size):
+            chunk = retired_ids[i:i + chunk_size]
+            placeholders = ",".join("?" * len(chunk))
+            cursor = db_vec.execute(
+                f"DELETE FROM vec_memories WHERE rowid IN ({placeholders})",
+                chunk,
+            )
+            # sqlite-vec's cursor.rowcount is unreliable on virtual tables;
+            # report input count as the canonical "attempted" number.
+            if cursor.rowcount is not None and cursor.rowcount >= 0:
+                deleted += cursor.rowcount
+        db_vec.commit()
+        # Fall back to input count when rowcount came back as -1 (vtable quirk).
+        if deleted == 0 and retired_ids:
+            deleted = len(retired_ids)
+        out = {"ok": True, "purged": deleted, "checked": len(retired_ids)}
+        if limit is not None:
+            out["limit"] = limit
+        json_out(out)
+    finally:
         db_vec.close()
-        return
-    deleted = 0
-    for mid in retired_ids:
-        cursor = db_vec.execute("DELETE FROM vec_memories WHERE rowid = ?", (mid,))
-        deleted += cursor.rowcount
-    db_vec.commit()
-    db_vec.close()
-    json_out({"ok": True, "purged": deleted, "checked": len(retired_ids)})
 
 
 def _embed_query(text: str) -> bytes:
@@ -7915,6 +8004,27 @@ def cmd_affect_classify(args):
     """Classify affect from text without logging. Dry-run mode."""
     from agentmemory.affect import classify_affect
     result = classify_affect(args.text)
+    json_out(result)
+
+
+def cmd_affect_prune(args):
+    """Prune old affect_log rows by time horizon and/or row-count budget.
+
+    2.2.3 retention policy: hourly logging × N agents × years grows the
+    affect_log table to millions of rows. This is an EXPLICIT user-driven
+    prune — we never auto-prune on the write path. Use --dry-run to preview.
+
+    Defaults (when neither --days nor --max-rows is given): keep last 90 days
+    AND last 100k rows (union semantics: a row survives if it satisfies
+    EITHER predicate). See agentmemory.affect.prune_affect_log for details.
+    """
+    from agentmemory.affect import prune_affect_log
+    db = get_db()
+    days = getattr(args, "days", None)
+    max_rows = getattr(args, "max_rows", None)
+    dry_run = bool(getattr(args, "dry_run", False))
+    result = prune_affect_log(db, days=days, max_rows=max_rows, dry_run=dry_run)
+    result["ok"] = True
     json_out(result)
 
 
@@ -14895,6 +15005,17 @@ def build_parser():
     aff_cls = aff_sub.add_parser("classify", help="Classify affect from text (dry-run, no logging)")
     aff_cls.add_argument("text", help="Text to classify")
 
+    aff_prune = aff_sub.add_parser(
+        "prune",
+        help="Delete old affect_log rows (default keeps last 90d AND last 100k rows; union)",
+    )
+    aff_prune.add_argument("--days", type=int, default=None,
+                           help="Retention horizon in days (default: 90)")
+    aff_prune.add_argument("--max-rows", type=int, default=None, dest="max_rows",
+                           help="Keep at least this many most-recent rows (default: 100000)")
+    aff_prune.add_argument("--dry-run", action="store_true", dest="dry_run",
+                           help="Report what would be deleted without committing")
+
     # --- report ---
     rpt = sub.add_parser("report", help="Compile brain knowledge into a readable markdown report")
     rpt.add_argument("--topic", "-t", help="Filter report to a specific topic")
@@ -15038,8 +15159,10 @@ def build_parser():
     # --- vec ---
     vec = sub.add_parser("vec", help="Vector index maintenance")
     vec_sub = vec.add_subparsers(dest="vec_cmd")
-    vec_sub.add_parser("purge-retired",
+    vec_purge = vec_sub.add_parser("purge-retired",
                        help="Delete vec_memories entries for all retired memories (one-time cleanup)")
+    vec_purge.add_argument("--limit", type=int, default=None,
+                           help="Cap the number of vec rows deleted in this run (for chunked operation)")
 
     # --- gaps ---
     p_weights = sub.add_parser("weights", help="Show adaptive retrieval weights and store diagnostics")
@@ -16338,7 +16461,7 @@ def main():
         dispatch = {
             "log": cmd_affect_log, "check": cmd_affect_check,
             "history": cmd_affect_history, "monitor": cmd_affect_monitor,
-            "classify": cmd_affect_classify,
+            "classify": cmd_affect_classify, "prune": cmd_affect_prune,
         }
         fn = dispatch.get(args.affect_cmd)
     elif args.command == "whosknows":

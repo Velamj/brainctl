@@ -623,3 +623,114 @@ def _std(vals):
         return 0.0
     mean = sum(vals) / len(vals)
     return math.sqrt(sum((x - mean) ** 2 for x in vals) / len(vals))
+
+
+# =============================================================================
+# RETENTION POLICY (2.2.3) — affect_log can grow to millions of rows over time
+# =============================================================================
+# Hourly logging × N agents × years yields a multi-million-row table that
+# slows queries and bloats brain.db. The brainctl 2.2.3 patch wave introduces
+# `brainctl affect prune` for explicit user-driven cleanup. We deliberately
+# do NOT auto-prune on every write — that would be a hidden side effect on
+# the hot path. Only the explicit CLI call (or a user cron) deletes data.
+#
+# Default policy: keep the most recent 90 days OR the most recent 100k rows,
+# whichever preserves MORE data (union semantics — a row survives if it
+# satisfies EITHER predicate). This protects busy agents (lots of rows in
+# 90 days) AND quiet agents (few rows over many years).
+
+DEFAULT_RETENTION_DAYS = 90
+DEFAULT_RETENTION_MAX_ROWS = 100_000
+
+
+def compute_prune_cutoffs(db, days=None, max_rows=None):
+    """Return (cutoff_ts, cutoff_id, total_rows) for an affect_log prune.
+
+    Pure-ish helper: only reads from `db`. No DELETE, no commit. Returned
+    cutoffs are EXCLUSIVE — rows with created_at < cutoff_ts AND id < cutoff_id
+    are eligible for deletion (union → AND on the negative).
+
+    days        : retention horizon in days (None → use DEFAULT_RETENTION_DAYS)
+    max_rows    : retain the most recent N rows by id (None → use DEFAULT_RETENTION_MAX_ROWS)
+
+    cutoff_ts is the ISO8601 string at (now - days). cutoff_id is the id
+    such that exactly max_rows rows with id >= cutoff_id remain after prune.
+    Returns (None, None, total) if total <= max_rows AND days policy would
+    delete nothing (early-exit hint for callers).
+    """
+    if days is None:
+        days = DEFAULT_RETENTION_DAYS
+    if max_rows is None:
+        max_rows = DEFAULT_RETENTION_MAX_ROWS
+
+    total_row = db.execute("SELECT COUNT(*) AS c FROM affect_log").fetchone()
+    total = (total_row["c"] if hasattr(total_row, "keys") else total_row[0]) if total_row else 0
+    if total == 0:
+        return None, None, 0
+
+    # Time cutoff: rows older than `days` are eligible by the time predicate
+    cutoff_ts_row = db.execute(
+        "SELECT datetime('now', ?) AS cutoff",
+        (f"-{int(days)} days",),
+    ).fetchone()
+    cutoff_ts = cutoff_ts_row["cutoff"] if hasattr(cutoff_ts_row, "keys") else cutoff_ts_row[0]
+
+    # Row-count cutoff: keep the most recent max_rows by id. The id BELOW
+    # which rows are eligible is the (total - max_rows + 1)-th smallest id.
+    if total > max_rows:
+        offset = total - max_rows
+        cutoff_id_row = db.execute(
+            "SELECT id FROM affect_log ORDER BY id ASC LIMIT 1 OFFSET ?",
+            (offset,),
+        ).fetchone()
+        cutoff_id = (cutoff_id_row["id"] if hasattr(cutoff_id_row, "keys") else cutoff_id_row[0]) if cutoff_id_row else None
+    else:
+        # All rows are within the row-count budget — nothing eligible by id.
+        # Set cutoff_id to 0 so the AND predicate (id < cutoff_id) excludes
+        # everything — i.e., row-count rule keeps all rows.
+        cutoff_id = 0
+
+    return cutoff_ts, cutoff_id, total
+
+
+def prune_affect_log(db, days=None, max_rows=None, dry_run=False):
+    """Delete affect_log rows that exceed the retention policy.
+
+    Union semantics: a row is KEPT when (created_at >= cutoff_ts) OR
+    (id >= cutoff_id). Equivalently a row is DELETED when
+    (created_at < cutoff_ts) AND (id < cutoff_id). Defaults preserve at
+    least the last 90 days AND at least the most recent 100k rows.
+
+    dry_run=True returns the count that WOULD be deleted without committing.
+    Returns dict {"deleted": int, "kept": int, "total_before": int,
+    "cutoff_ts": str|None, "cutoff_id": int|None, "dry_run": bool}.
+    """
+    cutoff_ts, cutoff_id, total = compute_prune_cutoffs(db, days=days, max_rows=max_rows)
+    result = {
+        "deleted": 0,
+        "kept": total,
+        "total_before": total,
+        "cutoff_ts": cutoff_ts,
+        "cutoff_id": cutoff_id,
+        "dry_run": bool(dry_run),
+    }
+    if total == 0 or cutoff_ts is None:
+        return result
+
+    where = "created_at < ? AND id < ?"
+    params = (cutoff_ts, cutoff_id if cutoff_id is not None else 0)
+
+    if dry_run:
+        cnt_row = db.execute(
+            f"SELECT COUNT(*) AS c FROM affect_log WHERE {where}",
+            params,
+        ).fetchone()
+        deleted = cnt_row["c"] if hasattr(cnt_row, "keys") else cnt_row[0]
+    else:
+        cur = db.execute(f"DELETE FROM affect_log WHERE {where}", params)
+        deleted = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+        db.commit()
+
+    result["deleted"] = deleted
+    result["kept"] = total - deleted
+    return result

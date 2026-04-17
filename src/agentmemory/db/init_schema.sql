@@ -1532,6 +1532,12 @@ CREATE INDEX idx_affect_safety ON affect_log(safety_flag) WHERE safety_flag IS N
 
 CREATE INDEX idx_affect_cluster ON affect_log(cluster, created_at DESC);
 
+-- 2.2.3: cross-agent time-range index for `brainctl affect prune`. The
+-- composite idx_affect_agent_time leads with agent_id and cannot serve a
+-- WHERE created_at < ? predicate that spans all agents. Mirrors
+-- migration 049_affect_log_retention_indexes.sql for fresh installs.
+CREATE INDEX IF NOT EXISTS idx_affect_created_at ON affect_log(created_at);
+
 -- -------------------------------------------------------------------------
 -- LLM usage tracking
 -- -------------------------------------------------------------------------
