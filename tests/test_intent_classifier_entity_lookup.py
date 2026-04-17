@@ -8,17 +8,27 @@ through to factual_lookup, missing the entity_lookup rerank profile.
 """
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
-# bin/intent_classifier.py is not a package; load it via direct path import.
-BIN = Path(__file__).resolve().parent.parent / "bin"
-if str(BIN) not in sys.path:
-    sys.path.insert(0, str(BIN))
-
-import intent_classifier as ic
+# bin/intent_classifier.py is not a package. Other tests may have already
+# imported a different copy via `agentmemory._impl` (which does `from
+# intent_classifier import ...` — that resolves through cwd-relative sys.path
+# and can pick up an installed-package or main-repo copy ahead of the
+# worktree's). Force-load from this worktree's bin/ via spec_from_file_location
+# so we always test the version in the current branch, not whatever happens
+# to be cached in sys.modules.
+_BIN_IC = (
+    Path(__file__).resolve().parent.parent / "bin" / "intent_classifier.py"
+)
+_spec = importlib.util.spec_from_file_location(
+    "intent_classifier_worktree_2_2_3", str(_BIN_IC)
+)
+ic = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(ic)
 
 
 # ---------------------------------------------------------------------------
