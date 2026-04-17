@@ -691,6 +691,15 @@ def cmd_dream_daemon(args) -> None:
             if decision["should_run"]:
                 print(f"[dream-daemon] trigger fired: {decision['reason']}", file=sys.stderr)
                 result = run_dream_cycle(db, agent_id=agent_id, phase=phase)
+                # Truncate-checkpoint the WAL after a real cycle. SQLite's
+                # autocheckpoint only fires when the WAL crosses 1000 pages;
+                # a long-running daemon with steady writes can let brain.db-wal
+                # grow into the 100s of MB before that triggers. Explicit
+                # truncate here keeps the WAL bounded across days/weeks.
+                try:
+                    db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                except Exception as _wal_exc:
+                    print(f"[dream-daemon] wal_checkpoint failed: {_wal_exc}", file=sys.stderr)
                 # Compact one-line status to stdout for log harvesters
                 print(json.dumps({
                     "tick_at": _now_sql(),

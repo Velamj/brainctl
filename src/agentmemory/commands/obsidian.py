@@ -533,8 +533,10 @@ def cmd_obsidian_watch(args: Any) -> None:
     _CACHE_TTL = max(cooldown * 5, 30)  # at least 30s
 
     def _evict_stale(now: float) -> None:
-        if len(_recently_processed) < 256:
-            return  # cheap path: no eviction needed for small caches
+        # Always evict expired entries — the previous `len < 256` short-circuit
+        # let the dict grow unbounded during burst imports (e.g. 5000 unique
+        # files arriving inside the TTL window all looked "fresh" so eviction
+        # never ran). O(n) per event with n bounded by burst rate × TTL.
         cutoff = now - _CACHE_TTL
         stale = [k for k, t in _recently_processed.items() if t < cutoff]
         for k in stale:

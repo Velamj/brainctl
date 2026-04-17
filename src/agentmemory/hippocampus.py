@@ -12,6 +12,7 @@ import sqlite3
 import struct
 import subprocess
 import sys
+import time
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
@@ -3417,6 +3418,7 @@ DREAM_SIMILARITY_THRESHOLD = 0.70   # cosine similarity floor for bisociation
 DREAM_MAX_HYPOTHESES_PER_RUN = 20   # cap new hypotheses per consolidation cycle
 DREAM_INCUBATION_DAYS = 7           # days before an unrecalled hypothesis retires
 DREAM_CANDIDATE_LIMIT = 200         # max memories considered for pairwise scan
+DREAM_MAX_WALL_SECONDS = 30.0       # hard wall-time cap on the O(n^2) pairwise scan
 
 
 def _cosine_similarity(a: List[float], b: List[float]) -> float:
@@ -3601,15 +3603,28 @@ def run_dream_pass(
         a_id, b_id = ir["memory_a_id"], ir["memory_b_id"]
         incubating_pairs.add((min(a_id, b_id), max(a_id, b_id)))
 
-    # Step 4: Pairwise scan for cross-scope bisociations
+    # Step 4: Pairwise scan for cross-scope bisociations.
+    # The scan is O(n^2). With n=DREAM_CANDIDATE_LIMIT=200 that's up to 40k
+    # cosine ops per cycle, each touching two 768-float vectors — enough to
+    # peg a CPU on weak hardware if the cycle fires unattended. We cap on
+    # both (a) hypothesis count and (b) wall-clock time so a single cycle
+    # can never wedge the daemon. Anything we don't get to this cycle is
+    # still a candidate next cycle (incubating set tracks what we did look at).
     n = len(memories_with_vecs)
     new_hypotheses = []
+    deadline = time.monotonic() + DREAM_MAX_WALL_SECONDS
 
     for i in range(n):
         if len(new_hypotheses) >= max_hypotheses:
             break
+        if time.monotonic() >= deadline:
+            stats["wall_time_capped"] = 1
+            break
         for j in range(i + 1, n):
             if len(new_hypotheses) >= max_hypotheses:
+                break
+            if time.monotonic() >= deadline:
+                stats["wall_time_capped"] = 1
                 break
             stats["pairs_scanned"] += 1
 

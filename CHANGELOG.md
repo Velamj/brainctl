@@ -5,6 +5,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.1.1] — 2026-04-16
+
+### Fixed — resource-exhaustion hardening (no functional changes)
+
+- **Dream REM pairwise scan now wall-clock capped.** The O(n²) bisociation
+  scan in `hippocampus.run_dream_pass` could peg a CPU for tens of
+  seconds on weak hardware (200 candidates × 200 = 40k cosine ops on
+  768-dim vectors). Added `DREAM_MAX_WALL_SECONDS = 30.0` deadline
+  checked in both loop levels. Anything not scanned this cycle is still
+  a candidate next cycle. Stats now report `wall_time_capped: 1` when
+  the cap fired.
+- **Obsidian watch eviction is now always-on.** The `_evict_stale`
+  helper in `cmd_obsidian_watch` short-circuited when the dict had
+  fewer than 256 entries — fine in steady state, broken under burst
+  imports where thousands of unique files arrived inside the TTL
+  window and all looked "fresh." Eviction now runs on every event with
+  bounded O(n) cost.
+- **Dream daemon checkpoints WAL after every real cycle.** SQLite's
+  autocheckpoint only fires at 1000 pages; long-running daemons with
+  steady writes let `brain.db-wal` balloon into the 100s of MB before
+  that triggered. Explicit `PRAGMA wal_checkpoint(TRUNCATE)` after
+  `run_dream_cycle` keeps the WAL bounded across weeks.
+- **Recommended pattern for distill cron: wrap each tier in `timeout 60s`.**
+  A stalled DB lock or Ollama hang in any hourly distill pass can back
+  up the cron queue and cascade-fail the next hour. The local example
+  in `config/distill-cron.sh` (gitignored) now demonstrates the pattern;
+  any operator running scheduled `brainctl distill` should apply the
+  same timeout wrapper.
+
+### Deferred to 2.1.2
+
+- MCP server connection pool (audited risk: 199 tools each call
+  `get_db()` fresh; rapid loops can exhaust file handles). Needs care
+  to not break callers that do `conn.close()` — designing properly
+  next patch.
+- `vec_purge_retired` batched DELETE.
+- `affect_log` retention policy.
+
 ## [2.1.0] — 2026-04-16
 
 ### Removed
