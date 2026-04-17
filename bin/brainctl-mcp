@@ -10,11 +10,13 @@ Usage:
   brainctl-mcp --list-tools     # print available tools and exit
 """
 
+import atexit
 import json
 import re
 import sqlite3
 import struct
 import sys
+import threading
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
@@ -122,12 +124,112 @@ VALID_ENTITY_TYPES = [
 # DB helpers
 # ---------------------------------------------------------------------------
 
-def get_db() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(DB_PATH), timeout=10)
+# ---------------------------------------------------------------------------
+# Connection pool
+# ---------------------------------------------------------------------------
+# Per-thread cached sqlite connections. The MCP server has 199 tools, each
+# of which used to open + close its own sqlite connection. Under rapid
+# tool-call bursts that exhausted file handles (macOS default is 256) and
+# kept reloading the sqlite-vec dylib (5-20ms per call). A per-thread
+# cache reuses the same physical connection across calls in the same
+# worker thread; SQLite is not fully thread-safe even with
+# `check_same_thread=False`, so we never share a connection across threads.
+#
+# Compatibility: every existing caller does `db.commit(); db.close()`.
+# The `_PooledConn` wrapper turns close() into a no-op (the pool owns the
+# connection lifecycle and closes everything via atexit on process exit).
+# commit() still flushes, so transactional semantics are unchanged.
+
+_POOL: dict[int, sqlite3.Connection] = {}
+_VEC_POOL: dict[int, sqlite3.Connection] = {}
+_POOL_LOCK = threading.Lock()
+
+
+class _PooledConn:
+    """Forwards every attribute access to the underlying sqlite3.Connection,
+    but no-ops .close() so existing caller code keeps working unchanged.
+
+    Context-manager support is preserved (commit on clean exit, rollback
+    on exception) — same semantics as sqlite3.Connection."""
+
+    __slots__ = ("_conn",)
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        object.__setattr__(self, "_conn", conn)
+
+    def close(self) -> None:  # pool-managed; closed at process exit
+        return None
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def __setattr__(self, name, value):
+        setattr(self._conn, name, value)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is None:
+            self._conn.commit()
+        else:
+            self._conn.rollback()
+        return False
+
+
+def _make_db_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(str(DB_PATH), timeout=10, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def _make_vec_conn():
+    """Open a sqlite connection with the sqlite-vec extension loaded.
+    Returns None if the extension can't be loaded — preserves the
+    pre-pool contract that callers check `if vdb is not None`."""
+    try:
+        conn = sqlite3.connect(str(DB_PATH), timeout=10, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.enable_load_extension(True)
+        conn.load_extension(VEC_DYLIB)
+        conn.enable_load_extension(False)
+        return conn
+    except Exception:
+        return None
+
+
+def get_db() -> _PooledConn:
+    tid = threading.get_ident()
+    with _POOL_LOCK:
+        c = _POOL.get(tid)
+        if c is not None:
+            try:
+                c.execute("SELECT 1").fetchone()
+                return _PooledConn(c)
+            except sqlite3.Error:
+                _POOL.pop(tid, None)
+                try:
+                    c.close()
+                except Exception:
+                    pass
+        c = _make_db_conn()
+        _POOL[tid] = c
+        return _PooledConn(c)
+
+
+@atexit.register
+def _close_pools() -> None:
+    with _POOL_LOCK:
+        for c in list(_POOL.values()) + list(_VEC_POOL.values()):
+            try:
+                c.close()
+            except Exception:
+                pass
+        _POOL.clear()
+        _VEC_POOL.clear()
 
 
 def _now_ts() -> str:
@@ -163,16 +265,27 @@ def _embed_safe(text: str):
 
 
 def _get_vec_db():
-    try:
-        conn = sqlite3.connect(str(DB_PATH), timeout=10)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode = WAL")
-        conn.enable_load_extension(True)
-        conn.load_extension(VEC_DYLIB)
-        conn.enable_load_extension(False)
-        return conn
-    except Exception:
-        return None
+    """Returns a pooled vec-enabled connection (per thread), or None if
+    the sqlite-vec extension can't be loaded. Callers MUST keep their
+    `if vdb is not None:` guards — failure semantics are preserved."""
+    tid = threading.get_ident()
+    with _POOL_LOCK:
+        c = _VEC_POOL.get(tid)
+        if c is not None:
+            try:
+                c.execute("SELECT 1").fetchone()
+                return _PooledConn(c)
+            except sqlite3.Error:
+                _VEC_POOL.pop(tid, None)
+                try:
+                    c.close()
+                except Exception:
+                    pass
+        c = _make_vec_conn()
+        if c is None:
+            return None
+        _VEC_POOL[tid] = c
+        return _PooledConn(c)
 
 
 def row_to_dict(row):

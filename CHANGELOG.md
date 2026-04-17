@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.1.2] — 2026-04-16
+
+### Fixed — MCP server connection pooling
+
+- **`bin/brainctl-mcp` now reuses sqlite connections per thread.** Every
+  one of the MCP tool handlers used to do `db = get_db() ... db.close()`,
+  which spawned a fresh sqlite connection (and, for vec-using tools, a
+  fresh `sqlite_vec` extension load — 5–20ms each) on every call. Under
+  rapid tool-call bursts this approached the macOS 256 file-handle
+  ceiling and burned real CPU on extension reloads. Both `get_db()` and
+  `_get_vec_db()` are now per-thread pooled. Caller code is unchanged
+  — a `_PooledConn` wrapper makes `.close()` a no-op (the pool owns
+  lifecycle and closes everything via `atexit` on process exit), while
+  `.commit()`, transactions, row factory, and context-manager semantics
+  are forwarded transparently. Per-thread isolation preserves SQLite's
+  thread-safety guarantees. `_get_vec_db()` still returns `None` if the
+  sqlite-vec extension can't load — the contract for callers checking
+  `if vdb is not None:` is unchanged.
+
 ## [2.1.1] — 2026-04-16
 
 ### Fixed — resource-exhaustion hardening (no functional changes)
