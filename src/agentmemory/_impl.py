@@ -222,6 +222,35 @@ _CONTIGUITY_BONUS = 1.15
 # Q-learning rate for temporal-difference memory utility updates (Zhang et al. 2026 / MemRL).
 _Q_LEARNING_RATE = 0.1
 
+# Bayesian alpha/beta runaway guardrails (Bug 4 fix, 2.2.0). Each successful
+# recall used to only increment alpha, which meant a memory recalled 100 times
+# reached Beta(101, 1) — posterior mean ~0.99 regardless of actual quality.
+# Downstream Thompson sampling in _apply_recency_and_trim (~line 5680) then
+# let popular-but-wrong memories crowd out correct but less-recalled ones.
+#
+# DESIGN DECISION (2.2.0): option (c) — "anti-attractor prior".
+#   Each recall increments alpha by 1.0 AND beta by _BETA_PRIOR_INCREMENT,
+#   but only while (alpha + beta) < _AB_PRIOR_CAP. Both increments stop
+#   together once the cap fires so the alpha/beta ratio the memory has
+#   earned by then is preserved rather than drifting.
+#
+# Rejected alternatives (documented for future maintainers):
+#   (a) Hard-cap alpha at 50 — simpler but discards the retrieval-practice
+#       signal past that point and produces a discontinuity at the cap.
+#   (b) Logarithmic alpha increment — changes the scale of every downstream
+#       consumer of alpha (posterior mean, Thompson variance, gap-scanner
+#       thresholds). Too invasive for a 2.2.0 correctness wave.
+#   (d) Revert to alpha/(alpha+beta) and add explicit recall-outcome
+#       instrumentation — requires new telemetry plumbing and is out of
+#       scope for a correctness release. Flagged for a future evolution.
+#
+# The numeric values below are deliberately tunable without churning this
+# release: a 0.1 beta increment per recall gives a ~10x penalty on a single
+# recall that is actually wrong, and the 1000 cap means a memory must be
+# recalled ~900 times before the guard fires — well beyond normal use.
+_BETA_PRIOR_INCREMENT = 0.1
+_AB_PRIOR_CAP = 1000.0
+
 
 def _update_q_value(db, memory_id, contributed, learning_rate=_Q_LEARNING_RATE):
     """TD update: q_new = q_old + lr * (reward - q_old).
@@ -230,6 +259,13 @@ def _update_q_value(db, memory_id, contributed, learning_rate=_Q_LEARNING_RATE):
     (Zhang et al. 2026). reward=1.0 on positive contribution, 0.0 otherwise.
     Q-value is clamped to [0, 1] after each update.
 
+    Bug 9 fix (2.2.0): collapsed prior SELECT-then-UPDATE into a single
+    atomic UPDATE that performs the TD step inline using SQLite arithmetic.
+    The old read-modify-write was racy under concurrent agents — two writers
+    could both read q_old before either wrote q_new, losing one update. The
+    new form is a single statement and atomic at the SQLite page level.
+    Retired memories are still skipped via the WHERE clause.
+
     Args:
         db: Active sqlite3 connection. Commits after updating.
         memory_id: Integer PK of the memory being updated.
@@ -237,18 +273,17 @@ def _update_q_value(db, memory_id, contributed, learning_rate=_Q_LEARNING_RATE):
         learning_rate: TD step size alpha (default _Q_LEARNING_RATE = 0.1).
 
     Side effects:
-        Updates q_value for the memory and commits.
+        Updates q_value for the memory and commits. No-op (silently) if
+        the memory does not exist or has been retired.
     """
     reward = 1.0 if contributed else 0.0
-    row = db.execute(
-        "SELECT q_value FROM memories WHERE id=? AND retired_at IS NULL",
-        (memory_id,),
-    ).fetchone()
-    if not row:
-        return
-    q_old = row["q_value"] if row["q_value"] is not None else 0.5
-    q_new = max(0.0, min(1.0, q_old + learning_rate * (reward - q_old)))
-    db.execute("UPDATE memories SET q_value = ? WHERE id = ?", (q_new, memory_id))
+    db.execute(
+        "UPDATE memories "
+        "   SET q_value = max(0.0, min(1.0, "
+        "       COALESCE(q_value, 0.5) + ? * (? - COALESCE(q_value, 0.5)))) "
+        " WHERE id = ? AND retired_at IS NULL",
+        (learning_rate, reward, memory_id),
+    )
     db.commit()
 
 
@@ -2156,19 +2191,31 @@ def _retrieval_practice_boost(db, memory_id, retrieval_prediction_error=0.0):
     """
     rpe = max(0.0, min(1.0, retrieval_prediction_error or 0.0))
     boost = _RETRIEVAL_PRACTICE_BASE_BOOST * (1.0 + rpe)
-    # Intentional decoupling: confidence gets a flat additive boost (testing-effect
-    # model, Roediger & Karpicke 2006) while alpha is incremented separately to
-    # record the evidence count. The two are no longer kept in sync via
-    # alpha / (alpha + beta) — the additive boost replaces the pure Bayesian update.
+    # Bug 4 fix (2.2.0): every recall now also increments beta by
+    # _BETA_PRIOR_INCREMENT (anti-attractor prior). Both increments are
+    # gated on (alpha + beta) < _AB_PRIOR_CAP via a CASE expression so the
+    # whole update is one atomic statement. Confidence still gets the
+    # additive testing-effect boost (Roediger & Karpicke 2006); the
+    # Bayesian alpha/beta now also moves in step with each recall, so a
+    # popular-but-wrong memory cannot inflate to Beta(101, 1) → mean ~0.99
+    # and crowd out correct competitors during Thompson sampling. See the
+    # module-level constants block above for the rejected alternatives
+    # (a hard alpha cap, log increment, full revert with explicit recall
+    # outcome telemetry) and the rationale for option (c).
     db.execute(
         "UPDATE memories SET "
         "confidence = MIN(1.0, confidence + ?), "
-        "alpha = COALESCE(alpha, 1.0) + 1.0, "
+        "alpha = CASE WHEN COALESCE(alpha, 1.0) + COALESCE(beta, 1.0) >= ? "
+        "             THEN COALESCE(alpha, 1.0) "
+        "             ELSE COALESCE(alpha, 1.0) + 1.0 END, "
+        "beta  = CASE WHEN COALESCE(alpha, 1.0) + COALESCE(beta, 1.0) >= ? "
+        "             THEN COALESCE(beta,  1.0) "
+        "             ELSE COALESCE(beta,  1.0) + ? END, "
         "recalled_count = recalled_count + 1, "
         "last_recalled_at = strftime('%Y-%m-%dT%H:%M:%S', 'now'), "
         "labile_until = strftime('%Y-%m-%dT%H:%M:%S', 'now', '+2 hours') "
         "WHERE id = ?",
-        (boost, memory_id),
+        (boost, _AB_PRIOR_CAP, _AB_PRIOR_CAP, _BETA_PRIOR_INCREMENT, memory_id),
     )
     # Q-value TD update: successful retrieval implies contribution (Zhang et al. 2026 / MemRL).
     _update_q_value(db, memory_id, contributed=True)
@@ -2741,13 +2788,20 @@ def cmd_memory_add(args):
 
     file_path = getattr(args, "file_path", None)
     file_line = getattr(args, "file_line", None)
+    # Bug 10 fix (2.2.0): seed beta = alpha_floor on the new memory so it
+    # starts with a symmetric Beta(N, N) prior — "we are not yet sure". The
+    # prior version only seeded alpha, leaving beta at the default 1.0,
+    # which produced Beta(N, 1) and inverted the gate's intent (the new
+    # memory was favored over a high-PII incumbent rather than penalized).
+    # Symmetric priors mean the new memory must accumulate real recall
+    # evidence before it can outrank the incumbent during Thompson sampling.
     cursor = db.execute(
         "INSERT INTO memories (agent_id, category, scope, content, confidence, tags, source_event_id, "
-        "memory_type, supersedes_id, alpha, file_path, file_line, write_tier, indexed, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "memory_type, supersedes_id, alpha, beta, file_path, file_line, write_tier, indexed, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (args.agent, args.category, args.scope or "global", args.content,
          effective_confidence, tags_json, args.source_event, memory_type,
-         supersedes_id, float(alpha_floor), file_path, file_line,
+         supersedes_id, float(alpha_floor), float(alpha_floor), file_path, file_line,
          write_tier, do_index, _now_ts(), _now_ts())
     )
     memory_id = cursor.lastrowid
@@ -2919,7 +2973,9 @@ def cmd_memory_add(args):
     if auto_linked:
         out["auto_linked_entities"] = auto_linked
     if pii_info:
-        out["pii_gate"] = {**pii_info, "alpha_floor": alpha_floor}
+        # beta_floor mirrors alpha_floor (Bug 10 fix) — exposed for callers
+        # that audit the gate's decision.
+        out["pii_gate"] = {**pii_info, "alpha_floor": alpha_floor, "beta_floor": alpha_floor}
     json_out(out)
 
 def cmd_memory_search(args):
@@ -3133,8 +3189,58 @@ def cmd_memory_update(args):
 
     log_access(db, args.agent or "unknown", "write", "memories", args.id)
     db.commit()
+
+    # Bug 3 fix (2.2.0): re-embed when content changes so vec_memories does
+    # not return stale semantic-search results after a content edit. The
+    # prior implementation updated `content` and FTS5 (via trigger) but
+    # left the row in vec_memories pointing at the old embedding — a
+    # silent staleness that callers had no way to detect. We mirror the
+    # write path used in cmd_memory_add (lines ~2900) so the two stay in
+    # sync. If the sqlite-vec extension is not loaded we degrade
+    # gracefully: a stderr warning, no crash. The next backfill cron will
+    # eventually re-cover any gap left here.
+    reembedded = False
+    if args.content is not None:
+        try:
+            blob = _embed_query_safe(args.content)
+            if blob:
+                db_vec = _try_get_db_with_vec()
+                if db_vec is None:
+                    print(
+                        f"warning: sqlite-vec extension not loaded; "
+                        f"memory {args.id} re-embed skipped after content update",
+                        file=sys.stderr,
+                    )
+                else:
+                    try:
+                        db_vec.execute(
+                            "INSERT OR REPLACE INTO vec_memories(rowid, embedding) VALUES (?, ?)",
+                            (args.id, blob),
+                        )
+                        db_vec.execute(
+                            "INSERT OR IGNORE INTO embeddings "
+                            "(source_table, source_id, model, dimensions, vector) "
+                            "VALUES (?, ?, ?, ?, ?)",
+                            ("memories", args.id, EMBED_MODEL, EMBED_DIMENSIONS, blob),
+                        )
+                        db_vec.commit()
+                        reembedded = True
+                    finally:
+                        db_vec.close()
+        except Exception as exc:
+            # Non-fatal: cron backfill catches gaps. Log so operators see it.
+            print(
+                f"warning: memory {args.id} re-embed failed: {exc}",
+                file=sys.stderr,
+            )
+
     row = db.execute("SELECT id, version FROM memories WHERE id = ?", (args.id,)).fetchone()
-    json_out({"ok": True, "memory_id": args.id, "new_version": row["version"]})
+    json_out({
+        "ok": True,
+        "memory_id": args.id,
+        "new_version": row["version"],
+        "reembedded": reembedded,
+    })
 
 
 def cmd_memory_confidence(args):
@@ -5302,6 +5408,19 @@ def _rrf_fuse(fts_list, vec_list, k=60):
 
     Returns merged list sorted by RRF score descending, with each item
     annotated with ``rrf_score`` and ``source`` ("keyword"/"semantic"/"both").
+
+    Both input lists are dict-like rows keyed by ``"id"`` (the memories.id
+    primary key, NOT a raw sqlite-vec rowid). The id == rowid invariant is
+    preserved by the upstream _vec_memories() helper, which re-fetches rows
+    from the base ``memories`` table by id after harvesting raw rowids from
+    vec_memories. The PK was verified to be ``INTEGER PRIMARY KEY
+    AUTOINCREMENT`` in src/agentmemory/db/init_schema.sql, which makes
+    id == rowid hold by SQLite's default semantics. Bug 5 (2.2.0) fix:
+    add a deterministic ``id`` tie-breaker so ties produce stable ordering
+    across runs (otherwise dict iteration order leaks into search output
+    when two rows share the same RRF score). Empty input lists are
+    naturally handled — the merged output is simply whichever side is
+    populated, sorted by score.
     """
     scores = {}
     sources = {}
@@ -5317,7 +5436,11 @@ def _rrf_fuse(fts_list, vec_list, k=60):
         sources[rid] = "both" if rid in sources else "semantic"
         if rid not in rows:
             rows[rid] = row
-    sorted_ids = sorted(scores, key=lambda x: scores[x], reverse=True)
+    # Deterministic ordering: primary -score (descending), secondary id
+    # (ascending) to break ties stably. Mixing -score with a positive id
+    # in a single key tuple lets `sorted` ascend on both — equivalent to
+    # descending score, ascending id.
+    sorted_ids = sorted(scores, key=lambda rid: (-scores[rid], rid))
     out = []
     for rid in sorted_ids:
         r = rows[rid].copy()
