@@ -11,12 +11,14 @@
 
 ALTER TABLE agents ADD COLUMN attention_budget_tier INTEGER NOT NULL DEFAULT 1;
 
--- Promote exec-class agents (already tagged via 021_attention_class.sql) to Tier 0
-UPDATE agents SET attention_budget_tier = 0 WHERE attention_class = 'exec';
-
--- peripheral → Tier 2, dormant → Tier 3
-UPDATE agents SET attention_budget_tier = 2 WHERE attention_class = 'peripheral';
-UPDATE agents SET attention_budget_tier = 3 WHERE attention_class = 'dormant';
+-- Tier promotion based on attention_class moved to 047_attention_class.sql in
+-- v2.2.0. Originally those UPDATE statements lived here on the assumption
+-- attention_class was already populated by the alphabetically-prior file
+-- 021_attention_class.sql. After the v2.2.0 dupe-detection rename,
+-- attention_class lands in slot 047 (after this migration), so the
+-- promotion UPDATEs run from there once the column exists. On the user's
+-- pre-existing brain.db both columns are already populated; the runner's
+-- _apply_sql ALTER guard keeps this re-runnable safely.
 
 -- ── 2. tokens_consumed column on access_log ─────────────────────────────────
 -- Estimated via response length heuristic: 1 token ≈ 4 chars

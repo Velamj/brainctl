@@ -1,18 +1,23 @@
 -- ============================================================
--- Migration 012: Theory of Mind — Agent Mental Models
--- : Theory of Mind & Agent Modeling
+-- Migration 043: Theory of Mind — Agent Mental Models
+-- (RENUMBERED from original 012 in v2.2.0 — see migrate.py header
+-- comment "DUPLICATE-VERSION HISTORY" for context.)
 -- Author: Weaver (Context Integration Engineer)
--- Date: 2026-03-28
+-- Date: 2026-03-28 (original); renumbered 2026-04-16
 -- ============================================================
 -- Adds four tables enabling Hermes to:
 --   1. Track what each agent currently believes (agent_beliefs)
 --   2. Detect belief conflicts between agents or vs. ground truth (belief_conflicts)
 --   3. Model what each agent knows from another agent's perspective (agent_perspective_models)
 --   4. Maintain a cached BDI snapshot per agent (agent_bdi_state)
+--
+-- IDEMPOTENT: every CREATE uses IF NOT EXISTS. Safe to re-apply on
+-- DBs where these tables were created via init_schema.sql or an
+-- earlier ad-hoc patch.
 -- ============================================================
 
 INSERT INTO schema_version (version, description)
-VALUES (12, 'Theory of Mind: agent_beliefs, belief_conflicts, agent_perspective_models, agent_bdi_state');
+VALUES (43, 'Theory of Mind: agent_beliefs, belief_conflicts, agent_perspective_models, agent_bdi_state (renumbered from 012)');
 
 -- ============================================================
 -- Table 1: agent_beliefs
@@ -20,7 +25,7 @@ VALUES (12, 'Theory of Mind: agent_beliefs, belief_conflicts, agent_perspective_
 -- Beliefs are agent-local snapshots that may differ from ground
 -- truth in memories. The divergence IS the signal.
 -- ============================================================
-CREATE TABLE agent_beliefs (
+CREATE TABLE IF NOT EXISTS agent_beliefs (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     agent_id            TEXT    NOT NULL REFERENCES agents(id),
     topic               TEXT    NOT NULL,
@@ -44,11 +49,11 @@ CREATE TABLE agent_beliefs (
     updated_at          TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S', 'now')),
     UNIQUE(agent_id, topic)
 );
-CREATE INDEX idx_beliefs_agent      ON agent_beliefs(agent_id);
-CREATE INDEX idx_beliefs_topic      ON agent_beliefs(topic);
-CREATE INDEX idx_beliefs_active     ON agent_beliefs(invalidated_at) WHERE invalidated_at IS NULL;
-CREATE INDEX idx_beliefs_assumption ON agent_beliefs(is_assumption) WHERE is_assumption = 1;
-CREATE INDEX idx_beliefs_stale      ON agent_beliefs(last_updated_at);
+CREATE INDEX IF NOT EXISTS idx_beliefs_agent      ON agent_beliefs(agent_id);
+CREATE INDEX IF NOT EXISTS idx_beliefs_topic      ON agent_beliefs(topic);
+CREATE INDEX IF NOT EXISTS idx_beliefs_active     ON agent_beliefs(invalidated_at) WHERE invalidated_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_beliefs_assumption ON agent_beliefs(is_assumption) WHERE is_assumption = 1;
+CREATE INDEX IF NOT EXISTS idx_beliefs_stale      ON agent_beliefs(last_updated_at);
 
 
 -- ============================================================
@@ -56,7 +61,7 @@ CREATE INDEX idx_beliefs_stale      ON agent_beliefs(last_updated_at);
 -- Conflicts between agents' beliefs about the same topic,
 -- or between an agent's belief and global ground truth.
 -- ============================================================
-CREATE TABLE belief_conflicts (
+CREATE TABLE IF NOT EXISTS belief_conflicts (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     topic           TEXT    NOT NULL,
     agent_a_id      TEXT    NOT NULL REFERENCES agents(id),
@@ -79,12 +84,12 @@ CREATE TABLE belief_conflicts (
     requires_supervisor_intervention INTEGER NOT NULL DEFAULT 0
         -- 1 = Hermes should inject corrective context before affected agents act
 );
-CREATE INDEX idx_conflicts_topic    ON belief_conflicts(topic);
-CREATE INDEX idx_conflicts_agent_a  ON belief_conflicts(agent_a_id);
-CREATE INDEX idx_conflicts_agent_b  ON belief_conflicts(agent_b_id);
-CREATE INDEX idx_conflicts_open     ON belief_conflicts(resolved_at) WHERE resolved_at IS NULL;
-CREATE INDEX idx_conflicts_severity ON belief_conflicts(severity DESC) WHERE resolved_at IS NULL;
-CREATE INDEX idx_conflicts_supervisor ON belief_conflicts(requires_supervisor_intervention)
+CREATE INDEX IF NOT EXISTS idx_conflicts_topic    ON belief_conflicts(topic);
+CREATE INDEX IF NOT EXISTS idx_conflicts_agent_a  ON belief_conflicts(agent_a_id);
+CREATE INDEX IF NOT EXISTS idx_conflicts_agent_b  ON belief_conflicts(agent_b_id);
+CREATE INDEX IF NOT EXISTS idx_conflicts_open     ON belief_conflicts(resolved_at) WHERE resolved_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_conflicts_severity ON belief_conflicts(severity DESC) WHERE resolved_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_conflicts_supervisor ON belief_conflicts(requires_supervisor_intervention)
     WHERE requires_supervisor_intervention = 1 AND resolved_at IS NULL;
 
 
@@ -97,7 +102,7 @@ CREATE INDEX idx_conflicts_supervisor ON belief_conflicts(requires_supervisor_in
 -- it routes context to, then uses knowledge_gap to frame context
 -- appropriately for the receiver's knowledge state.
 -- ============================================================
-CREATE TABLE agent_perspective_models (
+CREATE TABLE IF NOT EXISTS agent_perspective_models (
     id                      INTEGER PRIMARY KEY AUTOINCREMENT,
     observer_agent_id       TEXT    NOT NULL REFERENCES agents(id),
     subject_agent_id        TEXT    NOT NULL REFERENCES agents(id),
@@ -121,11 +126,11 @@ CREATE TABLE agent_perspective_models (
     created_at              TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S', 'now')),
     UNIQUE(observer_agent_id, subject_agent_id, topic)
 );
-CREATE INDEX idx_pmodel_observer  ON agent_perspective_models(observer_agent_id);
-CREATE INDEX idx_pmodel_subject   ON agent_perspective_models(subject_agent_id);
-CREATE INDEX idx_pmodel_topic     ON agent_perspective_models(topic);
-CREATE INDEX idx_pmodel_confusion ON agent_perspective_models(confusion_risk DESC);
-CREATE INDEX idx_pmodel_gaps      ON agent_perspective_models(knowledge_gap)
+CREATE INDEX IF NOT EXISTS idx_pmodel_observer  ON agent_perspective_models(observer_agent_id);
+CREATE INDEX IF NOT EXISTS idx_pmodel_subject   ON agent_perspective_models(subject_agent_id);
+CREATE INDEX IF NOT EXISTS idx_pmodel_topic     ON agent_perspective_models(topic);
+CREATE INDEX IF NOT EXISTS idx_pmodel_confusion ON agent_perspective_models(confusion_risk DESC);
+CREATE INDEX IF NOT EXISTS idx_pmodel_gaps      ON agent_perspective_models(knowledge_gap)
     WHERE knowledge_gap IS NOT NULL;
 
 
@@ -136,7 +141,7 @@ CREATE INDEX idx_pmodel_gaps      ON agent_perspective_models(knowledge_gap)
 -- `brainctl tom update <agent-id>`.
 -- Provides a single-row read path for agent epistemic health.
 -- ============================================================
-CREATE TABLE agent_bdi_state (
+CREATE TABLE IF NOT EXISTS agent_bdi_state (
     agent_id                    TEXT    PRIMARY KEY REFERENCES agents(id),
 
     -- BELIEFS dimension
@@ -184,6 +189,6 @@ CREATE TABLE agent_bdi_state (
     last_full_assessment_at     TEXT,
     updated_at                  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S', 'now'))
 );
-CREATE INDEX idx_bdi_coverage  ON agent_bdi_state(knowledge_coverage_score);
-CREATE INDEX idx_bdi_staleness ON agent_bdi_state(belief_staleness_score DESC);
-CREATE INDEX idx_bdi_confusion ON agent_bdi_state(confusion_risk_score DESC);
+CREATE INDEX IF NOT EXISTS idx_bdi_coverage  ON agent_bdi_state(knowledge_coverage_score);
+CREATE INDEX IF NOT EXISTS idx_bdi_staleness ON agent_bdi_state(belief_staleness_score DESC);
+CREATE INDEX IF NOT EXISTS idx_bdi_confusion ON agent_bdi_state(confusion_risk_score DESC);

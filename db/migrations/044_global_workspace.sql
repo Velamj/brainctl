@@ -1,7 +1,13 @@
 -- =============================================================================
--- Migration 013: Global Workspace Broadcasting -- Implements Baars' Global Workspace Theory as a salience-gated broadcast layer
+-- Migration 044: Global Workspace Broadcasting
+-- (RENUMBERED from original 013 in v2.2.0 — see migrate.py header comment
+-- "DUPLICATE-VERSION HISTORY" for context. Inner schema_version INSERT
+-- previously wrote 15, evidence of an earlier botched renumber attempt;
+-- corrected to 44 to match the new file ordinal.)
+-- Implements Baars' Global Workspace Theory as a salience-gated broadcast layer
 -- on top of brain.db. High-salience memories "ignite" and broadcast org-wide.
 -- Depends on: neuromodulation_state (012), memory_events/MEB (010)
+-- IDEMPOTENT: every CREATE uses IF NOT EXISTS — safe to re-apply.
 -- =============================================================================
 
 PRAGMA foreign_keys = ON;
@@ -135,4 +141,4 @@ END;
 -- =============================================================================
 
 INSERT INTO schema_version (version, description)
-VALUES (15, 'Global Workspace Broadcasting — salience-gated org-wide awareness ');
+VALUES (44, 'Global Workspace Broadcasting — salience-gated org-wide awareness (renumbered from 013, was previously tagged 15)');

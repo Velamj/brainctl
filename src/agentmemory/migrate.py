@@ -2,10 +2,67 @@
 
 Reads migration SQL files from db/migrations/, applies unapplied ones in order,
 tracks applied migrations in schema_versions table.
+
+============================================================================
+DUPLICATE-VERSION HISTORY (read this before adding a new migration)
+============================================================================
+
+Up to v2.1.x, eight migration files in db/migrations/ shared four version
+numbers (012, 013, 017, 023). The runner sorts files alphabetically and
+records the integer version once it finishes the FIRST file at that
+version; the SECOND file at the same version was then silently skipped
+forever on fresh DBs because its version was already in
+``schema_versions``.
+
+Subsystems lost on fresh installs:
+  * 012_theory_of_mind.sql        (agent_beliefs, belief_conflicts,
+                                    agent_perspective_models, agent_bdi_state)
+  * 013_global_workspace.sql      (workspace_config/broadcasts/acks/phi)
+  * 017_memory_rbac.sql           (memories.visibility/read_acl)
+  * 023_uncertainty_log_search_columns.sql
+                                  (agent_uncertainty_log search columns)
+
+In v2.2.0 these four files were renumbered to slots 043-046 (the next
+free integers above the previous high-water 042) and made idempotent
+(``CREATE TABLE/INDEX/TRIGGER IF NOT EXISTS``; ADD COLUMN duplicate-column
+errors swallowed by ``_apply_sql`` below). Existing brain.db installs
+that already have the affected tables — including the user's own DB,
+which had ad-hoc patches — pick up the renumbered migrations as no-ops
+on the next ``brainctl migrate`` run.
+
+DESIGN RATIONALE — why option (a) renumber, not (b) suffix-ordinal:
+  1. SQLite triggers reference tables lazily; CREATE TRIGGER does not
+     validate referenced tables, so moving a defining migration to a
+     LATER slot does not break create-time ordering for
+     trigger-bearing downstream migrations.
+  2. The only cross-migration table reference among the lost-pair
+     payloads is ``017_global_workspace_memory_columns`` inserting into
+     ``workspace_broadcasts`` (defined in 013_global_workspace) inside
+     a trigger body. That trigger only fires on UPDATE OF gw_broadcast,
+     never at migrate time.
+  3. Option (b) would have required a schema_versions table migration
+     of its own (adding a suffix column) — solving a problem the
+     simpler renumber doesn't have.
+
+WHEN ADDING A NEW MIGRATION:
+  * Pick the next unused integer above the current max (use
+    ``brainctl migrate --status-verbose`` or ``ls db/migrations/``).
+  * Use ``CREATE TABLE/INDEX/TRIGGER IF NOT EXISTS``.
+  * For ALTER TABLE ADD COLUMN, just write it plain — ``_apply_sql``
+    catches the duplicate-column failure on re-apply. SQLite has no
+    native ``ADD COLUMN IF NOT EXISTS`` syntax.
+  * If you write the inner ``INSERT INTO schema_version (version, ...)``
+    row, make sure the integer matches the file's ordinal.
+  * Run ``python3 -c "from agentmemory import migrate;
+    migrate._check_no_duplicate_versions()"`` — it will raise loudly
+    if you accidentally introduce another duplicate.
+
+============================================================================
 """
 import sqlite3
 import re
 import sys
+from collections import defaultdict
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -13,12 +70,45 @@ from datetime import datetime, timezone
 MIGRATIONS_DIR = Path(__file__).parent.parent.parent / "db" / "migrations"
 
 
+# Errors that mean "this DDL already happened, treat as no-op". Matched
+# case-insensitively against the SQLite error text. Empirically observed
+# error messages from sqlite 3.51.x are listed; see _apply_sql below.
+#
+# DELIBERATELY NARROW: every fragment here is a load-bearing claim that
+# the matching error proves the DDL already happened. Don't add general
+# "object exists" wording or you'll start swallowing real bugs (e.g. a
+# misspelled column in a SELECT).
+_IDEMPOTENT_ERROR_FRAGMENTS = (
+    "duplicate column name",  # ALTER TABLE ADD COLUMN of existing column
+)
+
+# Per-statement-kind tolerated errors. Looser than the global list because
+# they only apply when we know the surrounding DDL kind makes the error
+# semantically a no-op:
+#   * CREATE INDEX on a missing column on an existing table = the table
+#     was created by an earlier migration with a different column shape,
+#     and the new index simply can't apply. Logging is the right answer;
+#     crashing the whole migration breaks the user's upgrade for a
+#     legacy column rename they may not even use.
+#   * CREATE TRIGGER, same logic.
+_PER_KIND_TOLERATED_FRAGMENTS = {
+    "CREATE INDEX": ("no such column",),
+    "CREATE TRIGGER": ("no such column",),
+}
+
+
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
 
 
 def _get_migrations() -> list[tuple[int, str, Path]]:
-    """Return sorted list of (version, name, path) for all migration files."""
+    """Return sorted list of (version, name, path) for all migration files.
+
+    Raises ``ValueError`` if two files share the same integer version —
+    that's the bug we shipped through v2.1.x and never want to ship again.
+    Bypass via env var ``BRAINCTL_ALLOW_DUPLICATE_MIGRATIONS=1`` only if
+    you're auditing an old branch; on main this should never trigger.
+    """
     migrations = []
     for f in sorted(MIGRATIONS_DIR.glob("*.sql")):
         m = re.match(r'^(\d+)_(.+)\.sql$', f.name)
@@ -26,7 +116,43 @@ def _get_migrations() -> list[tuple[int, str, Path]]:
             version = int(m.group(1))
             name = m.group(2).replace('_', ' ')
             migrations.append((version, name, f))
+
+    import os
+    if not os.environ.get("BRAINCTL_ALLOW_DUPLICATE_MIGRATIONS"):
+        _check_no_duplicate_versions(migrations)
     return migrations
+
+
+def _check_no_duplicate_versions(
+    migrations: list[tuple[int, str, Path]] | None = None
+) -> None:
+    """Hard-fail if any integer version is shared by two or more files.
+
+    Called from ``_get_migrations`` on every status/run/status_verbose
+    invocation. Also exposed as a standalone helper so a contributor
+    adding a migration can sanity-check their file name in one line:
+    ``python3 -c "from agentmemory import migrate; migrate._check_no_duplicate_versions()"``.
+    """
+    if migrations is None:
+        # Re-glob without the recursion guard.
+        migrations = []
+        for f in sorted(MIGRATIONS_DIR.glob("*.sql")):
+            m = re.match(r'^(\d+)_(.+)\.sql$', f.name)
+            if m:
+                migrations.append((int(m.group(1)), m.group(2), f))
+
+    by_version: dict[int, list[str]] = defaultdict(list)
+    for version, _name, path in migrations:
+        by_version[version].append(path.name)
+    dupes = {v: names for v, names in by_version.items() if len(names) > 1}
+    if dupes:
+        lines = [f"  version {v:03d}: {', '.join(sorted(names))}" for v, names in sorted(dupes.items())]
+        raise ValueError(
+            "Duplicate-version migration files detected — alphabetical sort would "
+            "silently skip the second file at each shared version. Rename one of "
+            "each pair to a free integer slot (use the next number above the "
+            "current high-water mark).\n" + "\n".join(lines)
+        )
 
 
 def _ensure_schema_versions(conn: sqlite3.Connection) -> None:
@@ -48,6 +174,141 @@ def _get_applied(conn: sqlite3.Connection) -> set[int]:
         return {r[0] for r in rows}
     except sqlite3.OperationalError:
         return set()
+
+
+def _strip_line_comment(line: str) -> str:
+    """Return ``line`` with any trailing ``-- comment`` removed.
+
+    SQLite line comments start at the first unquoted ``--``. We don't fully
+    parse string literals — none of our migrations end a logical statement
+    inside one, but we do correctly skip inline comments AFTER a terminating
+    ``;``, which is what tripped up the splitter on the
+    ``('enabled', '1');     -- kill switch`` line in 044_global_workspace.
+    """
+    in_single = False
+    i = 0
+    n = len(line)
+    while i < n:
+        c = line[i]
+        if c == "'":
+            # Toggle quoted-string state. Doubled '' inside a literal is
+            # SQLite's escape and remains "in" the string.
+            in_single = not in_single
+        elif not in_single and c == "-" and i + 1 < n and line[i + 1] == "-":
+            return line[:i].rstrip()
+        i += 1
+    return line.rstrip()
+
+
+def _split_sql_statements(sql: str) -> list[str]:
+    """Split a SQL script into individual statements.
+
+    ``executescript`` is all-or-nothing per script; we want statement-level
+    error recovery so an idempotent ``ALTER TABLE ADD COLUMN`` whose column
+    already exists doesn't abort the whole migration. The split is naive but
+    handles the constructs our migrations use (multi-line CREATE TABLE,
+    CREATE TRIGGER ... BEGIN ... END;, comments, blank lines, and inline
+    line comments after terminating ``;``).
+
+    Notes for future maintainers:
+      * BEGIN/END blocks (triggers) are recognized and kept as one statement
+        until matching END;.
+      * Inline ``-- comment`` after a terminating ``;`` is handled via
+        ``_strip_line_comment``. A semicolon hidden inside a quoted string
+        literal still won't terminate the statement (we'd need a real
+        tokenizer for that); none of our migrations rely on that.
+    """
+    statements: list[str] = []
+    current: list[str] = []
+    in_trigger_body = False
+
+    for raw_line in sql.splitlines():
+        line = raw_line.rstrip()
+        stripped_upper = line.strip().upper()
+        if not in_trigger_body and (
+            stripped_upper.startswith("CREATE TRIGGER")
+            or stripped_upper.startswith("CREATE TEMP TRIGGER")
+        ):
+            in_trigger_body = True
+        current.append(line)
+        if in_trigger_body:
+            # BEGIN ... END; ends a trigger body. Strip any inline comment
+            # before checking so e.g. "END;  -- close" still matches.
+            tail = _strip_line_comment(line).strip().upper()
+            if tail in ("END;", "END ;"):
+                statements.append("\n".join(current).strip())
+                current = []
+                in_trigger_body = False
+        else:
+            # A statement terminates on a `;` that is not inside a comment.
+            # Strip inline `-- ...` first so the very common pattern
+            # `...);    -- inline note` is detected as a terminator.
+            cleaned = _strip_line_comment(line)
+            if cleaned.endswith(";"):
+                statements.append("\n".join(current).strip())
+                current = []
+
+    # Trailing fragment (file without trailing newline / no terminating ;)
+    tail = "\n".join(current).strip()
+    if tail:
+        statements.append(tail)
+
+    # Filter empties and comment-only statements (those would be no-ops in
+    # ``execute`` but generate noisy "incomplete input" if they slip through).
+    out = []
+    for s in statements:
+        # Strip both line and block comments (block via -- line by line);
+        # if nothing meaningful remains, skip.
+        non_comment = "\n".join(_strip_line_comment(l) for l in s.splitlines()).strip()
+        if non_comment:
+            out.append(s)
+    return out
+
+
+def _apply_sql(conn: sqlite3.Connection, sql: str, file_label: str) -> tuple[int, list[str]]:
+    """Apply SQL one statement at a time, swallowing idempotent failures.
+
+    Returns ``(stmts_run, idempotent_skipped)`` where ``idempotent_skipped``
+    is a list of human-readable notes about statements that were no-ops on
+    re-application (e.g. ``ADD COLUMN visibility`` when the column was
+    already present from init_schema.sql).
+
+    Any error that does NOT match an idempotent fragment is re-raised; the
+    caller is expected to record it in the ``errors`` list and bail out of
+    the run.
+    """
+    stmts = _split_sql_statements(sql)
+    skipped: list[str] = []
+    run_count = 0
+    for stmt in stmts:
+        try:
+            conn.execute(stmt)
+            run_count += 1
+        except sqlite3.OperationalError as exc:
+            msg = str(exc).lower()
+            first_line = stmt.strip().splitlines()[0][:100]
+
+            # Globally idempotent errors — true regardless of statement kind.
+            if any(frag in msg for frag in _IDEMPOTENT_ERROR_FRAGMENTS):
+                skipped.append(f"{file_label}: idempotent skip — {exc}: `{first_line}`")
+                continue
+
+            # Per-statement-kind tolerance: only when the leading DDL
+            # keyword matches a known-safe pattern AND the error text is on
+            # that pattern's tolerated list. The leading-token detection
+            # collapses whitespace so multi-line CREATE statements still
+            # match.
+            leading = " ".join(stmt.strip().split()[:2]).upper()
+            kind_tolerated = _PER_KIND_TOLERATED_FRAGMENTS.get(leading, ())
+            if any(frag in msg for frag in kind_tolerated):
+                skipped.append(
+                    f"{file_label}: tolerated {leading} skip — {exc}: `{first_line}`"
+                )
+                continue
+
+            raise
+    conn.commit()
+    return run_count, skipped
 
 
 def status(db_path: str) -> dict:
@@ -91,19 +352,27 @@ def run(db_path: str, dry_run: bool = False) -> dict:
 
     applied = []
     errors = []
+    idempotent_notes: list[str] = []
     for version, name, path in pending:
         sql = path.read_text()
         if dry_run:
             applied.append({"version": version, "name": name, "file": path.name, "dry_run": True})
             continue
         try:
-            conn.executescript(sql)
+            stmts_run, skipped = _apply_sql(conn, sql, path.name)
+            idempotent_notes.extend(skipped)
             conn.execute(
                 "INSERT OR IGNORE INTO schema_versions (version, name, applied_at) VALUES (?, ?, ?)",
                 (version, name, _utc_now_iso())
             )
             conn.commit()
-            applied.append({"version": version, "name": name, "file": path.name})
+            applied.append({
+                "version": version,
+                "name": name,
+                "file": path.name,
+                "stmts_run": stmts_run,
+                "idempotent_skipped": len(skipped),
+            })
         except Exception as exc:
             errors.append({"version": version, "name": name, "error": str(exc)})
             break  # stop on first error
@@ -115,6 +384,7 @@ def run(db_path: str, dry_run: bool = False) -> dict:
         "dry_run": dry_run,
         "migrations": applied,
         "errors": errors,
+        "idempotent_notes": idempotent_notes,
     }
 
 
@@ -197,16 +467,13 @@ def mark_applied_up_to(db_path: str, up_to: int, dry_run: bool = False) -> dict:
         }
 
     # Figure out which versions to mark. Every migration version in [1..up_to]
-    # that isn't already tracked gets a row. Collapse duplicate-version files
-    # (e.g. 012_neuromodulation_state.sql + 012_theory_of_mind.sql) into one
-    # representative row — we mark the version, not the file.
+    # that isn't already tracked gets a row. With duplicate-version files
+    # banned by ``_check_no_duplicate_versions``, every version maps to
+    # exactly one file — no collapsing needed.
     targets: dict[int, str] = {}
     for version, name, _path in migrations:
         if version <= up_to and version not in existing_versions:
-            # If there are multiple files sharing a version, prefer the
-            # alphabetically first (what _get_migrations already sorted by).
-            if version not in targets:
-                targets[version] = name
+            targets[version] = name
 
     if not targets:
         conn.close()
