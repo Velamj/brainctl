@@ -192,13 +192,26 @@ def _merge_append_only(
     return count
 
 
-def _merge_entities(conn: sqlite3.Connection, dry_run: bool) -> tuple[int, int]:
-    """Merge entities: match on name+scope; merge observations+properties; insert new."""
+def _merge_entities(
+    conn: sqlite3.Connection, dry_run: bool
+) -> tuple[int, int, dict[int, int]]:
+    """Merge entities: match on name+scope; merge observations+properties; insert new.
+
+    Returns ``(rows_copied, conflicts, entity_id_map)`` where ``entity_id_map``
+    maps source-DB entity ids → target-DB entity ids. The map is what
+    :func:`_merge_knowledge_edges` needs to rewrite edges that reference
+    entities so they point at the correct target row instead of dangling.
+
+    Bug 6a fix (2.2.0): without this map, edges copied from src reference
+    src-side ids that may collide with unrelated target rows or point at
+    nothing — producing silent orphans the FTS/graph layer drops.
+    """
     rows_copied = 0
     conflicts = 0
+    entity_id_map: dict[int, int] = {}
 
     if not _table_exists(conn, "src.entities"):
-        return rows_copied, conflicts
+        return rows_copied, conflicts, entity_id_map
 
     src_cols = _get_columns(conn, "src.entities")
     dst_cols = _get_columns(conn, "entities")
@@ -209,6 +222,8 @@ def _merge_entities(conn: sqlite3.Connection, dry_run: bool) -> tuple[int, int]:
     src_rows = conn.execute(f"SELECT {src_col_str} FROM src.entities").fetchall()
 
     for row in src_rows:
+        # Capture src id so we can map it to whatever id the target ends up using.
+        src_id = row[src_col_idx["id"]] if "id" in src_col_idx else None
         name = row[src_col_idx["name"]]
         scope = row[src_col_idx["scope"]]
         src_obs_raw = row[src_col_idx["observations"]] if "observations" in src_col_idx else "[]"
@@ -221,6 +236,8 @@ def _merge_entities(conn: sqlite3.Connection, dry_run: bool) -> tuple[int, int]:
 
         if existing:
             conflicts += 1
+            if src_id is not None:
+                entity_id_map[src_id] = existing[0]
             # Merge observations (union of JSON arrays)
             try:
                 dst_obs = json.loads(existing[1] or "[]")
@@ -257,19 +274,49 @@ def _merge_entities(conn: sqlite3.Connection, dry_run: bool) -> tuple[int, int]:
             col_str = ", ".join(common_cols)
             placeholders = ", ".join("?" * len(common_cols))
             if not dry_run:
-                conn.execute(
+                cur = conn.execute(
                     f"INSERT INTO entities ({col_str}) VALUES ({placeholders})",
                     vals,
                 )
+                if src_id is not None and cur.lastrowid is not None:
+                    entity_id_map[src_id] = cur.lastrowid
+            else:
+                # Dry run: we still want to surface a plausible identity mapping
+                # for the report so callers can size redirect work; map src_id to
+                # itself (best we can do without inserting).
+                if src_id is not None:
+                    entity_id_map[src_id] = src_id
             rows_copied += 1
 
-    return rows_copied, conflicts
+    return rows_copied, conflicts, entity_id_map
 
 
-def _merge_knowledge_edges(conn: sqlite3.Connection, dry_run: bool) -> tuple[int, int]:
-    """Merge knowledge_edges: INSERT OR IGNORE on unique business key."""
+def _merge_knowledge_edges(
+    conn: sqlite3.Connection,
+    dry_run: bool,
+    entity_id_map: dict[int, int] | None = None,
+) -> tuple[int, int]:
+    """Merge knowledge_edges with id-remap and conflict resolution.
+
+    Bug 6a fix (2.2.0): when an edge in src references an entity by id, the
+    src-side id is meaningless (or actively wrong) in the target DB. We remap
+    ``source_id`` and ``target_id`` through ``entity_id_map`` (built by
+    :func:`_merge_entities`) whenever the relevant ``*_table`` is ``'entities'``.
+
+    Conflict-resolution rule (chosen here so callers can rely on it):
+    HIGHEST WEIGHT WINS. If a remapped src edge collides with an existing
+    target edge on the unique business key, we keep ``MAX(existing.weight,
+    src.weight)``. Rationale: weight is the strongest local signal we have for
+    edge quality; preferring the higher weight preserves the strongest
+    relation evidence and never loses the existing edge by accident.
+
+    Self-loops produced by the remap (e.g. an edge X→Y where both X and Y
+    remap to the same target id) are dropped — they're almost always noise
+    and the unique index would otherwise fire on every duplicate self-loop.
+    """
     rows_copied = 0
     conflicts = 0
+    entity_id_map = entity_id_map or {}
 
     if not _table_exists(conn, "src.knowledge_edges"):
         return rows_copied, conflicts
@@ -285,28 +332,86 @@ def _merge_knowledge_edges(conn: sqlite3.Connection, dry_run: bool) -> tuple[int
     col_str = ", ".join(common_cols)
     placeholders = ", ".join("?" * len(common_cols))
 
-    for row in src_rows:
-        vals = [row[src_col_idx[c]] for c in common_cols]
+    # Helper: rewrite an edge tuple's source/target ids when they reference entities.
+    def _remap(row: tuple) -> tuple | None:
+        st = row[src_col_idx["source_table"]]
+        si = row[src_col_idx["source_id"]]
+        tt = row[src_col_idx["target_table"]]
+        ti = row[src_col_idx["target_id"]]
+        new_si = entity_id_map.get(si, si) if st == "entities" else si
+        new_ti = entity_id_map.get(ti, ti) if tt == "entities" else ti
+        # Drop self-loops introduced by the remap collapse.
+        if st == tt and new_si == new_ti:
+            return None
+        # Apply remap to the row in column order (shallow copy).
+        new_row = list(row)
+        new_row[src_col_idx["source_id"]] = new_si
+        new_row[src_col_idx["target_id"]] = new_ti
+        return tuple(new_row)
+
+    for raw_row in src_rows:
+        remapped = _remap(raw_row)
+        if remapped is None:
+            # Self-loop after remap — silently drop (counts as conflict for the report).
+            conflicts += 1
+            continue
+
+        vals = [remapped[src_col_idx[c]] for c in common_cols]
+
         if not dry_run:
-            try:
-                conn.execute(
-                    f"INSERT OR IGNORE INTO knowledge_edges ({col_str}) VALUES ({placeholders})",
-                    vals,
+            # Highest-weight-wins via ON CONFLICT. We can't reference excluded.weight
+            # without naming the conflict columns explicitly, so we use the unique
+            # business key from `uq_knowledge_edges_relation`.
+            if "weight" in common_cols:
+                sql = (
+                    f"INSERT INTO knowledge_edges ({col_str}) VALUES ({placeholders}) "
+                    "ON CONFLICT(source_table, source_id, target_table, target_id, relation_type) "
+                    "DO UPDATE SET weight = MAX(weight, excluded.weight)"
                 )
-                # rowcount == 0 means the unique constraint fired
+            else:
+                # Fallback for older schemas that lack a weight column.
+                sql = (
+                    f"INSERT OR IGNORE INTO knowledge_edges ({col_str}) "
+                    f"VALUES ({placeholders})"
+                )
+            try:
+                conn.execute(sql, vals)
                 if conn.execute("SELECT changes()").fetchone()[0] == 0:
                     conflicts += 1
                 else:
-                    rows_copied += 1
+                    # changes() counts 1 for both INSERT and the DO UPDATE branch.
+                    # We treat any conflict-resolved row as "conflict" for the
+                    # report, and only fresh inserts as "rows_copied". Detect by
+                    # re-checking row presence: if row id == lastrowid, fresh insert.
+                    last_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                    is_fresh = bool(
+                        conn.execute(
+                            "SELECT 1 FROM knowledge_edges WHERE id = ? AND "
+                            "source_table=? AND source_id=? AND target_table=? "
+                            "AND target_id=? AND relation_type=?",
+                            (
+                                last_id,
+                                remapped[src_col_idx["source_table"]],
+                                remapped[src_col_idx["source_id"]],
+                                remapped[src_col_idx["target_table"]],
+                                remapped[src_col_idx["target_id"]],
+                                remapped[src_col_idx["relation_type"]],
+                            ),
+                        ).fetchone()
+                    )
+                    if is_fresh:
+                        rows_copied += 1
+                    else:
+                        conflicts += 1
             except sqlite3.IntegrityError:
                 conflicts += 1
         else:
-            # In dry_run mode, check if edge already exists
-            st = row[src_col_idx["source_table"]]
-            si = row[src_col_idx["source_id"]]
-            tt = row[src_col_idx["target_table"]]
-            ti = row[src_col_idx["target_id"]]
-            rt = row[src_col_idx["relation_type"]]
+            # Dry-run: predict whether the edge would conflict against current target state.
+            st = remapped[src_col_idx["source_table"]]
+            si = remapped[src_col_idx["source_id"]]
+            tt = remapped[src_col_idx["target_table"]]
+            ti = remapped[src_col_idx["target_id"]]
+            rt = remapped[src_col_idx["relation_type"]]
             exists = conn.execute(
                 "SELECT 1 FROM knowledge_edges WHERE source_table=? AND source_id=? "
                 "AND target_table=? AND target_id=? AND relation_type=?",
@@ -427,10 +532,21 @@ def merge(
     try:
         conn.execute("ATTACH DATABASE ? AS src", (source_path,))
 
+        # Wrap writes in BEGIN IMMEDIATE so a crash mid-merge can't leave the
+        # target half-written. ATTACH itself can't run inside a transaction,
+        # so we open the txn after attaching. Skip in dry_run since no writes.
+        if not dry_run:
+            conn.execute("BEGIN IMMEDIATE")
+
         tables_merged: list[str] = []
         skipped: list[str] = []
         total_copied = 0
         total_conflicts = 0
+        # entity_id_map: src_entity_id -> target_entity_id, populated when the
+        # 'entities' table is merged. Threaded into knowledge_edges so edges
+        # referencing src-side entity ids get rewritten to point at target
+        # ids (Bug 6a fix).
+        entity_id_map: dict[int, int] = {}
 
         for table in tables_to_merge:
             # Check source table exists
@@ -448,9 +564,11 @@ def merge(
             elif table == "memories":
                 copied, conflicts = _merge_memories(conn, dry_run)
             elif table == "entities":
-                copied, conflicts = _merge_entities(conn, dry_run)
+                copied, conflicts, entity_id_map = _merge_entities(conn, dry_run)
             elif table == "knowledge_edges":
-                copied, conflicts = _merge_knowledge_edges(conn, dry_run)
+                copied, conflicts = _merge_knowledge_edges(
+                    conn, dry_run, entity_id_map=entity_id_map
+                )
             elif table == "agent_beliefs":
                 copied, conflicts = _merge_agent_beliefs(conn, dry_run)
             elif table in ("events", "decisions", "affect_log",
