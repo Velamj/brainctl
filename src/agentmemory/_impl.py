@@ -2751,6 +2751,7 @@ def cmd_memory_add(args):
          write_tier, do_index, _now_ts(), _now_ts())
     )
     memory_id = cursor.lastrowid
+    db.commit()  # ensure the INSERT (and FTS trigger) is committed before subprocess exit
 
     # Record gated_from_memory_id audit trail if column exists (migration 025)
     if supersedes_id:

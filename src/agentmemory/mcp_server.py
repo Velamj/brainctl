@@ -756,6 +756,7 @@ def tool_memory_add(agent_id: str, content: str, category: str, scope: str = "gl
          created_at, created_at)
     )
     mid = cur.lastrowid
+    db.commit()  # ensure the INSERT (and FTS trigger) is committed
 
     # Record gated_from_memory_id if column exists (migration 025)
     if supersedes_id:
