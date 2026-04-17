@@ -36,7 +36,9 @@ def _make_db() -> sqlite3.Connection:
             recalled_count  INTEGER NOT NULL DEFAULT 0,
             last_recalled_at TEXT DEFAULT NULL,
             labile_until    TEXT DEFAULT NULL,
-            retrieval_prediction_error REAL DEFAULT NULL
+            retrieval_prediction_error REAL DEFAULT NULL,
+            q_value         REAL DEFAULT 0.5,
+            retired_at      TEXT DEFAULT NULL
         )
     """)
     db.commit()
