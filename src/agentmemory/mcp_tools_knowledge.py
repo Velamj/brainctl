@@ -102,7 +102,7 @@ def tool_knowledge_index(
         memories = conn.execute(
             f"SELECT id, category, scope, content, confidence, recalled_count, "
             f"file_path, file_line, created_at, agent_id "
-            f"FROM memories WHERE {where} ORDER BY category, confidence DESC",
+            f"FROM memories WHERE {where} ORDER BY category, confidence DESC",  # nosec B608 - where built from source-literal predicates only
             params,
         ).fetchall()
 
@@ -199,7 +199,7 @@ def tool_knowledge_report(
         stats: dict[str, Any] = {}
         for tbl in ["memories", "events", "entities", "decisions", "knowledge_edges"]:
             try:
-                stats[tbl] = conn.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]
+                stats[tbl] = conn.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]  # nosec B608 - tbl iterates a hardcoded literal list
             except Exception:
                 stats[tbl] = 0
         active_memories = conn.execute(
@@ -277,7 +277,7 @@ def tool_knowledge_report(
                 f"FROM knowledge_edges ke "
                 f"JOIN entities es ON ke.source_id = es.id AND ke.source_table = 'entities' "
                 f"JOIN entities et ON ke.target_id = et.id AND ke.target_table = 'entities' "
-                f"WHERE ke.source_id IN ({ph}) OR ke.target_id IN ({ph})",
+                f"WHERE ke.source_id IN ({ph}) OR ke.target_id IN ({ph})",  # nosec B608 - ph is "?,?,?,..." placeholder string
                 ent_ids + ent_ids,
             ).fetchall()
             seen: set[str] = set()
@@ -478,12 +478,12 @@ def tool_distill(
             FROM events
             WHERE importance >= ?
             AND event_type NOT IN ({skip})
-        """.format(skip=",".join(f"'{t}'" for t in skip_types))
+        """.format(skip=",".join(f"'{t}'" for t in skip_types))  # nosec B608 - skip_types is a hardcoded literal frozenset
         params: list[Any] = [threshold]
 
         if event_type_list:
             placeholders = ",".join("?" for _ in event_type_list)
-            sql += f" AND event_type IN ({placeholders}) "
+            sql += f" AND event_type IN ({placeholders}) "  # nosec B608 - placeholders is "?,?,..." count-only
             params.extend(event_type_list)
 
         if since:

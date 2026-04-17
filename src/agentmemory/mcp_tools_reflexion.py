@@ -237,7 +237,7 @@ def handle_reflexion_list(arguments: dict) -> dict:
     try:
         db = _db()
         rows = db.execute(
-            f"SELECT * FROM reflexion_lessons {where} ORDER BY confidence DESC, created_at DESC LIMIT ?",
+            f"SELECT * FROM reflexion_lessons {where} ORDER BY confidence DESC, created_at DESC LIMIT ?",  # nosec B608 - where built from source-literal predicates only
             params + [limit],
         ).fetchall()
         _log_access(db, agent_id, "reflexion_list", "reflexion_lessons", None, None, len(rows))
@@ -284,7 +284,7 @@ def handle_reflexion_query(arguments: dict) -> dict:
                 WHERE reflexion_lessons_fts MATCH ?
                   AND rl.status = 'active' AND rl.confidence >= ?
                   {scope_where}
-                ORDER BY rl.confidence DESC, fts_rank LIMIT ?""",
+                ORDER BY rl.confidence DESC, fts_rank LIMIT ?""",  # nosec B608 - scope_where built from source-literal predicates only
                 [sanitized, min_confidence] + scope_params + [top_k],
             ).fetchall()
         else:
@@ -292,7 +292,7 @@ def handle_reflexion_query(arguments: dict) -> dict:
                 f"""SELECT * FROM reflexion_lessons
                 WHERE status = 'active' AND confidence >= ?
                   {scope_where}
-                ORDER BY confidence DESC LIMIT ?""",
+                ORDER BY confidence DESC LIMIT ?""",  # nosec B608 - scope_where built from source-literal predicates only
                 [min_confidence] + scope_params + [top_k],
             ).fetchall()
 
@@ -300,7 +300,7 @@ def handle_reflexion_query(arguments: dict) -> dict:
         if ids:
             placeholders = ",".join("?" * len(ids))
             db.execute(
-                f"UPDATE reflexion_lessons SET times_retrieved = times_retrieved + 1 WHERE id IN ({placeholders})",
+                f"UPDATE reflexion_lessons SET times_retrieved = times_retrieved + 1 WHERE id IN ({placeholders})",  # nosec B608 - placeholders is "?,?,..." count-only
                 ids,
             )
             db.commit()

@@ -501,14 +501,14 @@ def tool_neuro_signal(
 
         if dopamine > 0:
             db.execute(
-                f"UPDATE memories SET confidence = MIN(1.0, confidence + ?) WHERE {where}",
+                f"UPDATE memories SET confidence = MIN(1.0, confidence + ?) WHERE {where}",  # nosec B608 - where built from source-literal predicates only
                 [round(0.1 * magnitude, 4)] + params,
             )
             direction = "boost"
         else:
             db.execute(
                 f"UPDATE memories SET confidence = MAX(0.1, confidence - ?), "
-                f"tags = json_insert(COALESCE(tags, '[]'), '$[#]', 'needs_review') WHERE {where}",
+                f"tags = json_insert(COALESCE(tags, '[]'), '$[#]', 'needs_review') WHERE {where}",  # nosec B608 - where built from source-literal predicates only
                 [round(0.08 * magnitude, 4)] + params,
             )
             direction = "penalize"

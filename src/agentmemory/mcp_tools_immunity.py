@@ -89,7 +89,7 @@ def tool_quarantine_list(
             {where}
             ORDER BY q.created_at DESC
             LIMIT ?
-            """,
+            """,  # nosec B608 - where built from source-literal predicates only
             params + [limit],
         ).fetchall()
         items = [dict(r) for r in rows]

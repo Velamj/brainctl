@@ -135,6 +135,42 @@ def _expertise_scope_to_domain(scope: str | None) -> str | None:
     return scope
 
 
+# ---------------------------------------------------------------------------
+# SQL column allowlist for tool_expertise_update.
+#
+# Defense-in-depth against CWE-89 (SQL injection via column name). The
+# `tool_expertise_update` handler is decorated with **kwargs, so any unknown
+# keyword the MCP dispatcher hands through is silently accepted. The body
+# only assembles SET clauses from hardcoded source-literal predicates today,
+# but locking the writable column set to this frozenset makes the invariant
+# statically auditable and testable. Source of truth: agent_expertise table
+# definition in this module's _ensure_expertise_table.
+_EXPERTISE_UPDATE_ALLOWED_COLUMNS = frozenset({
+    "brier_score",
+    "strength",
+    "updated_at",
+})
+
+
+def _build_expertise_update_sql(assignments: list[tuple[str, Any]]) -> tuple[str | None, list[Any]]:
+    """Build a parameterized UPDATE for agent_expertise from (column, value) pairs.
+
+    Returns (sql, params). `sql` is None when no allowlisted columns are
+    present. The fragment ", ".join(f"{c}=?" for c, _ in accepted) is safe
+    BECAUSE every column name `c` is intersected with
+    _EXPERTISE_UPDATE_ALLOWED_COLUMNS above.
+    """
+    accepted: list[tuple[str, Any]] = [
+        (col, val) for col, val in assignments
+        if col in _EXPERTISE_UPDATE_ALLOWED_COLUMNS
+    ]
+    if not accepted:
+        return None, []
+    set_clause = ", ".join(f"{col}=?" for col, _ in accepted)  # nosec B608 - cols allowlisted
+    sql = f"UPDATE agent_expertise SET {set_clause} WHERE agent_id=? AND domain=?"  # nosec B608
+    return sql, [val for _, val in accepted]
+
+
 def _ensure_expertise_table(conn: sqlite3.Connection) -> None:
     conn.execute("""
         CREATE TABLE IF NOT EXISTS agent_expertise (
@@ -494,21 +530,23 @@ def tool_expertise_update(
                 "error": f"No expertise entry for agent='{agent_id}' domain='{domain}'. Run expertise_build first.",
             }
 
-        updates = []
-        params: list[Any] = []
+        # Pre-compute timestamp in Python so every column value is bound
+        # positionally — no SQL functions in the SET clause, no caller-derived
+        # identifier ever touches the SQL string.
+        now_iso_str = _now()
+        assignments: list[tuple[str, Any]] = []
         if brier is not None:
-            updates.append("brier_score=?")
-            params.append(brier)
+            assignments.append(("brier_score", brier))
         if strength is not None:
-            updates.append("strength=?")
-            params.append(strength)
-        updates.append("updated_at=datetime('now')")
+            assignments.append(("strength", strength))
+        assignments.append(("updated_at", now_iso_str))
+
+        sql, params = _build_expertise_update_sql(assignments)
+        if sql is None:
+            return {"ok": False, "error": "No allowlisted fields to update"}
         params.extend([agent_id, domain])
 
-        conn.execute(
-            f"UPDATE agent_expertise SET {', '.join(updates)} WHERE agent_id=? AND domain=?",
-            params,
-        )
+        conn.execute(sql, params)
         conn.commit()
 
         result: dict[str, Any] = {"ok": True, "agent_id": agent_id, "domain": domain}
@@ -562,7 +600,7 @@ def tool_whosknows(
             GROUP BY e.agent_id
             ORDER BY total_score DESC
             LIMIT ?
-            """,
+            """,  # nosec B608 - like_clauses repeats source-literal "e.domain LIKE ?" with ?-placeholder bindings
             like_params + [min_strength, top_n],
         ).fetchall()
 

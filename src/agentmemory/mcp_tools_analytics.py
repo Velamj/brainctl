@@ -348,7 +348,7 @@ def tool_memory_utility_rate(
         if all_pushed_ids:
             ph = ",".join("?" * len(all_pushed_ids))
             current_rows = conn.execute(
-                f"SELECT id, recalled_count FROM memories WHERE id IN ({ph})",
+                f"SELECT id, recalled_count FROM memories WHERE id IN ({ph})",  # nosec B608 - ph is "?,?,..." count-only
                 list(all_pushed_ids),
             ).fetchall()
             for m in current_rows:

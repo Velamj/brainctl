@@ -313,7 +313,7 @@ def _consolidation_events(agent_id: str, days: int = 30, limit: int = 50) -> dic
               AND created_at >= strftime('%Y-%m-%dT%H:%M:%S', 'now', ?)
             ORDER BY created_at DESC
             LIMIT ?
-            """,
+            """,  # nosec B608 - placeholders is "?,?,..." count-only
             (agent_id, *_CONSOLIDATION_EVENT_TYPES, f"-{days} days", limit),
         ).fetchall()
 
