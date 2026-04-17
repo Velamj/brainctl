@@ -125,12 +125,18 @@ CREATE TRIGGER memories_fts_insert AFTER INSERT ON memories WHEN new.indexed = 1
 END;
 
 -- Split into two triggers so 0→1 promotion correctly adds to FTS without double-delete.
+-- Added `NEW.retired_at IS NULL` guard on the INSERT leg so retire UPDATEs
+-- (retired_at NULL → non-NULL) do not re-insert the row. The companion
+-- trg_memories_fts_purge_on_retire trigger near the end of this file does
+-- the actual DELETE at the retire transition; without this guard, the
+-- 'delete' command issued there is silently no-op'd by FTS5 statement-level
+-- batching against the pending INSERT.
 CREATE TRIGGER memories_fts_update_delete AFTER UPDATE ON memories WHEN old.indexed = 1 BEGIN
     INSERT INTO memories_fts(memories_fts, rowid, content, category, tags)
     VALUES ('delete', old.id, old.content, old.category, old.tags);
 END;
 
-CREATE TRIGGER memories_fts_update_insert AFTER UPDATE ON memories WHEN new.indexed = 1 BEGIN
+CREATE TRIGGER memories_fts_update_insert AFTER UPDATE ON memories WHEN new.indexed = 1 AND new.retired_at IS NULL BEGIN
     INSERT INTO memories_fts(rowid, content, category, tags)
     VALUES (new.id, new.content, new.category, new.tags);
 END;
@@ -1640,3 +1646,51 @@ CREATE TABLE IF NOT EXISTS context_profiles (
     entity_types TEXT,
     created_at   TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%S', 'now'))
 );
+
+-- ===========================================================================
+-- FK INTEGRITY DELETE TRIGGERS  (mirrored from migration 048)
+-- ===========================================================================
+-- See db/migrations/048_fk_integrity_fts_retire_trigger.sql for full rationale.
+-- These triggers fire only when PRAGMA foreign_keys = OFF (raw SQL admin,
+-- merge.py:586 which disables FK during merge). With FK ON the SQLite default
+-- NO ACTION rejects orphan-creating parent DELETEs outright.
+
+CREATE TRIGGER IF NOT EXISTS trg_agent_delete_nullify_validation
+AFTER DELETE ON agents
+BEGIN
+    UPDATE memories
+       SET validation_agent_id = NULL
+     WHERE validation_agent_id = OLD.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_memory_delete_cascade_edges
+AFTER DELETE ON memories
+BEGIN
+    DELETE FROM knowledge_edges
+     WHERE (source_table = 'memories' AND source_id = OLD.id)
+        OR (target_table = 'memories' AND target_id = OLD.id);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_entity_delete_cascade_edges
+AFTER DELETE ON entities
+BEGIN
+    DELETE FROM knowledge_edges
+     WHERE (source_table = 'entities' AND source_id = OLD.id)
+        OR (target_table = 'entities' AND target_id = OLD.id);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_event_delete_cascade_edges
+AFTER DELETE ON events
+BEGIN
+    DELETE FROM knowledge_edges
+     WHERE (source_table = 'events' AND source_id = OLD.id)
+        OR (target_table = 'events' AND target_id = OLD.id);
+END;
+
+-- FTS5 retire-aware re-index: handled inline by the
+-- memories_fts_update_insert trigger above, which has a `WHEN ... AND
+-- new.retired_at IS NULL` guard. memories_fts_update_delete fires
+-- unconditionally on any UPDATE when old.indexed = 1, which removes the
+-- FTS5 row at the retire transition; the guarded _update_insert then does
+-- NOT re-insert. Net: retired memories vanish from FTS5 immediately, no
+-- separate purge trigger needed (and no double-delete risk).
