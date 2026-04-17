@@ -15700,6 +15700,20 @@ def build_parser():
         ),
     )
 
+    # --- update ---
+    update_p = sub.add_parser(
+        "update",
+        help="Upgrade brainctl + run pending migrations (one-shot installer refresh)",
+    )
+    update_p.add_argument("--dry-run", action="store_true",
+                          help="Print the planned upgrade + migrate steps without executing them")
+    update_p.add_argument("--pre", action="store_true",
+                          help="Accept pre-releases when running pip install -U (no-op for pipx)")
+    update_p.add_argument("--skip-migrate", action="store_true",
+                          help="Upgrade the pip package but don't auto-run brainctl migrate afterwards")
+    update_p.add_argument("--json", action="store_true",
+                          help="Emit a structured JSON summary instead of human-readable text")
+
     # --- archive-dead-tables (Phase 2a safety net) ---
     p_archive = sub.add_parser(
         "archive-dead-tables",
@@ -15867,6 +15881,182 @@ def cmd_migrate(args):
         return
 
     json_out(migrate_run(db, dry_run=dry_run))
+
+
+# ---------------------------------------------------------------------------
+# Update — upgrade brainctl + run pending migrations in one shot
+# ---------------------------------------------------------------------------
+
+def cmd_update(args):
+    """Upgrade the installed brainctl package, then run pending migrations.
+
+    Why this command at all: a brainctl release usually ships both code
+    AND new schema migrations, and users were forgetting the second
+    half. `brainctl update` makes it one step.
+
+    Flow:
+      1. detect install mode (dev / pipx / pip / unknown)
+      2. record old version (so we can show a transition in the summary)
+      3. run pip/pipx upgrade (or skip for dev installs — git pull is theirs)
+      4. read new version from the freshly-installed binary
+      5. ask `brainctl doctor --json` whether migrations are safe to run
+         (specifically: refuse if migrations.state == "virgin-tracker-with-drift")
+      6. shell out to the *new* `brainctl migrate` so it picks up
+         schema logic that the parent process can't see (parent has the
+         pre-upgrade modules in sys.modules already)
+      7. emit a summary
+
+    Why subprocess for the migrate step instead of importing migrate.run:
+    after `pip install -U brainctl`, the new code is on disk but the
+    parent's `sys.modules` still holds the OLD module objects. A
+    sys.modules pop + reimport dance is fragile (transitive imports,
+    cached classes); a child process is the clean reset.
+    """
+    from agentmemory import update as _upd
+
+    dry_run = bool(getattr(args, "dry_run", False))
+    pre = bool(getattr(args, "pre", False))
+    skip_migrate = bool(getattr(args, "skip_migrate", False))
+    as_json = bool(getattr(args, "json", False))
+
+    summary: Dict[str, Any] = {
+        "ok": True,
+        "dry_run": dry_run,
+        "old_version": VERSION,
+        "new_version": None,
+        "install_mode": None,
+        "install_info": None,
+        "upgrade": None,
+        "migrations_applied": 0,
+        "migrate_skipped_reason": None,
+        "warnings": [],
+    }
+
+    # 1. detect install mode
+    mode, info = _upd.detect_install_mode(cwd=Path.cwd())
+    summary["install_mode"] = mode
+    summary["install_info"] = info
+    if not as_json:
+        print(f"brainctl update — detected install mode: {mode} ({info.get('reason')})")
+
+    # 2. plan upgrade step
+    if mode == "dev" or mode == "unknown":
+        msg = (
+            f"Dev install detected at {info.get('editable_location') or info.get('location') or '<unknown>'}. "
+            "Update via `git pull` + `pip install -e .`. Skipping auto-upgrade."
+        )
+        summary["upgrade"] = {"action": "skip", "reason": msg}
+        if not as_json:
+            print(msg)
+    elif mode == "pipx":
+        summary["upgrade"] = {"action": "pipx upgrade brainctl", "would_run": True}
+        if not as_json:
+            print(f"Plan: pipx upgrade brainctl")
+    elif mode == "pip":
+        cmd_str = "pip install -U brainctl" + (" --pre" if pre else "")
+        summary["upgrade"] = {"action": cmd_str, "would_run": True}
+        if not as_json:
+            print(f"Plan: {cmd_str}")
+
+    # 3. execute upgrade (unless dry-run or dev-install)
+    if not dry_run and summary["upgrade"] and summary["upgrade"].get("would_run"):
+        if mode == "pipx":
+            res = _upd.run_pipx_upgrade()
+        else:  # pip
+            res = _upd.run_pip_upgrade(pre=pre)
+        summary["upgrade"]["result"] = _scrub_subprocess(res)
+        if not res["ok"]:
+            summary["ok"] = False
+            summary["warnings"].append(f"upgrade step failed (rc={res['returncode']})")
+            if not as_json:
+                print(res.get("stderr", "").strip() or "<no stderr>", file=sys.stderr)
+                print("Aborting: upgrade failed.", file=sys.stderr)
+            _emit_update_summary(summary, as_json)
+            sys.exit(1)
+
+    # 4. read new version from post-upgrade binary
+    if dry_run:
+        summary["new_version"] = "(dry-run: not queried)"
+    else:
+        new_v = _upd.run_brainctl_version()
+        summary["new_version"] = new_v or "(unknown — `brainctl version` failed)"
+        if not new_v:
+            summary["warnings"].append("could not determine new version from `brainctl version`")
+
+    # 5. doctor check + migrate (unless skipped)
+    if skip_migrate:
+        summary["migrate_skipped_reason"] = "--skip-migrate flag set"
+    elif dry_run:
+        summary["migrate_skipped_reason"] = "dry-run; would call `brainctl migrate` next"
+        if not as_json:
+            print("Plan: brainctl doctor --json (then brainctl migrate if safe)")
+    else:
+        doctor = _upd.run_doctor_json()
+        mig_state = ((doctor.get("migrations") or {}).get("state")) if doctor.get("ok", True) else None
+        # virgin-tracker-with-drift is the only state where running
+        # migrate would corrupt the user's DB; everything else is safe.
+        # See cmd_doctor (this file, ~line 7517) for the full state table.
+        if mig_state == "virgin-tracker-with-drift":
+            summary["migrate_skipped_reason"] = "doctor reported virgin-tracker-with-drift"
+            summary["warnings"].append("virgin tracker detected — see recovery steps")
+            if not as_json:
+                print(_upd.VIRGIN_TRACKER_RECOVERY, file=sys.stderr)
+            _emit_update_summary(summary, as_json)
+            sys.exit(2)
+        if not doctor.get("ok", True):
+            # Doctor itself errored — surface it but don't auto-migrate
+            summary["migrate_skipped_reason"] = (
+                f"`brainctl doctor` failed: {doctor.get('error', 'unknown')}"
+            )
+            summary["warnings"].append("doctor check failed; skipping migrate")
+        else:
+            mig_res = _upd.run_brainctl_migrate()
+            summary["migrate_result"] = _scrub_subprocess(mig_res.get("_subprocess", {}))
+            summary["migrations_applied"] = int(mig_res.get("applied", 0) or 0)
+            if not mig_res.get("ok", False):
+                summary["ok"] = False
+                summary["warnings"].append("migrate step failed")
+
+    _emit_update_summary(summary, as_json)
+
+
+def _scrub_subprocess(res: Dict[str, Any]) -> Dict[str, Any]:
+    """Trim subprocess result dicts so the JSON summary stays readable.
+
+    Drops the full stdout/stderr (often pip noise pages long) but keeps
+    the kind, command, returncode, and a stderr tail for diagnosis.
+    """
+    if not res:
+        return {}
+    stderr = res.get("stderr", "") or ""
+    return {
+        "kind": res.get("kind"),
+        "cmd": res.get("cmd"),
+        "returncode": res.get("returncode"),
+        "stderr_tail": stderr[-400:] if stderr else "",
+    }
+
+
+def _emit_update_summary(summary: Dict[str, Any], as_json: bool) -> None:
+    """Print the final summary (JSON or human)."""
+    if as_json:
+        json_out(summary)
+        return
+    old = summary.get("old_version") or "?"
+    new = summary.get("new_version") or "?"
+    applied = summary.get("migrations_applied", 0)
+    warns = summary.get("warnings", [])
+    print()
+    print(f"  version:    {old} -> {new}")
+    print(f"  migrations: {applied} applied")
+    if summary.get("migrate_skipped_reason"):
+        print(f"  migrate:    skipped ({summary['migrate_skipped_reason']})")
+    if warns:
+        print(f"  warnings:   {len(warns)}")
+        for w in warns:
+            print(f"    - {w}")
+    else:
+        print(f"  warnings:   none")
 
 
 # ---------------------------------------------------------------------------
@@ -16630,6 +16820,9 @@ def main():
         fn = cmd_config
     elif args.command == "migrate":
         cmd_migrate(args)
+        return
+    elif args.command == "update":
+        cmd_update(args)
         return
     elif args.command == "archive-dead-tables":
         cmd_archive_dead_tables(args)
