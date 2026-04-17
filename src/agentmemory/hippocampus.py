@@ -863,7 +863,10 @@ def compute_ewc_importance(conn: sqlite3.Connection, now: Optional[datetime] = N
 
     Memories with ewc_importance > 0.7 receive heightened protection in consolidation:
     - consolidate/compress passes exclude them (like protected=1)
-    - resolve_contradictions requires similarity > 0.9 before retiring them
+    - resolve_contradictions requires similarity > 0.9 before retiring **either**
+      side of the contradiction (symmetric check; below threshold the pair is
+      flagged with a 'EWC-protected contradiction queued for review' warning
+      event instead of any silent retirement)
 
     Returns: {"updated": N}
     """
@@ -2543,8 +2546,20 @@ def resolve_contradictions(conn: sqlite3.Connection, llm_fn: Optional[Any] = Non
 
     For non-permanent memories, retires the lower-confidence one.
     For permanent memories, logs a warning event instead.
-    EWC protection: if the loser has ewc_importance > 0.7, requires text similarity > 0.9
-    before retiring (high bar for deletion of high-value memories).
+
+    Bug 8 fix (2.2.0): EWC protection is now symmetric. The prior
+    implementation only inspected the loser-by-confidence's
+    ``ewc_importance``; a memory with high EWC that happened to win the
+    confidence comparison would never be checked, so its low-EWC partner could
+    be silently retired even though a later belief revision could flip the
+    confidence ordering and silently drop the high-value memory.
+
+    New behavior: if **either** side has ``ewc_importance > 0.7``, the pair
+    requires text similarity > 0.9 before any retirement. When the bar is not
+    cleared, the contradiction is queued for human review via a ``warning``
+    event (``event_type='warning'``,
+    ``summary='EWC-protected contradiction queued for review'``) — the
+    high-value memory stays active until a human or supervisor resolves it.
     """
     _has_ewc = has_column(conn, "memories", "ewc_importance")
     _ewc_select = ", ewc_importance" if _has_ewc else ""
@@ -2566,6 +2581,8 @@ def resolve_contradictions(conn: sqlite3.Connection, llm_fn: Optional[Any] = Non
 
     stats = {"contradictions_found": 0, "retired": 0, "warnings": 0, "skipped_ewc_protected": 0}
     now_sql = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    EWC_THRESHOLD = 0.7
+    SIM_THRESHOLD = 0.9
 
     for (category, scope), group_mems in groups.items():
         checked = set()
@@ -2603,25 +2620,50 @@ def resolve_contradictions(conn: sqlite3.Connection, llm_fn: Optional[Any] = Non
                     stats["warnings"] += 1
                     continue
 
-                # Retire the lower-confidence one (or the older one if tied)
-                if a["confidence"] >= b["confidence"]:
-                    loser = b
-                else:
-                    loser = a
-
-                # EWC protection: high-importance memories require a very strong contradiction
-                # signal (text similarity > 0.9) before they can be retired.
+                # EWC protection check — runs BEFORE picking a loser, because the
+                # high-EWC side might be the higher-confidence one and would
+                # otherwise be ignored by the original loser-only check.
                 if _has_ewc:
-                    loser_ewc = float(loser.get("ewc_importance") or 0.0)
-                    if loser_ewc > 0.7:
+                    a_ewc = float(a.get("ewc_importance") or 0.0)
+                    b_ewc = float(b.get("ewc_importance") or 0.0)
+                    if a_ewc > EWC_THRESHOLD or b_ewc > EWC_THRESHOLD:
                         sim = SequenceMatcher(
                             None,
                             a["content"].lower().strip(),
                             b["content"].lower().strip(),
                         ).ratio()
-                        if sim <= 0.9:
+                        if sim <= SIM_THRESHOLD:
+                            # Don't retire — flag for review. Both stats counters
+                            # bump: skipped_ewc_protected (operational metric) and
+                            # warnings (human-review queue size).
+                            conn.execute(
+                                """
+                                INSERT INTO events (agent_id, event_type, summary, detail, importance, created_at)
+                                VALUES (?, 'warning', ?, ?, 0.9, ?)
+                                """,
+                                (
+                                    a["agent_id"],
+                                    "EWC-protected contradiction queued for review",
+                                    (
+                                        f"Memory {a['id']} (ewc={a_ewc:.3f}, conf={a['confidence']}): "
+                                        f"{a['content']}\n"
+                                        f"Memory {b['id']} (ewc={b_ewc:.3f}, conf={b['confidence']}): "
+                                        f"{b['content']}\n"
+                                        f"Text similarity={sim:.3f} (threshold {SIM_THRESHOLD})"
+                                    ),
+                                    now_sql,
+                                ),
+                            )
                             stats["skipped_ewc_protected"] += 1
+                            stats["warnings"] += 1
                             continue
+
+                # Retire the lower-confidence one (older one wins on tie because
+                # `a` has the lower id from the `ORDER BY ... id` query).
+                if a["confidence"] >= b["confidence"]:
+                    loser = b
+                else:
+                    loser = a
 
                 # Bayesian update: increment beta for the loser (contradiction evidence)
                 _has_ab = has_column(conn, "memories", "alpha")

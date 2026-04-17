@@ -459,7 +459,11 @@ class TestTrustDecay:
 # ---------------------------------------------------------------------------
 
 class TestTrustUpdateContradiction:
-    def test_unresolved_penalizes_both(self, isolated_db):
+    """Bug 7 (2.2.0): contradiction penalties target the lower-trust side, not
+    the argument-order side."""
+
+    def test_unresolved_penalizes_lower_trust_only(self, isolated_db):
+        # A is higher trust → winner; B is lower trust → loser eats -0.20.
         mid_a = _insert_memory(isolated_db, trust_score=0.9, agent_id="agent-a")
         mid_b = _insert_memory(isolated_db, trust_score=0.8, agent_id="agent-a")
         result = trust_mod.tool_trust_update_contradiction(
@@ -467,25 +471,85 @@ class TestTrustUpdateContradiction:
         )
         assert result["ok"] is True
         assert result["resolved"] is False
+        assert result["tie"] is False
+        assert result["loser_id"] == mid_b
+        assert result["winner_id"] == mid_a
         scores = {m["id"]: m["trust_score"] for m in result["updated_memories"]}
-        assert scores[mid_a] <= 0.7   # 0.9 - 0.20
-        assert scores[mid_b] <= 0.6   # 0.8 - 0.20
+        assert abs(scores[mid_a] - 0.9) < 0.01   # winner unchanged on unresolved
+        assert abs(scores[mid_b] - 0.6) < 0.01   # loser eats 0.8 - 0.20
 
-    def test_resolved_penalizes_only_a(self, isolated_db):
-        mid_a = _insert_memory(isolated_db, trust_score=0.9, agent_id="agent-a")
-        mid_b = _insert_memory(isolated_db, trust_score=0.8, agent_id="agent-a")
+    def test_unresolved_loser_penalized_regardless_of_arg_order(self, isolated_db):
+        # Same memories, swapped order — outcome must be identical.
+        mid_high = _insert_memory(isolated_db, trust_score=0.9, agent_id="agent-a")
+        mid_low  = _insert_memory(isolated_db, trust_score=0.8, agent_id="agent-a")
+        result = trust_mod.tool_trust_update_contradiction(
+            memory_id_a=mid_low, memory_id_b=mid_high, resolved=False
+        )
+        assert result["ok"] is True
+        assert result["loser_id"] == mid_low
+        assert result["winner_id"] == mid_high
+        scores = {m["id"]: m["trust_score"] for m in result["updated_memories"]}
+        assert abs(scores[mid_high] - 0.9) < 0.01
+        assert abs(scores[mid_low] - 0.6) < 0.01
+
+    def test_resolved_loser_minor_penalty_winner_reinforced(self, isolated_db):
+        mid_high = _insert_memory(isolated_db, trust_score=0.9, agent_id="agent-a")
+        mid_low  = _insert_memory(isolated_db, trust_score=0.8, agent_id="agent-a")
+        result = trust_mod.tool_trust_update_contradiction(
+            memory_id_a=mid_high, memory_id_b=mid_low, resolved=True
+        )
+        assert result["ok"] is True
+        assert result["resolved"] is True
+        assert result["loser_id"] == mid_low
+        assert result["winner_id"] == mid_high
+        scores = {m["id"]: m["trust_score"] for m in result["updated_memories"]}
+        # Loser (was 0.8) loses 0.05 → 0.75
+        assert abs(scores[mid_low] - 0.75) < 0.01
+        # Winner (was 0.9) gains 0.02 → 0.92
+        assert abs(scores[mid_high] - 0.92) < 0.01
+
+    def test_resolved_higher_trust_penalty_does_not_invert(self, isolated_db):
+        # Regression guard for the original bug: if memory_id_a happens to be the
+        # higher-trust one, it must NOT be penalized just because it appears first.
+        mid_a = _insert_memory(isolated_db, trust_score=0.95, agent_id="agent-r")
+        mid_b = _insert_memory(isolated_db, trust_score=0.50, agent_id="agent-r")
         result = trust_mod.tool_trust_update_contradiction(
             memory_id_a=mid_a, memory_id_b=mid_b, resolved=True
         )
         assert result["ok"] is True
-        assert result["resolved"] is True
+        assert result["loser_id"] == mid_b
         scores = {m["id"]: m["trust_score"] for m in result["updated_memories"]}
-        # Only mid_a gets penalized by 0.05
-        assert abs(scores[mid_a] - 0.85) < 0.01
-        # mid_b stays at 0.8 (no UPDATE touches it in resolved=True path)
-        assert abs(scores[mid_b] - 0.8) < 0.01
+        assert abs(scores[mid_a] - 0.97) < 0.01  # winner reinforced
+        assert abs(scores[mid_b] - 0.45) < 0.01  # loser penalized
+
+    def test_tie_penalizes_both_unresolved(self, isolated_db):
+        mid_a = _insert_memory(isolated_db, trust_score=0.7, agent_id="agent-tie")
+        mid_b = _insert_memory(isolated_db, trust_score=0.7, agent_id="agent-tie")
+        result = trust_mod.tool_trust_update_contradiction(
+            memory_id_a=mid_a, memory_id_b=mid_b, resolved=False
+        )
+        assert result["ok"] is True
+        assert result["tie"] is True
+        assert result["loser_id"] is None
+        assert result["winner_id"] is None
+        scores = {m["id"]: m["trust_score"] for m in result["updated_memories"]}
+        assert abs(scores[mid_a] - 0.5) < 0.01
+        assert abs(scores[mid_b] - 0.5) < 0.01
+
+    def test_tie_penalizes_both_resolved(self, isolated_db):
+        mid_a = _insert_memory(isolated_db, trust_score=0.7, agent_id="agent-tie")
+        mid_b = _insert_memory(isolated_db, trust_score=0.7, agent_id="agent-tie")
+        result = trust_mod.tool_trust_update_contradiction(
+            memory_id_a=mid_a, memory_id_b=mid_b, resolved=True
+        )
+        assert result["ok"] is True
+        assert result["tie"] is True
+        scores = {m["id"]: m["trust_score"] for m in result["updated_memories"]}
+        assert abs(scores[mid_a] - 0.65) < 0.01
+        assert abs(scores[mid_b] - 0.65) < 0.01
 
     def test_floor_at_030(self, isolated_db):
+        # Both at floor with tie → both stay at 0.30.
         mid_a = _insert_memory(isolated_db, trust_score=0.3, agent_id="agent-floor")
         mid_b = _insert_memory(isolated_db, trust_score=0.3, agent_id="agent-floor")
         result = trust_mod.tool_trust_update_contradiction(
@@ -494,6 +558,26 @@ class TestTrustUpdateContradiction:
         assert result["ok"] is True
         for m in result["updated_memories"]:
             assert m["trust_score"] >= 0.30
+
+    def test_winner_ceiling_at_one(self, isolated_db):
+        # Winner reinforcement must not exceed 1.0.
+        mid_high = _insert_memory(isolated_db, trust_score=0.99, agent_id="agent-cap")
+        mid_low  = _insert_memory(isolated_db, trust_score=0.5, agent_id="agent-cap")
+        result = trust_mod.tool_trust_update_contradiction(
+            memory_id_a=mid_high, memory_id_b=mid_low, resolved=True
+        )
+        assert result["ok"] is True
+        scores = {m["id"]: m["trust_score"] for m in result["updated_memories"]}
+        assert scores[mid_high] <= 1.0
+
+    def test_missing_memory_returns_error(self, isolated_db):
+        # Regression guard: invalid IDs must not silently no-op or crash.
+        mid_a = _insert_memory(isolated_db, trust_score=0.8, agent_id="agent-x")
+        result = trust_mod.tool_trust_update_contradiction(
+            memory_id_a=mid_a, memory_id_b=99999, resolved=False
+        )
+        assert result["ok"] is False
+        assert "must exist" in result["error"].lower() or "not found" in result["error"].lower()
 
     def test_dispatch(self, isolated_db):
         mid_a = _insert_memory(isolated_db, trust_score=0.8, agent_id="agent-d")

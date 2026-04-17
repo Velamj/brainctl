@@ -550,25 +550,88 @@ def tool_trust_decay(dry_run: bool = False) -> dict:
 
 
 def tool_trust_update_contradiction(memory_id_a: int, memory_id_b: int, resolved: bool = False) -> dict:
-    """Penalize trust scores on contradicting memories."""
+    """Penalize trust scores on contradicting memories — AGM-correct (loser-by-trust).
+
+    Bug 7 fix (2.2.0): the prior implementation penalized memories by *argument
+    order*, not by who lost the contradiction. AGM prescribes that the lower-trust
+    side absorbs the larger penalty (it lost), while the higher-trust side either
+    holds steady (unresolved — conflict still live) or earns a small reinforcement
+    (resolved — its credibility was vindicated).
+
+    Penalty schedule:
+      - ``resolved=False`` (still in conflict):   loser -0.20, winner unchanged.
+      - ``resolved=True``  (post-resolution):     loser -0.05, winner +0.02.
+
+    Tie-breaker: on exact trust equality, penalize both equally with the same
+    delta (-0.20 unresolved, -0.05 resolved). Entrenchment-by-age is intentionally
+    *not* used here — temporal entrenchment is the PII gate's responsibility, not
+    trust's.
+
+    Floor: trust_score is clamped to [0.30, 1.0].
+    """
     db = _db()
     try:
-        if resolved:
-            db.execute(
-                "UPDATE memories SET trust_score = ROUND(MAX(0.30, trust_score - 0.05), 4), "
-                "updated_at = strftime('%Y-%m-%dT%H:%M:%S','now') WHERE id = ?", (memory_id_a,)
-            )
-        else:
-            db.execute(
-                "UPDATE memories SET trust_score = ROUND(MAX(0.30, trust_score - 0.20), 4), "
-                "updated_at = strftime('%Y-%m-%dT%H:%M:%S','now') WHERE id IN (?, ?)",
-                (memory_id_a, memory_id_b)
-            )
         rows = db.execute(
-            "SELECT id, trust_score FROM memories WHERE id IN (?, ?)", (memory_id_a, memory_id_b)
+            "SELECT id, trust_score FROM memories WHERE id IN (?, ?)",
+            (memory_id_a, memory_id_b)
+        ).fetchall()
+        if len(rows) != 2:
+            return {
+                "ok": False,
+                "error": f"Both memories must exist; found {len(rows)} of 2 "
+                         f"(ids: {memory_id_a}, {memory_id_b})",
+            }
+
+        scores = {int(r["id"]): float(r["trust_score"] or 1.0) for r in rows}
+        trust_a = scores[memory_id_a]
+        trust_b = scores[memory_id_b]
+
+        # Loser = lower-trust side. On exact tie, treat both as losers.
+        tie = (trust_a == trust_b)
+        if tie:
+            loser_id, winner_id = None, None
+        elif trust_a < trust_b:
+            loser_id, winner_id = memory_id_a, memory_id_b
+        else:
+            loser_id, winner_id = memory_id_b, memory_id_a
+
+        loser_delta = -0.05 if resolved else -0.20
+        # Winner reinforcement only when the contradiction is settled — premature
+        # reinforcement during a live conflict would mis-credit a still-disputed
+        # memory.
+        winner_delta = 0.02 if resolved else 0.0
+
+        def _apply(mem_id: int, delta: float) -> None:
+            db.execute(
+                "UPDATE memories SET "
+                "trust_score = ROUND(MIN(1.0, MAX(0.30, trust_score + ?)), 4), "
+                "updated_at = strftime('%Y-%m-%dT%H:%M:%S','now') "
+                "WHERE id = ?",
+                (delta, mem_id)
+            )
+
+        if tie:
+            # Symmetric tie: both sides eat the loser-side delta.
+            _apply(memory_id_a, loser_delta)
+            _apply(memory_id_b, loser_delta)
+        else:
+            _apply(loser_id, loser_delta)
+            if winner_delta != 0.0:
+                _apply(winner_id, winner_delta)
+
+        out_rows = db.execute(
+            "SELECT id, trust_score FROM memories WHERE id IN (?, ?)",
+            (memory_id_a, memory_id_b)
         ).fetchall()
         db.commit()
-        return {"ok": True, "resolved": resolved, "updated_memories": _rows_to_list(rows)}
+        return {
+            "ok": True,
+            "resolved": resolved,
+            "loser_id": loser_id,
+            "winner_id": winner_id,
+            "tie": tie,
+            "updated_memories": _rows_to_list(out_rows),
+        }
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
     finally:
@@ -780,10 +843,12 @@ TOOLS: list[Tool] = [
     Tool(
         name="trust_update_contradiction",
         description=(
-            "Penalize the trust scores of two contradicting memories. "
-            "If resolved=false (default), both memories are penalized by 0.20. "
-            "If resolved=true, only memory_id_a is penalized by 0.05 (loser-of-conflict penalty). "
-            "Minimum score floor is 0.30."
+            "Penalize the trust scores of two contradicting memories — AGM-correct. "
+            "Identifies the lower-trust side as the loser; argument order is irrelevant. "
+            "If resolved=false (default), the loser is penalized by 0.20 and the winner is unchanged. "
+            "If resolved=true, the loser is penalized by 0.05 and the winner is reinforced by 0.02. "
+            "On exact trust tie, both memories absorb the loser-side delta. "
+            "Score is clamped to [0.30, 1.0]. Returns loser_id, winner_id, and tie flag."
         ),
         inputSchema={
             "type": "object",
