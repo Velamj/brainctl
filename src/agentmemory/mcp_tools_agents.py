@@ -59,6 +59,33 @@ def _tom_tables_exist(db) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# SQL column allowlist for tool_task_update.
+#
+# Defense-in-depth against CWE-89 (SQL injection via column name). The
+# `tool_task_update` handler is decorated with **kw, which means any unknown
+# keyword the MCP dispatcher hands through is silently accepted. Today the
+# function body only assembles SET clauses from hardcoded source-literal
+# predicates ("status = ?", "priority = ?", etc.), so no caller-supplied
+# identifier reaches SQL. But that invariant lives in the function body and
+# is easy to break in a future refactor that iterates **kw directly. Locking
+# the writable column set to this frozenset makes the invariant statically
+# auditable and testable (see tests/test_sqli_tool_modules.py).
+#
+# Source of truth: db/init_schema.sql tasks table definition. id, created_at,
+# and external_id/external_system are intentionally excluded (immutable after
+# creation or managed by SQLite).
+_TASK_UPDATE_ALLOWED_COLUMNS = frozenset({
+    "status",
+    "completed_at",
+    "claimed_at",
+    "claimed_by",
+    "assigned_agent_id",
+    "priority",
+    "updated_at",
+})
+
+
+# ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
 
@@ -211,36 +238,62 @@ def tool_task_add(agent_id: str = "mcp-client", *, title: str,
         db.close()
 
 
+def _build_task_update_sql(assignments: list[tuple[str, Any]]) -> tuple[str | None, list[Any]]:
+    """Build a parameterized UPDATE for the tasks table from (column, value) pairs.
+
+    Returns (sql, params). `sql` is None when no allowlisted columns are present
+    (caller surfaces "no fields to update" to the user). Pure function — no DB
+    handle, no I/O — so the SQL-shape invariant is testable in isolation.
+
+    The fragment ", ".join(f"{c} = ?" for c, _ in accepted) is safe BECAUSE
+    every column name `c` is intersected with _TASK_UPDATE_ALLOWED_COLUMNS
+    above; no caller-supplied identifier ever reaches the SQL string.
+    """
+    accepted: list[tuple[str, Any]] = [
+        (col, val) for col, val in assignments
+        if col in _TASK_UPDATE_ALLOWED_COLUMNS
+    ]
+    if not accepted:
+        return None, []
+    set_clause = ", ".join(f"{col} = ?" for col, _ in accepted)  # nosec B608 - cols allowlisted above
+    sql = f"UPDATE tasks SET {set_clause} WHERE id = ?"  # nosec B608
+    return sql, [val for _, val in accepted]
+
+
 def tool_task_update(agent_id: str = "mcp-client", *, id: int,
                      status: str = None, assign: str = None,
                      priority: str = None, no_claim: bool = False, **kw) -> dict:
     """Update status, assignment, or priority on an existing task."""
     if not id:
         return {"ok": False, "error": "id must be provided"}
-    sets = []
-    params = []
+    # (column, value) pairs collected from explicit named args only.
+    # **kw is accepted as an MCP dispatcher sink but never read into SQL —
+    # see _TASK_UPDATE_ALLOWED_COLUMNS for the locked write surface.
+    now_iso_str = _now()
+    assignments: list[tuple[str, Any]] = []
     if status:
-        sets.append("status = ?")
-        params.append(status)
+        assignments.append(("status", status))
         if status == "completed":
-            sets.append("completed_at = strftime('%Y-%m-%dT%H:%M:%S', 'now')")
+            assignments.append(("completed_at", now_iso_str))
         if status == "in_progress" and not no_claim:
-            sets.append("claimed_at = strftime('%Y-%m-%dT%H:%M:%S', 'now')")
-            sets.append("claimed_by = ?")
-            params.append(agent_id)
+            assignments.append(("claimed_at", now_iso_str))
+            assignments.append(("claimed_by", agent_id))
     if assign:
-        sets.append("assigned_agent_id = ?")
-        params.append(assign)
+        assignments.append(("assigned_agent_id", assign))
     if priority:
-        sets.append("priority = ?")
-        params.append(priority)
-    if not sets:
+        assignments.append(("priority", priority))
+    # User-meaningful update must include at least one of the above before
+    # we tack on the always-bumped updated_at column.
+    if not assignments:
         return {"ok": False, "error": "No fields to update. Provide status, assign, or priority."}
-    sets.append("updated_at = strftime('%Y-%m-%dT%H:%M:%S', 'now')")
+    assignments.append(("updated_at", now_iso_str))
+    sql, params = _build_task_update_sql(assignments)
+    if sql is None:
+        return {"ok": False, "error": "No fields to update. Provide status, assign, or priority."}
     params.append(id)
     db = _db()
     try:
-        db.execute(f"UPDATE tasks SET {', '.join(sets)} WHERE id = ?", params)
+        db.execute(sql, params)
         _log_access(db, agent_id, "write", "tasks", id)
         db.commit()
         return {"ok": True, "task_id": id}
@@ -267,7 +320,8 @@ def tool_task_list(agent_id: str = "mcp-client", *, status: str = None,
     sql += (" ORDER BY CASE priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 "
             "WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END, created_at")
     if limit:
-        sql += f" LIMIT {int(limit)}"
+        sql += " LIMIT ?"
+        params.append(int(limit))
     db = _db()
     try:
         rows = db.execute(sql, params).fetchall()
