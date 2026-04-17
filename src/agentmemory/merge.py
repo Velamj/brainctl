@@ -107,13 +107,29 @@ def _merge_agents(conn: sqlite3.Connection, dry_run: bool) -> tuple[int, int]:
     return rows_copied, conflicts
 
 
-def _merge_memories(conn: sqlite3.Connection, dry_run: bool) -> tuple[int, int]:
-    """Merge memories: match on content+agent_id+category, keep higher confidence."""
+def _merge_memories(
+    conn: sqlite3.Connection, dry_run: bool
+) -> tuple[int, int, dict[int, int]]:
+    """Merge memories: match on content+agent_id+category, keep higher confidence.
+
+    Returns ``(rows_copied, conflicts, memory_id_map)`` where ``memory_id_map``
+    maps source-DB memory ids → target-DB memory ids. The map is what
+    :func:`_merge_knowledge_edges` needs to rewrite edges that reference
+    memories so they point at the correct target row instead of dangling.
+
+    Bug 6c fix (2.2.1): without this map, edges copied from src reference
+    src-side memory ids that may collide with unrelated target rows or point
+    at nothing — producing the same silent-orphan failure that Bug 6a fixed
+    for the entities side. ``INSERT INTO memories`` does not preserve the
+    src id, so we must capture ``cursor.lastrowid`` on the fresh-insert path
+    AND record the existing target id on the dedup path.
+    """
     rows_copied = 0
     conflicts = 0
+    memory_id_map: dict[int, int] = {}
 
     if not _table_exists(conn, "src.memories"):
-        return rows_copied, conflicts
+        return rows_copied, conflicts, memory_id_map
 
     src_cols = _get_columns(conn, "src.memories")
     dst_cols = _get_columns(conn, "memories")
@@ -125,6 +141,8 @@ def _merge_memories(conn: sqlite3.Connection, dry_run: bool) -> tuple[int, int]:
     src_col_idx = {c: i for i, c in enumerate(src_cols)}
 
     for row in src_rows:
+        # Capture src id so we can map it to whatever id the target ends up using.
+        src_id = row[src_col_idx["id"]] if "id" in src_col_idx else None
         content = row[src_col_idx["content"]]
         agent_id = row[src_col_idx["agent_id"]]
         category = row[src_col_idx["category"]]
@@ -137,6 +155,12 @@ def _merge_memories(conn: sqlite3.Connection, dry_run: bool) -> tuple[int, int]:
 
         if existing:
             conflicts += 1
+            # Map src id → target id UNCONDITIONALLY on any existing match
+            # (even when no confidence update happens). If we only mapped
+            # inside the higher-confidence branch, edges referencing the
+            # lower-confidence src memory would silently orphan.
+            if src_id is not None:
+                memory_id_map[src_id] = existing[0]
             dst_conf = existing[1]
             if src_conf is not None and dst_conf is not None and src_conf > dst_conf:
                 if not dry_run:
@@ -150,13 +174,22 @@ def _merge_memories(conn: sqlite3.Connection, dry_run: bool) -> tuple[int, int]:
             col_str = ", ".join(common_cols)
             placeholders = ", ".join("?" * len(common_cols))
             if not dry_run:
-                conn.execute(
+                cur = conn.execute(
                     f"INSERT INTO memories ({col_str}) VALUES ({placeholders})",
                     vals,
                 )
+                if src_id is not None and cur.lastrowid is not None:
+                    memory_id_map[src_id] = cur.lastrowid
+            else:
+                # Dry run: surface a plausible identity mapping for the
+                # report so callers can size redirect work; map src_id to
+                # itself (best we can do without inserting). Mirrors the
+                # _merge_entities dry-run behavior.
+                if src_id is not None:
+                    memory_id_map[src_id] = src_id
             rows_copied += 1
 
-    return rows_copied, conflicts
+    return rows_copied, conflicts, memory_id_map
 
 
 def _merge_append_only(
@@ -295,6 +328,7 @@ def _merge_knowledge_edges(
     conn: sqlite3.Connection,
     dry_run: bool,
     entity_id_map: dict[int, int] | None = None,
+    memory_id_map: dict[int, int] | None = None,
 ) -> tuple[int, int]:
     """Merge knowledge_edges with id-remap and conflict resolution.
 
@@ -302,6 +336,14 @@ def _merge_knowledge_edges(
     src-side id is meaningless (or actively wrong) in the target DB. We remap
     ``source_id`` and ``target_id`` through ``entity_id_map`` (built by
     :func:`_merge_entities`) whenever the relevant ``*_table`` is ``'entities'``.
+
+    Bug 6c fix (2.2.1): the same orphan failure exists for memory-referencing
+    edges. ``_merge_memories`` now returns a ``memory_id_map`` and we apply
+    it here whenever ``*_table == 'memories'``. Both maps run through the
+    same self-loop drop and the same ON CONFLICT MAX(weight) collapse, so
+    cross-direction collisions and post-remap duplicates are handled
+    uniformly regardless of whether the referenced rows are entities or
+    memories.
 
     Conflict-resolution rule (chosen here so callers can rely on it):
     HIGHEST WEIGHT WINS. If a remapped src edge collides with an existing
@@ -317,6 +359,7 @@ def _merge_knowledge_edges(
     rows_copied = 0
     conflicts = 0
     entity_id_map = entity_id_map or {}
+    memory_id_map = memory_id_map or {}
 
     if not _table_exists(conn, "src.knowledge_edges"):
         return rows_copied, conflicts
@@ -332,15 +375,28 @@ def _merge_knowledge_edges(
     col_str = ", ".join(common_cols)
     placeholders = ", ".join("?" * len(common_cols))
 
-    # Helper: rewrite an edge tuple's source/target ids when they reference entities.
+    # Helper: rewrite an edge tuple's source/target ids when they reference
+    # entities or memories. Both id-spaces are remapped through their
+    # respective maps; self-loops produced by either remap are dropped.
     def _remap(row: tuple) -> tuple | None:
         st = row[src_col_idx["source_table"]]
         si = row[src_col_idx["source_id"]]
         tt = row[src_col_idx["target_table"]]
         ti = row[src_col_idx["target_id"]]
-        new_si = entity_id_map.get(si, si) if st == "entities" else si
-        new_ti = entity_id_map.get(ti, ti) if tt == "entities" else ti
-        # Drop self-loops introduced by the remap collapse.
+        if st == "entities":
+            new_si = entity_id_map.get(si, si)
+        elif st == "memories":
+            new_si = memory_id_map.get(si, si)
+        else:
+            new_si = si
+        if tt == "entities":
+            new_ti = entity_id_map.get(ti, ti)
+        elif tt == "memories":
+            new_ti = memory_id_map.get(ti, ti)
+        else:
+            new_ti = ti
+        # Drop self-loops introduced by the remap collapse. (Cross-table
+        # self-loops are impossible — st == tt is required.)
         if st == tt and new_si == new_ti:
             return None
         # Apply remap to the row in column order (shallow copy).
@@ -542,11 +598,12 @@ def merge(
         skipped: list[str] = []
         total_copied = 0
         total_conflicts = 0
-        # entity_id_map: src_entity_id -> target_entity_id, populated when the
-        # 'entities' table is merged. Threaded into knowledge_edges so edges
-        # referencing src-side entity ids get rewritten to point at target
-        # ids (Bug 6a fix).
+        # entity_id_map / memory_id_map: src_id -> target_id, populated when
+        # the corresponding table is merged. Threaded into knowledge_edges so
+        # edges referencing src-side ids get rewritten to point at target
+        # ids (Bug 6a fix for entities, Bug 6c fix for memories).
         entity_id_map: dict[int, int] = {}
+        memory_id_map: dict[int, int] = {}
 
         for table in tables_to_merge:
             # Check source table exists
@@ -562,12 +619,15 @@ def merge(
             if table == "agents":
                 copied, conflicts = _merge_agents(conn, dry_run)
             elif table == "memories":
-                copied, conflicts = _merge_memories(conn, dry_run)
+                copied, conflicts, memory_id_map = _merge_memories(conn, dry_run)
             elif table == "entities":
                 copied, conflicts, entity_id_map = _merge_entities(conn, dry_run)
             elif table == "knowledge_edges":
                 copied, conflicts = _merge_knowledge_edges(
-                    conn, dry_run, entity_id_map=entity_id_map
+                    conn,
+                    dry_run,
+                    entity_id_map=entity_id_map,
+                    memory_id_map=memory_id_map,
                 )
             elif table == "agent_beliefs":
                 copied, conflicts = _merge_agent_beliefs(conn, dry_run)
