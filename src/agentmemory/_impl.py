@@ -3148,8 +3148,58 @@ def cmd_memory_update(args):
 
     log_access(db, args.agent or "unknown", "write", "memories", args.id)
     db.commit()
+
+    # Bug 3 fix (2.2.0): re-embed when content changes so vec_memories does
+    # not return stale semantic-search results after a content edit. The
+    # prior implementation updated `content` and FTS5 (via trigger) but
+    # left the row in vec_memories pointing at the old embedding — a
+    # silent staleness that callers had no way to detect. We mirror the
+    # write path used in cmd_memory_add (lines ~2900) so the two stay in
+    # sync. If the sqlite-vec extension is not loaded we degrade
+    # gracefully: a stderr warning, no crash. The next backfill cron will
+    # eventually re-cover any gap left here.
+    reembedded = False
+    if args.content is not None:
+        try:
+            blob = _embed_query_safe(args.content)
+            if blob:
+                db_vec = _try_get_db_with_vec()
+                if db_vec is None:
+                    print(
+                        f"warning: sqlite-vec extension not loaded; "
+                        f"memory {args.id} re-embed skipped after content update",
+                        file=sys.stderr,
+                    )
+                else:
+                    try:
+                        db_vec.execute(
+                            "INSERT OR REPLACE INTO vec_memories(rowid, embedding) VALUES (?, ?)",
+                            (args.id, blob),
+                        )
+                        db_vec.execute(
+                            "INSERT OR IGNORE INTO embeddings "
+                            "(source_table, source_id, model, dimensions, vector) "
+                            "VALUES (?, ?, ?, ?, ?)",
+                            ("memories", args.id, EMBED_MODEL, EMBED_DIMENSIONS, blob),
+                        )
+                        db_vec.commit()
+                        reembedded = True
+                    finally:
+                        db_vec.close()
+        except Exception as exc:
+            # Non-fatal: cron backfill catches gaps. Log so operators see it.
+            print(
+                f"warning: memory {args.id} re-embed failed: {exc}",
+                file=sys.stderr,
+            )
+
     row = db.execute("SELECT id, version FROM memories WHERE id = ?", (args.id,)).fetchone()
-    json_out({"ok": True, "memory_id": args.id, "new_version": row["version"]})
+    json_out({
+        "ok": True,
+        "memory_id": args.id,
+        "new_version": row["version"],
+        "reembedded": reembedded,
+    })
 
 
 def cmd_memory_confidence(args):
