@@ -257,6 +257,23 @@ def classify_intent(query: str) -> IntentResult:
             matched_rule=f"agent_name:{next(iter(agent_hit))}",
             format_hint=_FORMAT_HINTS["entity_lookup"],
         )
+    # ---- Rule 9b: Entity lookup keyword fallback ----
+    # Mirrors _builtin_classify_intent in src/agentmemory/_impl.py (the inline
+    # rule-based classifier). Without this, queries like "Who is Alice?" fell
+    # through to factual_lookup and missed the entity_lookup rerank profile.
+    # Note: 'agent', 'assigned' here can be intentionally claimed earlier by
+    # Rule 2 (troubleshooting) or Rule 3 (task_status); that's the richer
+    # external taxonomy winning over the builtin's broader bucket.
+    _ENTITY_KW = ["who ", "person", "agent", "team", "assigned"]
+    hit = _kw(ql, _ENTITY_KW)
+    if hit:
+        return IntentResult(
+            intent="entity_lookup",
+            confidence=0.80,
+            tables=_TABLE_ROUTES["entity_lookup"],
+            matched_rule=f"entity_kw:{hit.strip()}",
+            format_hint=_FORMAT_HINTS["entity_lookup"],
+        )
     if _PROPER_NOUN_ALONE_RE.match(q):
         return IntentResult(
             intent="entity_lookup",
