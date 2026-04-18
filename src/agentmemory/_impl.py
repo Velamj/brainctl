@@ -6033,8 +6033,13 @@ def cmd_search(args):
             use_recency  = False
             use_salience = False
             use_qvalue   = False
-            # Trust preserved under --benchmark (different signal class).
-            use_trust    = signal["trust"]["informative"]
+            # Trust is unconditionally preserved under --benchmark per spec —
+            # provenance is a different signal class than stale-data leakage,
+            # so the signal-informativeness gate does NOT apply here. On a
+            # uniform-trust corpus the multiplier collapses to a no-op 1.0x
+            # anyway, so this is a behaviour clarification rather than a
+            # ranking change.
+            use_trust    = True
             # Surface the hard-skip reasons exactly once per cmd_search call,
             # tagged by bucket so an auditor can tell which set was affected.
             _debug_skips[f"{bucket}.recency_skipped"]  = "benchmark_mode"
@@ -6051,8 +6056,8 @@ def cmd_search(args):
                 _debug_skips[f"{bucket}.salience_skipped"] = signal["salience"]["reason"]
             if not use_qvalue:
                 _debug_skips[f"{bucket}.qvalue_skipped"]   = signal["q_value"]["reason"]
-        if not use_trust:
-            _debug_skips[f"{bucket}.trust_skipped"]    = signal["trust"]["reason"]
+            if not use_trust:
+                _debug_skips[f"{bucket}.trust_skipped"]    = signal["trust"]["reason"]
 
         # Lazy-compute max_recalls once for adaptive salience importance normalization
         if use_adaptive_salience and _adaptive_weights and _SAL_AVAILABLE:

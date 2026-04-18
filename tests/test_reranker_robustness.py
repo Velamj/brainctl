@@ -434,6 +434,17 @@ class TestBenchmarkFlag:
         assert debug.get("memories.salience_skipped") == "benchmark_mode"
         assert debug.get("memories.qvalue_skipped") == "benchmark_mode"
 
+    def test_benchmark_preserves_trust(self, db):
+        """Spec: trust reranker is preserved under --benchmark (different
+        signal class — provenance, not stale-data). Even on a uniform-trust
+        corpus the trust skip reason must NOT show up under benchmark."""
+        args = _build_args("alice prefers dark mode", benchmark=True)
+        out = _call_cmd_search(db, args)
+        debug = out.get("_debug", {})
+        assert "memories.trust_skipped" not in debug, (
+            f"trust must be preserved under --benchmark; debug={debug}"
+        )
+
     def test_benchmark_emits_stderr_note(self, db):
         # Capture the stderr message.
         args = _build_args("alice prefers dark mode", benchmark=True)
