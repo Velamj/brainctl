@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "brainctl": {
+      "command": "brainctl-mcp",
+      "args": [],
+      "env": { "BRAINCTL_DB": "${HOME}/agentmemory/db/brain.db" }
+    }
+  }
+}
