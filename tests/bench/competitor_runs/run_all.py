@@ -69,6 +69,7 @@ def _load_adapters() -> List[Tuple[str, Callable[[], Any]]]:
     from .zep_adapter import ZepAdapter
     from .cognee_adapter import CogneeAdapter
     from .memorylake_adapter import MemoryLakeAdapter
+    from .mempalace_adapter import MemPalaceAdapter
     from .openai_memory_adapter import OpenAIMemoryAdapter
 
     return [
@@ -78,6 +79,7 @@ def _load_adapters() -> List[Tuple[str, Callable[[], Any]]]:
         ("letta",          LettaAdapter),
         ("zep",            ZepAdapter),
         ("cognee",         CogneeAdapter),
+        ("mempalace",      MemPalaceAdapter),
         ("memorylake",     MemoryLakeAdapter),
         ("openai_memory",  OpenAIMemoryAdapter),
     ]

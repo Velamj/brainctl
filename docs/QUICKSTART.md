@@ -12,7 +12,7 @@ pip install brainctl
 
 Expected output:
 ```
-Successfully installed brainctl-2.3.2
+Successfully installed brainctl-2.4.0
 ```
 
 If you want the MCP server (Claude Desktop, Cursor, VS Code):

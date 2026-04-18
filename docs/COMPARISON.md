@@ -1,43 +1,45 @@
 # brainctl vs the field
 
-Feature comparison against the five most commonly evaluated agent memory systems.
+Feature comparison against the six most commonly evaluated agent memory systems.
 
-**Competitors covered:** Mem0, Letta, Zep, Cognee, OpenAI Memory
+**Competitors covered:** Mem0, Letta, Zep, Cognee, MemPalace, OpenAI Memory
 
 Research basis: public docs, GitHub repos, and release notes as of April 2026. Rows marked `?` indicate the feature may exist but could not be confirmed from public sources — check the vendor's current docs before relying on this entry. Rows marked `—` indicate the feature is not present based on available documentation.
+
+> **Honesty note on retrieval rows.** brainctl's LOCOMO / LongMemEval numbers are *measured* (Brain.search, default settings, full sweep). Competitor numbers in those rows are *cited* from each project's published material. The same-fixture head-to-head sweep is wired up at `tests/bench/competitor_runs/` (one adapter per system, skip-not-fabricate contract) but has not been executed yet — when it lands, cited numbers get replaced with measured ones.
 
 ---
 
 ## Feature matrix
 
-| feature | brainctl | Mem0 | Letta | Zep | Cognee | OpenAI Memory |
-|---------|----------|------|-------|-----|--------|---------------|
-| **local-first** (no required server) | ✓ | partial¹ | partial² | partial³ | ✓ | — |
-| **MIT license** | ✓ | — (Apache 2.0) | — (Apache 2.0) | — (proprietary CE deprecated Apr 2025) | — (Apache 2.0) | — (closed) |
-| **no LLM calls required** | ✓ | — | — | — | — | — |
-| **FTS full-text search** | ✓ | — | — | — | — | — |
-| **vector / semantic search** | ✓ | ✓ | ✓ | ✓ | ✓ | — |
-| **hybrid retrieval (FTS + vector)** | ✓ | — | — | — | — | — |
-| **knowledge graph** | ✓ | ✓ (Pro tier) | — | ✓ (Graphiti) | ✓ | — |
-| **auto entity linking** | ✓ | — | — | — | — | — |
-| **belief revision (AGM)** | ✓ | — | — | — | — | — |
-| **Ed25519-signed exports** | ✓ | — | — | — | — | — |
-| **on-chain attestation (Solana)** | ✓ (opt-in) | — | — | — | — | — |
-| **managed non-custodial wallet** | ✓ | — | — | — | — | — |
-| **MCP server included** | ✓ (201 tools) | ✓ | ✓ | ✓ | ✓ | — |
-| **first-party framework plugins** | 16 | ? | ? | — | — | — |
-| **session handoffs** | ✓ | — | ✓ (memory blocks) | — | — | — |
-| **prospective memory (triggers)** | ✓ | — | — | — | — | — |
-| **multi-agent shared store** | ✓ | ✓ | ✓ | — | — | — |
-| **context profiles** | ✓ | — | — | — | — | — |
-| **confidence decay / half-life** | ✓ | — | — | — | — | — |
-| **write gate (dedup / surprise)** | ✓ | ✓ (conflict detection) | — | — | — | — |
-| **consolidation engine** | ✓ | — | — | — | — | — |
-| **affect / emotional state tracking** | ✓ | — | — | — | — | — |
-| **free at rest (no per-op billing)** | ✓ | partial⁴ | partial⁴ | — | ✓ (local) | — |
-| **embedding model flexibility** | ✓ (any Ollama model) | ✓ | ✓ | ? | ✓ | — |
-| **LOCOMO hit@1 (overall)** | 0.341 | ? | ? | ? | ? | ? |
-| **LongMemEval hit@1 (overall)** | 0.882 | ? | ? | ? | ? | ? |
+| feature | brainctl | Mem0 | Letta | Zep | Cognee | MemPalace | OpenAI Memory |
+|---------|----------|------|-------|-----|--------|-----------|---------------|
+| **local-first** (no required server) | ✓ | partial¹ | partial² | partial³ | ✓ | ✓ | — |
+| **MIT license** | ✓ | — (Apache 2.0) | — (Apache 2.0) | — (proprietary CE deprecated Apr 2025) | — (Apache 2.0) | ? | — (closed) |
+| **no LLM calls required** | ✓ | — | — | — | — | ✓ | — |
+| **FTS full-text search** | ✓ | — | — | — | — | ? | — |
+| **vector / semantic search** | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| **hybrid retrieval (FTS + vector)** | ✓ | — | — | — | — | ✓ (hybrid v5) | — |
+| **knowledge graph** | ✓ | ✓ (Pro tier) | — | ✓ (Graphiti) | ✓ | ? | — |
+| **auto entity linking** | ✓ | — | — | — | — | ? | — |
+| **belief revision (AGM)** | ✓ | — | — | — | — | — | — |
+| **Ed25519-signed exports** | ✓ | — | — | — | — | — | — |
+| **on-chain attestation (Solana)** | ✓ (opt-in) | — | — | — | — | — | — |
+| **managed non-custodial wallet** | ✓ | — | — | — | — | — | — |
+| **MCP server included** | ✓ (201 tools) | ✓ | ✓ | ✓ | ✓ | ? | — |
+| **first-party framework plugins** | 16 | ? | ? | — | — | ? | — |
+| **session handoffs** | ✓ | — | ✓ (memory blocks) | — | — | ? | — |
+| **prospective memory (triggers)** | ✓ | — | — | — | — | ? | — |
+| **multi-agent shared store** | ✓ | ✓ | ✓ | — | — | ? | — |
+| **context profiles** | ✓ | — | — | — | — | ? | — |
+| **confidence decay / half-life** | ✓ | — | — | — | — | ? | — |
+| **write gate (dedup / surprise)** | ✓ | ✓ (conflict detection) | — | — | — | ? | — |
+| **consolidation engine** | ✓ | — | — | — | — | ? | — |
+| **affect / emotional state tracking** | ✓ | — | — | — | — | ? | — |
+| **free at rest (no per-op billing)** | ✓ | partial⁴ | partial⁴ | — | ✓ (local) | ✓ | — |
+| **embedding model flexibility** | ✓ (any Ollama model) | ✓ | ✓ | ? | ✓ | ? | — |
+| **LOCOMO Recall@10 (overall)**⁵ | 0.604 | ? | ? | ? | ? | 0.603 / 0.889⁶ | ? |
+| **LongMemEval Recall@5 (subset)**⁷ | 0.922 | ? | ? | ? | ? | 0.966⁶ | ? |
 
 ---
 
@@ -51,13 +53,24 @@ Research basis: public docs, GitHub repos, and release notes as of April 2026. R
 
 ⁴ **Free at rest (Mem0 / Letta)**: open-source tiers have no per-op billing, but cloud tiers do. For local deployments there is no metering.
 
+⁵ **LOCOMO Recall@10**: fraction of gold evidence turns appearing in top-10 retrieval. brainctl number is measured (Brain.search, default settings, full 1,982-question sweep, n_turns_total=5,882). MemPalace numbers are quoted from their published README pending the same-fixture re-run.
+
+⁶ **MemPalace numbers** (mempalaceofficial.com README, April 2026): LOCOMO R@10 60.3% basic / 88.9% with their hybrid v5 reranker; LongMemEval R@5 96.6% raw semantic. Adapter at `tests/bench/competitor_runs/mempalace_adapter.py` is wired but waiting on a head-to-head run.
+
+⁷ **LongMemEval headline (subset)**: brainctl number is on a 289-question subset of `longmemeval_s` — the questions whose gold answer is checkable by string / fuzzy match against the conversation content (single-session-user, single-session-assistant, single-session-preference, multi-session). Temporal-reasoning and knowledge-update categories are excluded because they need an LLM-as-judge to score; gold session IDs are still available there if measured separately.
+
 ---
 
 ## LOCOMO + LongMemEval numbers
 
 brainctl's published numbers use the `Brain.search` backend with default settings. No cherry-picking, no benchmark-specific tuning. Full methodology: [docs/BENCHMARKS.md](../tests/bench/) and the landing page `/benchmarks`.
 
-Competitor numbers: not yet available from public sources. Worker A will publish these in v2.4.0.
+Competitor numbers: the harness is in place under `tests/bench/competitor_runs/` (Mem0, Letta, Zep, Cognee, MemPalace, OpenAI Memory adapters). It has not yet been executed end-to-end on identical fixtures. Where competitors publish their own numbers, those are cited above with footnotes; we'll replace cited values with measured ones once the sweep runs.
+
+**Where we stand on the numbers we can compare directly:**
+- LOCOMO basic top-10 retrieval is **at parity with MemPalace basic** (R@10 0.604 vs 0.603 on n=1,982).
+- MemPalace's hybrid v5 reranker (R@10 0.889) is well ahead of brainctl Brain.search and is the bar still to beat.
+- On LongMemEval (subset), MemPalace edges brainctl 0.966 vs 0.922 R@5.
 
 ---
 
