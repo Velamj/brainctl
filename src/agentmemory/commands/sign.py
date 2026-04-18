@@ -77,6 +77,68 @@ def _parse_ids(s: Optional[str]) -> Optional[List[int]]:
 # export --sign
 # ---------------------------------------------------------------------------
 
+def _resolve_signer_keystore(
+    cli_keystore: Optional[str],
+    *,
+    auto_setup: bool,
+) -> Dict[str, Any]:
+    """Resolve which keystore to sign with.
+
+    Precedence (highest first):
+      1. ``--keystore <path>`` (explicit user choice)
+      2. ``~/.brainctl/wallet.json`` managed wallet (2.3.2+)
+      3. ``$BRAINCTL_SIGNING_KEY_PATH`` env (2.3.0 legacy)
+      4. ``--auto-setup-wallet`` → create a managed wallet on the fly
+      5. friendly "no wallet found" error pointing at `wallet new`
+
+    Returns ``{ok, keystore_path, source, error}`` where ``source`` is
+    one of ``"cli"``, ``"managed"``, ``"env"``, ``"auto-created"`` —
+    so the caller can surface a helpful breadcrumb in the output
+    payload.
+    """
+    from agentmemory import signing
+    from agentmemory.commands import wallet as _wallet
+
+    # 1. explicit --keystore
+    if cli_keystore:
+        return {"ok": True, "keystore_path": cli_keystore,
+                "source": "cli", "error": None}
+
+    # 2. managed wallet (this is the 2.3.2 happy path for new users)
+    managed = _wallet.resolve_wallet_path(None)
+    if managed.exists():
+        return {"ok": True, "keystore_path": str(managed),
+                "source": "managed", "error": None}
+
+    # 3. env fallback for 2.3.0 users who already wired this up
+    env_path = os.environ.get("BRAINCTL_SIGNING_KEY_PATH")
+    if env_path:
+        return {"ok": True, "keystore_path": env_path,
+                "source": "env", "error": None}
+
+    # 4. agent-driven auto-setup
+    if auto_setup:
+        created = _wallet.wallet_new_impl(None, force=False)
+        if not created["ok"]:
+            return {"ok": False, "keystore_path": None,
+                    "source": "auto-created",
+                    "error": f"--auto-setup-wallet failed: {created['error']}"}
+        return {"ok": True, "keystore_path": created["path"],
+                "source": "auto-created", "error": None,
+                "auto_created_address": created["address"]}
+
+    # 5. nothing found, friendly error
+    return {
+        "ok": False, "keystore_path": None, "source": None,
+        "error": (
+            "No wallet found. Run `brainctl wallet new` to create one "
+            "(takes 2 seconds, brainctl never sees the key). Or pass "
+            "`--keystore <path>` to use an existing Solana CLI wallet, "
+            "or `--auto-setup-wallet` to auto-create one inline."
+        ),
+    }
+
+
 def cmd_export(args: Any) -> None:
     as_json = bool(getattr(args, "json", False))
 
@@ -96,8 +158,19 @@ def cmd_export(args: Any) -> None:
         _emit({"ok": False, "error": f"brain.db not found at {db_path}"},
               as_json=as_json, exit_code=1)
 
+    auto_setup = bool(getattr(args, "auto_setup_wallet", False))
+    resolved = _resolve_signer_keystore(
+        getattr(args, "keystore", None), auto_setup=auto_setup,
+    )
+    if not resolved["ok"]:
+        _emit({"ok": False, "error": resolved["error"]},
+              as_json=as_json, exit_code=1)
+
+    keystore_path = resolved["keystore_path"]
+    keystore_source = resolved["source"]
+    auto_created_address = resolved.get("auto_created_address")
+
     try:
-        keystore_path = signing.resolve_keystore_path(getattr(args, "keystore", None))
         keypair = signing.load_keystore(keystore_path)
     except FileNotFoundError as e:
         _emit({"ok": False, "error": str(e)}, as_json=as_json, exit_code=1)
@@ -140,21 +213,82 @@ def cmd_export(args: Any) -> None:
         "memories_count": len(bundle["memories"]),
         "signed_at": signed["signed_at"],
         "pinned_onchain": False,
+        "pin_skipped_reason": None,
         "signature": None,
         "slot": None,
+        # Breadcrumb: which keystore source produced this bundle. Lets
+        # the agent (or human) follow the trail back to the wallet.
+        "keystore_source": keystore_source,
     }
+    # Surface an "I just created a wallet for you" notice when
+    # --auto-setup-wallet kicked in. Shown on stderr in human mode and
+    # included in the JSON payload either way.
+    if auto_created_address:
+        payload["auto_created_wallet"] = {
+            "address": auto_created_address,
+            "path": keystore_path,
+        }
+        if not as_json:
+            sys.stderr.write(
+                "auto-created managed wallet at "
+                f"{keystore_path} "
+                f"(address: {auto_created_address}). "
+                "Back it up with `brainctl wallet export <path>`.\n"
+            )
 
     if getattr(args, "pin_onchain", False):
         rpc_url = getattr(args, "rpc_url", None) or signing.DEFAULT_RPC_URL
-        pin = signing.pin_onchain(signed, keypair, rpc_url=rpc_url)
-        payload["pinned_onchain"] = bool(pin.get("ok"))
-        payload["signature"] = pin.get("signature")
-        payload["slot"] = pin.get("slot")
-        if not pin.get("ok"):
-            payload["error"] = f"on-chain pin failed: {pin.get('error')}"
-            # Bundle was still signed locally; don't drop that work — exit 1
-            # so callers know the pin failed but the bundle is on disk.
-            _emit(payload, as_json=as_json, exit_code=1)
+
+        # Pre-check the wallet's balance. If it's zero, the on-chain
+        # pin would fail with an opaque "insufficient funds" RPC
+        # error — we can do better by detecting this case up front
+        # and printing an actionable message.
+        #
+        # IMPORTANT: a 0-SOL balance is foreseeable, not a failure.
+        # The user's primary intent (sign the bundle) succeeded; the
+        # pin was opportunistic. We exit 0 with pinned_onchain=False +
+        # pin_skipped_reason="zero_balance". Genuine RPC / submit
+        # failures (next branch) still exit 1 — they're unexpected.
+        from agentmemory.commands import wallet as _wallet
+        bal = _wallet.wallet_balance_impl(keystore_path, rpc_url=rpc_url)
+        if bal["ok"] and bal["lamports"] == 0:
+            payload["pin_skipped_reason"] = "zero_balance"
+            msg = (
+                f"Your wallet at {bal['address']} has 0 SOL. To pin "
+                "on-chain (~$0.001 per pin), send any small amount "
+                "of SOL to that address. Run `brainctl wallet "
+                "balance` to check. Skipping the on-chain pin — the "
+                "offline signature is still valid in your bundle file."
+            )
+            sys.stderr.write(msg + "\n")
+            # Fall through to the no-pin happy path: the bundle has
+            # already been signed and (if -o was passed) written.
+        elif not bal["ok"]:
+            # Couldn't read balance (RPC down, transient error). Don't
+            # block the signing path — try the pin anyway and let it
+            # report a real error if it fails.
+            payload["pin_skipped_reason"] = None
+            sys.stderr.write(
+                f"warning: could not pre-check wallet balance "
+                f"({bal['error']}); attempting pin anyway.\n"
+            )
+            pin = signing.pin_onchain(signed, keypair, rpc_url=rpc_url)
+            payload["pinned_onchain"] = bool(pin.get("ok"))
+            payload["signature"] = pin.get("signature")
+            payload["slot"] = pin.get("slot")
+            if not pin.get("ok"):
+                payload["error"] = f"on-chain pin failed: {pin.get('error')}"
+                _emit(payload, as_json=as_json, exit_code=1)
+        else:
+            pin = signing.pin_onchain(signed, keypair, rpc_url=rpc_url)
+            payload["pinned_onchain"] = bool(pin.get("ok"))
+            payload["signature"] = pin.get("signature")
+            payload["slot"] = pin.get("slot")
+            if not pin.get("ok"):
+                payload["error"] = f"on-chain pin failed: {pin.get('error')}"
+                # Bundle was still signed locally; don't drop that work — exit 1
+                # so callers know the pin failed but the bundle is on disk.
+                _emit(payload, as_json=as_json, exit_code=1)
 
     if not out_path and not as_json:
         # No output file and not JSON mode — dump bundle to stdout so
@@ -251,7 +385,13 @@ def register_parser(sub: Any) -> None:
                        help="Sign the bundle (required in 2.3.0)")
     p_exp.add_argument("--keystore", default=None,
                        help="Path to a Solana CLI keystore (JSON array of 64 ints). "
-                            "Falls back to $BRAINCTL_SIGNING_KEY_PATH.")
+                            "Default: ~/.brainctl/wallet.json (managed wallet, 2.3.2+); "
+                            "falls back to $BRAINCTL_SIGNING_KEY_PATH for 2.3.0 users.")
+    p_exp.add_argument("--auto-setup-wallet", dest="auto_setup_wallet",
+                       action="store_true",
+                       help="If no wallet exists, auto-create one at "
+                            "~/.brainctl/wallet.json before signing (non-interactive). "
+                            "Designed for agent-driven flows.")
     p_exp.add_argument("--filter-agent", dest="filter_agent", default=None,
                        help="Only export memories from this agent_id")
     p_exp.add_argument("--category", default=None,

@@ -77,3 +77,29 @@ No token gating — anyone with brainctl + a Solana keypair can sign
 their own memories (preference memory #1691). Threat model + bundle
 format spec + a 30-line "verify without brainctl" recipe live in
 `docs/SIGNED_EXPORTS.md`.
+
+## Managed wallet (2.3.2+)
+
+For users who don't already have a Solana wallet (most chat-bot
+operators and agent builders), `brainctl wallet new` creates a
+non-custodial keypair at `~/.brainctl/wallet.json` (chmod 0600). The
+key is generated locally and **never** transmitted, copied, or backed
+up by brainctl — the user owns the file. `brainctl export --sign`
+auto-discovers the managed wallet when `--keystore` isn't passed
+(precedence: `--keystore` > `~/.brainctl/wallet.json` >
+`$BRAINCTL_SIGNING_KEY_PATH` > error). Implementation in
+`src/agentmemory/commands/wallet.py`. Subcommands: `new` (with
+`--force`/`--yes`), `address`, `balance`, `show`, `export <path>`,
+`import <path>`, `rm`, `onboard`. Override default location via
+`$BRAINCTL_WALLET_PATH` or `--path`.
+
+For AI agents: when a user wants to sign a bundle but doesn't have a
+wallet, surface this flow. The MCP tools `wallet_show` and
+`wallet_create` let you check / create on the user's behalf — but
+`wallet_create` will REFUSE to overwrite an existing keystore unless
+explicitly passed `force=true` (destructive — pass only after the
+user explicitly consents). Or use `brainctl export --sign
+--auto-setup-wallet` which creates a wallet inline and signs in one
+shot. `--pin-onchain` with 0 SOL skips cleanly with `exit 0` and
+`pin_skipped_reason="zero_balance"` — the offline signature is still
+valid; pinning is opportunistic.
