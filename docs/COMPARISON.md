@@ -38,8 +38,9 @@ Research basis: public docs, GitHub repos, and release notes as of April 2026. R
 | **affect / emotional state tracking** | ✓ | — | — | — | — | ? | — |
 | **free at rest (no per-op billing)** | ✓ | partial⁴ | partial⁴ | — | ✓ (local) | ✓ | — |
 | **embedding model flexibility** | ✓ (any Ollama model) | ✓ | ✓ | ? | ✓ | ? | — |
-| **LOCOMO Recall@10 (overall)**⁵ | 0.604 | ? | ? | ? | ? | 0.603 / 0.889⁶ | ? |
-| **LongMemEval Recall@5 (subset)**⁷ | 0.922 | ? | ? | ? | ? | 0.966⁶ | ? |
+| **LoCoMo session-level recall**⁵ | 0.922 | ? | ? | ? | ? | 0.603 | ? |
+| **LongMemEval R@5 (n=470)**⁵ | 0.970 | ? | ? | ? | ? | 0.966 | ? |
+| **MemBench hit@5 (FirstAgent, n=200)**⁵ | 0.930 | ? | ? | ? | ? | 0.885 | ? |
 
 ---
 
@@ -53,24 +54,29 @@ Research basis: public docs, GitHub repos, and release notes as of April 2026. R
 
 ⁴ **Free at rest (Mem0 / Letta)**: open-source tiers have no per-op billing, but cloud tiers do. For local deployments there is no metering.
 
-⁵ **LOCOMO Recall@10**: fraction of gold evidence turns appearing in top-10 retrieval. brainctl number is measured (Brain.search, default settings, full 1,982-question sweep, n_turns_total=5,882). MemPalace numbers are quoted from their published README pending the same-fixture re-run.
+⁵ **Same-machine head-to-head, run 2026-04-18.** Hardware: Intel Core Ultra 7 258V, 33.9 GB RAM, Windows 10 Home. Repro: `python benchmarks/compare_memory_engines.py --label full_compare`. Result bundle: `benchmarks/results/full_compare_20260418_033425/`. The LoCoMo row is session-level recall on `locomo10.json` (1,986 QA, brainctl `cmd_session` vs mempalace `raw_session`). The LongMemEval row is R@5 on `longmemeval_s_cleaned.json` (470 q, brainctl `cmd_search` vs mempalace `raw_session`). The MemBench row is hit@5 on the FirstAgent slice (200 q, partial — full sweep pending). ConvoMem was blocked because the evidence payload fetch failed; no fair same-machine number yet.
 
-⁶ **MemPalace numbers** (mempalaceofficial.com README, April 2026): LOCOMO R@10 60.3% basic / 88.9% with their hybrid v5 reranker; LongMemEval R@5 96.6% raw semantic. Adapter at `tests/bench/competitor_runs/mempalace_adapter.py` is wired but waiting on a head-to-head run.
-
-⁷ **LongMemEval headline (subset)**: brainctl number is on a 289-question subset of `longmemeval_s` — the questions whose gold answer is checkable by string / fuzzy match against the conversation content (single-session-user, single-session-assistant, single-session-preference, multi-session). Temporal-reasoning and knowledge-update categories are excluded because they need an LLM-as-judge to score; gold session IDs are still available there if measured separately.
+**Honesty caveat (carried verbatim from the artifact bundle):** the vector-on/off flag for the `cmd_search` run was not persisted into the artifact bundle, so the `cmd_search` numbers above should not be cited as a clean vector-vs-FTS statement without rerunning that exact variant with the flag captured.
 
 ---
 
-## LOCOMO + LongMemEval numbers
+## Head-to-head retrieval numbers
 
-brainctl's published numbers use the `Brain.search` backend with default settings. No cherry-picking, no benchmark-specific tuning. Full methodology: [docs/BENCHMARKS.md](../tests/bench/) and the landing page `/benchmarks`.
+brainctl's published numbers use the `Brain.search` backend (FTS-only lexical retrieval) and the `cmd_search` backend (full brainctl retrieval pipeline) with default settings. No cherry-picking, no benchmark-specific tuning. Full methodology: [docs/BENCHMARKS.md](../tests/bench/) and the landing page `/benchmarks`.
 
-Competitor numbers: the harness is in place under `tests/bench/competitor_runs/` (Mem0, Letta, Zep, Cognee, MemPalace, OpenAI Memory adapters). It has not yet been executed end-to-end on identical fixtures. Where competitors publish their own numbers, those are cited above with footnotes; we'll replace cited values with measured ones once the sweep runs.
+The 2026-04-18 head-to-head against MemPalace `raw_*` baselines:
 
-**Where we stand on the numbers we can compare directly:**
-- LOCOMO basic top-10 retrieval is **at parity with MemPalace basic** (R@10 0.604 vs 0.603 on n=1,982).
-- MemPalace's hybrid v5 reranker (R@10 0.889) is well ahead of brainctl Brain.search and is the bar still to beat.
-- On LongMemEval (subset), MemPalace edges brainctl 0.966 vs 0.922 R@5.
+| benchmark | scoring | brainctl | mempalace | delta |
+|---|---|---|---|---|
+| LoCoMo (n=1,986) | session-level avg recall | **0.9217** | 0.6028 | +0.319 |
+| LongMemEval (n=470) | R@5 | **0.9702** | 0.9660 | +0.004 |
+| LongMemEval (n=470) | R@10 | **0.9894** | 0.9830 | +0.006 |
+| MemBench FirstAgent (n=200) | hit@5 | **0.930** | 0.885 | +0.045 |
+| ConvoMem | — | blocked | blocked | n/a |
+
+The full LongMemEval breakdown (R@5 / R@10 / NDCG@5 / NDCG@10) for both `Brain.search` and `cmd_search` is on the `/benchmarks` page.
+
+Competitor harness for Mem0 / Letta / Zep / Cognee / OpenAI Memory remains unrun; gated on hosted-API budget for Mem0/Zep and on local-only sweep for Cognee.
 
 ---
 
