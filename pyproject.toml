@@ -31,7 +31,14 @@ obsidian = ["watchdog>=3.0.0"]
 ner = ["gliner>=0.2"]
 langchain = ["langchain-core>=0.3.0"]
 crewai = ["crewai>=0.80.0"]
-all = ["mcp>=1.27.0", "sqlite-vec>=0.1.0", "watchdog>=3.0.0"]
+# Signed memory exports + optional Solana memo-program pinning.
+# solders is the pure-Rust Solana SDK Python binding (lighter than
+# solana-py and ships pre-built wheels for macOS/Linux). Network
+# calls go through stdlib urllib.request, so no extra HTTP dep is
+# needed. brainctl imports cleanly without solders; signing CLI
+# commands print an install hint if the extra is missing.
+signing = ["solders>=0.21"]
+all = ["mcp>=1.27.0", "sqlite-vec>=0.1.0", "watchdog>=3.0.0", "solders>=0.21"]
 
 [project.scripts]
 brainctl = "agentmemory.cli:main"
