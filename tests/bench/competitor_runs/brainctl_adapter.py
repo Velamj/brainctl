@@ -30,7 +30,7 @@ class _BrainAdapterBase:
     """Common lifecycle for both backends — ingest into a fresh tmp DB."""
 
     name: str = "brainctl"
-    pinned_version: str = "2.3.2"
+    pinned_version: str = "2.4.1"
     needs_api_key = False
     cost_per_1k_writes_usd = 0.0      # local SQLite — zero LLM spend
     cost_per_1k_queries_usd = 0.0
@@ -46,6 +46,20 @@ class _BrainAdapterBase:
         self._tmp: Optional[tempfile.TemporaryDirectory] = None
         self._db_path: Optional[Path] = None
         self._brain = None
+        # Provenance fields that the runner can serialise into the result
+        # bundle so a reader can tell how this row was actually computed.
+        # Subclasses fill these in. Surfacing them is what closes the
+        # "vector-on/off flag was not persisted" honesty gap from the
+        # 2026-04-18 head-to-head bundle.
+        self.provenance: Dict[str, Any] = {
+            "name": self.name,
+            "pinned_version": self.pinned_version,
+            "retrieval_mode": None,        # "fts-only" | "hybrid-rrf" | "fts" (cmd_search w/o vec)
+            "vector_enabled": None,        # True | False | None=unknown
+            "embedding_model": None,       # filled when hybrid-rrf
+            "rerankers_active": [],        # list of reranker names that fired
+            "search_args": {},             # the SimpleNamespace dump for cmd_search
+        }
 
     def setup(self, tenant_id: str) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -86,6 +100,18 @@ class BrainSearchAdapter(_BrainAdapterBase):
     """brainctl Brain.search — FTS5-only, fast & deterministic."""
 
     name = "brainctl-brain"
+
+    def __init__(self) -> None:
+        super().__init__()
+        # Brain.search is unconditionally FTS-only; the provenance is
+        # known statically.
+        self.provenance.update({
+            "retrieval_mode": "fts-only",
+            "vector_enabled": False,
+            "embedding_model": None,
+            "rerankers_active": [],
+            "search_args": {"limit": "<runtime>"},
+        })
 
     def search(self, query: str, top_k: int) -> List[Dict[str, Any]]:
         results = self._brain.search(query, limit=top_k)
@@ -175,6 +201,14 @@ class CmdSearchAdapter(_BrainAdapterBase):
             agent="competitor-bench", format="json",
             oneline=False, verbose=False,
         )
+        # Persist the exact search args once. Closes the 2026-04-18
+        # honesty gap where the vector-on/off flag was not captured —
+        # any future reader of the result bundle can see precisely
+        # which knobs were active for this run.
+        if not self.provenance["search_args"]:
+            self.provenance["search_args"] = {
+                k: v for k, v in vars(args).items() if k != "query"
+            }
 
         saved_json = _impl.json_out
         saved_oneline = _impl.oneline_out
@@ -193,6 +227,29 @@ class CmdSearchAdapter(_BrainAdapterBase):
         if not captured:
             return []
         payload = captured[0] if isinstance(captured[0], dict) else {}
+
+        # cmd_search puts the actual retrieval mode into the response
+        # ("fts" when sqlite-vec failed to load or no embedding was
+        # produced; "hybrid-rrf" when FTS+vec fused via Reciprocal Rank
+        # Fusion). Capture it on the first call so the runner can
+        # serialise it into the result bundle.
+        if self.provenance["retrieval_mode"] is None:
+            mode = payload.get("mode")
+            if mode:
+                self.provenance["retrieval_mode"] = mode
+                self.provenance["vector_enabled"] = (mode == "hybrid-rrf")
+            # Best-effort: surface which rerankers actually fired and
+            # which embedding model was used, both of which cmd_search
+            # publishes under _debug / mode_meta in recent versions.
+            debug = payload.get("_debug") or {}
+            if isinstance(debug, dict):
+                self.provenance["rerankers_active"] = sorted(
+                    k for k, v in debug.items() if v not in (None, False, "skipped")
+                )
+            mode_meta = payload.get("mode_meta") or {}
+            if isinstance(mode_meta, dict):
+                self.provenance["embedding_model"] = mode_meta.get("embedding_model")
+
         flat: List[Dict[str, Any]] = []
         for bucket in ("memories", "events", "context", "entities", "decisions"):
             flat.extend(payload.get(bucket, []) or [])

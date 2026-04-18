@@ -248,6 +248,11 @@ def run_adapter_once(
         "overall": agg["overall"],
         "by_category": agg["by_category"],
         "partial_skip_reason": skipped_reason,  # populated if some tenants ran
+        # Adapter-supplied provenance (retrieval mode, vector flag,
+        # rerankers active, embedding model, search args). Closes the
+        # 2026-04-18 honesty gap where the cmd_search vector-on/off
+        # flag was not persisted in the artifact bundle.
+        "provenance": getattr(adapter, "provenance", {}) or {},
     }
 
 

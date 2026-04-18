@@ -1,10 +1,18 @@
 {
   "bench": "locomo",
   "cost_projection": {
-    "_total": 0.0,
-    "brainctl-brain": 0.0
+    "_total": 9.5166,
+    "brainctl-brain": 0.0,
+    "brainctl-cmd": 0.0,
+    "cognee": 5.884,
+    "letta": 0.0295,
+    "mem0": 1.1814,
+    "memorylake": 0.0,
+    "mempalace": 0.0,
+    "openai_memory": 0.0589,
+    "zep": 2.3628
   },
-  "generated_at": "2026-04-18T06:01:43.764339+00:00",
+  "generated_at": "2026-04-18T08:47:32.107118+00:00",
   "ks": [
     1,
     5,
@@ -15,7 +23,7 @@
   "n_questions": 50,
   "n_tenants": 10,
   "n_turns": 5882,
-  "repeats": 1,
+  "repeats": 2,
   "runs": {
     "brainctl-brain": [
       {
@@ -107,11 +115,472 @@
           "recall_at_5": 0.3287
         },
         "partial_skip_reason": null,
-        "pinned_version": "2.3.2",
+        "pinned_version": "2.4.1",
+        "provenance": {
+          "embedding_model": null,
+          "name": "brainctl-brain",
+          "pinned_version": "2.4.1",
+          "rerankers_active": [],
+          "retrieval_mode": "fts-only",
+          "search_args": {
+            "limit": "<runtime>"
+          },
+          "vector_enabled": false
+        },
         "status": "ok",
-        "t_ingest_s": 13.64,
+        "t_ingest_s": 4.25,
+        "t_query_s": 5.49,
+        "wall_s": 9.95
+      },
+      {
+        "by_category": {
+          "multi-hop": {
+            "count": 6,
+            "hit_at_1": 0,
+            "hit_at_10": 0,
+            "hit_at_20": 0,
+            "hit_at_5": 0,
+            "mrr": 0.0,
+            "ndcg_at_1": 0.0,
+            "ndcg_at_10": 0.0,
+            "ndcg_at_20": 0.0,
+            "ndcg_at_5": 0.0,
+            "recall_at_1": 0.0,
+            "recall_at_10": 0.0,
+            "recall_at_20": 0.0,
+            "recall_at_5": 0.0
+          },
+          "open-domain": {
+            "count": 2,
+            "hit_at_1": 0,
+            "hit_at_10": 0.5,
+            "hit_at_20": 0.5,
+            "hit_at_5": 0,
+            "mrr": 0.0714,
+            "ndcg_at_1": 0.0,
+            "ndcg_at_10": 0.1022,
+            "ndcg_at_20": 0.1022,
+            "ndcg_at_5": 0.0,
+            "recall_at_1": 0.0,
+            "recall_at_10": 0.25,
+            "recall_at_20": 0.25,
+            "recall_at_5": 0.0
+          },
+          "single-hop": {
+            "count": 21,
+            "hit_at_1": 0.0952,
+            "hit_at_10": 0.381,
+            "hit_at_20": 0.619,
+            "hit_at_5": 0.2857,
+            "mrr": 0.1904,
+            "ndcg_at_1": 0.0952,
+            "ndcg_at_10": 0.1375,
+            "ndcg_at_20": 0.1759,
+            "ndcg_at_5": 0.1113,
+            "recall_at_1": 0.0227,
+            "recall_at_10": 0.2112,
+            "recall_at_20": 0.3132,
+            "recall_at_5": 0.1159
+          },
+          "temporal": {
+            "count": 21,
+            "hit_at_1": 0.381,
+            "hit_at_10": 0.7143,
+            "hit_at_20": 0.7143,
+            "hit_at_5": 0.6667,
+            "mrr": 0.4937,
+            "ndcg_at_1": 0.381,
+            "ndcg_at_10": 0.5479,
+            "ndcg_at_20": 0.5479,
+            "ndcg_at_5": 0.5309,
+            "recall_at_1": 0.381,
+            "recall_at_10": 0.7143,
+            "recall_at_20": 0.7143,
+            "recall_at_5": 0.6667
+          }
+        },
+        "competitor": "brainctl-brain",
+        "estimated_cost_usd": 0.0,
+        "n_queries": 50,
+        "n_tenants": 10,
+        "n_writes": 5882,
+        "overall": {
+          "hit_at_1": 0.2,
+          "hit_at_10": 0.48,
+          "hit_at_20": 0.58,
+          "hit_at_5": 0.4,
+          "mrr": 0.2901,
+          "n_questions": 50,
+          "ndcg_at_1": 0.2,
+          "ndcg_at_10": 0.2919,
+          "ndcg_at_20": 0.3081,
+          "ndcg_at_5": 0.2697,
+          "recall_at_1": 0.1695,
+          "recall_at_10": 0.3987,
+          "recall_at_20": 0.4415,
+          "recall_at_5": 0.3287
+        },
+        "partial_skip_reason": null,
+        "pinned_version": "2.4.1",
+        "provenance": {
+          "embedding_model": null,
+          "name": "brainctl-brain",
+          "pinned_version": "2.4.1",
+          "rerankers_active": [],
+          "retrieval_mode": "fts-only",
+          "search_args": {
+            "limit": "<runtime>"
+          },
+          "vector_enabled": false
+        },
+        "status": "ok",
+        "t_ingest_s": 4.06,
         "t_query_s": 5.52,
-        "wall_s": 19.35
+        "wall_s": 9.78
+      }
+    ],
+    "brainctl-cmd": [
+      {
+        "by_category": {
+          "multi-hop": {
+            "count": 6,
+            "hit_at_1": 0,
+            "hit_at_10": 0,
+            "hit_at_20": 0,
+            "hit_at_5": 0,
+            "mrr": 0.0,
+            "ndcg_at_1": 0.0,
+            "ndcg_at_10": 0.0,
+            "ndcg_at_20": 0.0,
+            "ndcg_at_5": 0.0,
+            "recall_at_1": 0.0,
+            "recall_at_10": 0.0,
+            "recall_at_20": 0.0,
+            "recall_at_5": 0.0
+          },
+          "open-domain": {
+            "count": 2,
+            "hit_at_1": 0,
+            "hit_at_10": 0,
+            "hit_at_20": 0,
+            "hit_at_5": 0,
+            "mrr": 0.0,
+            "ndcg_at_1": 0.0,
+            "ndcg_at_10": 0.0,
+            "ndcg_at_20": 0.0,
+            "ndcg_at_5": 0.0,
+            "recall_at_1": 0.0,
+            "recall_at_10": 0.0,
+            "recall_at_20": 0.0,
+            "recall_at_5": 0.0
+          },
+          "single-hop": {
+            "count": 21,
+            "hit_at_1": 0,
+            "hit_at_10": 0.0952,
+            "hit_at_20": 0.0952,
+            "hit_at_5": 0,
+            "mrr": 0.0139,
+            "ndcg_at_1": 0.0,
+            "ndcg_at_10": 0.0131,
+            "ndcg_at_20": 0.0222,
+            "ndcg_at_5": 0.0,
+            "recall_at_1": 0.0,
+            "recall_at_10": 0.0254,
+            "recall_at_20": 0.0508,
+            "recall_at_5": 0.0
+          },
+          "temporal": {
+            "count": 21,
+            "hit_at_1": 0.1905,
+            "hit_at_10": 0.1905,
+            "hit_at_20": 0.2381,
+            "hit_at_5": 0.1905,
+            "mrr": 0.193,
+            "ndcg_at_1": 0.1905,
+            "ndcg_at_10": 0.1905,
+            "ndcg_at_20": 0.2015,
+            "ndcg_at_5": 0.1905,
+            "recall_at_1": 0.1905,
+            "recall_at_10": 0.1905,
+            "recall_at_20": 0.2381,
+            "recall_at_5": 0.1905
+          }
+        },
+        "competitor": "brainctl-cmd",
+        "estimated_cost_usd": 0.0,
+        "n_queries": 50,
+        "n_tenants": 10,
+        "n_writes": 5882,
+        "overall": {
+          "hit_at_1": 0.08,
+          "hit_at_10": 0.12,
+          "hit_at_20": 0.14,
+          "hit_at_5": 0.08,
+          "mrr": 0.0869,
+          "n_questions": 50,
+          "ndcg_at_1": 0.08,
+          "ndcg_at_10": 0.0855,
+          "ndcg_at_20": 0.0939,
+          "ndcg_at_5": 0.08,
+          "recall_at_1": 0.08,
+          "recall_at_10": 0.0907,
+          "recall_at_20": 0.1213,
+          "recall_at_5": 0.08
+        },
+        "partial_skip_reason": null,
+        "pinned_version": "2.4.1",
+        "provenance": {
+          "embedding_model": null,
+          "name": "brainctl-cmd",
+          "pinned_version": "2.4.1",
+          "rerankers_active": [],
+          "retrieval_mode": "fts",
+          "search_args": {
+            "agent": "competitor-bench",
+            "benchmark": false,
+            "budget": null,
+            "explore": false,
+            "format": "json",
+            "limit": 20,
+            "min_salience": null,
+            "mmr": false,
+            "mmr_lambda": 0.7,
+            "no_graph": true,
+            "no_recency": true,
+            "oneline": false,
+            "pagerank_boost": 0.0,
+            "profile": null,
+            "quantum": false,
+            "tables": "memories,events,context",
+            "verbose": false
+          },
+          "vector_enabled": false
+        },
+        "status": "ok",
+        "t_ingest_s": 4.09,
+        "t_query_s": 419.66,
+        "wall_s": 424.0
+      },
+      {
+        "by_category": {
+          "multi-hop": {
+            "count": 6,
+            "hit_at_1": 0,
+            "hit_at_10": 0,
+            "hit_at_20": 0,
+            "hit_at_5": 0,
+            "mrr": 0.0,
+            "ndcg_at_1": 0.0,
+            "ndcg_at_10": 0.0,
+            "ndcg_at_20": 0.0,
+            "ndcg_at_5": 0.0,
+            "recall_at_1": 0.0,
+            "recall_at_10": 0.0,
+            "recall_at_20": 0.0,
+            "recall_at_5": 0.0
+          },
+          "open-domain": {
+            "count": 2,
+            "hit_at_1": 0,
+            "hit_at_10": 0,
+            "hit_at_20": 0,
+            "hit_at_5": 0,
+            "mrr": 0.0,
+            "ndcg_at_1": 0.0,
+            "ndcg_at_10": 0.0,
+            "ndcg_at_20": 0.0,
+            "ndcg_at_5": 0.0,
+            "recall_at_1": 0.0,
+            "recall_at_10": 0.0,
+            "recall_at_20": 0.0,
+            "recall_at_5": 0.0
+          },
+          "single-hop": {
+            "count": 21,
+            "hit_at_1": 0,
+            "hit_at_10": 0.0952,
+            "hit_at_20": 0.0952,
+            "hit_at_5": 0,
+            "mrr": 0.0139,
+            "ndcg_at_1": 0.0,
+            "ndcg_at_10": 0.0131,
+            "ndcg_at_20": 0.0222,
+            "ndcg_at_5": 0.0,
+            "recall_at_1": 0.0,
+            "recall_at_10": 0.0254,
+            "recall_at_20": 0.0508,
+            "recall_at_5": 0.0
+          },
+          "temporal": {
+            "count": 21,
+            "hit_at_1": 0.1905,
+            "hit_at_10": 0.1905,
+            "hit_at_20": 0.2381,
+            "hit_at_5": 0.1905,
+            "mrr": 0.193,
+            "ndcg_at_1": 0.1905,
+            "ndcg_at_10": 0.1905,
+            "ndcg_at_20": 0.2015,
+            "ndcg_at_5": 0.1905,
+            "recall_at_1": 0.1905,
+            "recall_at_10": 0.1905,
+            "recall_at_20": 0.2381,
+            "recall_at_5": 0.1905
+          }
+        },
+        "competitor": "brainctl-cmd",
+        "estimated_cost_usd": 0.0,
+        "n_queries": 50,
+        "n_tenants": 10,
+        "n_writes": 5882,
+        "overall": {
+          "hit_at_1": 0.08,
+          "hit_at_10": 0.12,
+          "hit_at_20": 0.14,
+          "hit_at_5": 0.08,
+          "mrr": 0.0869,
+          "n_questions": 50,
+          "ndcg_at_1": 0.08,
+          "ndcg_at_10": 0.0855,
+          "ndcg_at_20": 0.0939,
+          "ndcg_at_5": 0.08,
+          "recall_at_1": 0.08,
+          "recall_at_10": 0.0907,
+          "recall_at_20": 0.1213,
+          "recall_at_5": 0.08
+        },
+        "partial_skip_reason": null,
+        "pinned_version": "2.4.1",
+        "provenance": {
+          "embedding_model": null,
+          "name": "brainctl-cmd",
+          "pinned_version": "2.4.1",
+          "rerankers_active": [],
+          "retrieval_mode": "fts",
+          "search_args": {
+            "agent": "competitor-bench",
+            "benchmark": false,
+            "budget": null,
+            "explore": false,
+            "format": "json",
+            "limit": 20,
+            "min_salience": null,
+            "mmr": false,
+            "mmr_lambda": 0.7,
+            "no_graph": true,
+            "no_recency": true,
+            "oneline": false,
+            "pagerank_boost": 0.0,
+            "profile": null,
+            "quantum": false,
+            "tables": "memories,events,context",
+            "verbose": false
+          },
+          "vector_enabled": false
+        },
+        "status": "ok",
+        "t_ingest_s": 4.2,
+        "t_query_s": 421.2,
+        "wall_s": 425.66
+      }
+    ],
+    "cognee": [
+      {
+        "competitor": "cognee",
+        "reason": "cognee not installed (pip install cognee==1.0.0): ModuleNotFoundError(\"No module named 'cognee'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      },
+      {
+        "competitor": "cognee",
+        "reason": "cognee not installed (pip install cognee==1.0.0): ModuleNotFoundError(\"No module named 'cognee'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      }
+    ],
+    "letta": [
+      {
+        "competitor": "letta",
+        "reason": "letta-client not installed (pip install letta-client==1.10.3): ModuleNotFoundError(\"No module named 'letta_client'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      },
+      {
+        "competitor": "letta",
+        "reason": "letta-client not installed (pip install letta-client==1.10.3): ModuleNotFoundError(\"No module named 'letta_client'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      }
+    ],
+    "mem0": [
+      {
+        "competitor": "mem0",
+        "reason": "mem0ai SDK not installed (pip install mem0ai==2.0.0): ModuleNotFoundError(\"No module named 'mem0'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      },
+      {
+        "competitor": "mem0",
+        "reason": "mem0ai SDK not installed (pip install mem0ai==2.0.0): ModuleNotFoundError(\"No module named 'mem0'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      }
+    ],
+    "memorylake": [
+      {
+        "competitor": "memorylake",
+        "reason": "ambiguous-product: PyPI memorylake==0.1.0 exists but lacks documented agent-memory API surface; the 'MemoryLake' competitor referenced in the brainctl matrix may be a different (Web3 'memory passport') product. Adapter intentionally stubbed until product-of-record is confirmed.",
+        "status": "skipped",
+        "wall_s": 0.0
+      },
+      {
+        "competitor": "memorylake",
+        "reason": "ambiguous-product: PyPI memorylake==0.1.0 exists but lacks documented agent-memory API surface; the 'MemoryLake' competitor referenced in the brainctl matrix may be a different (Web3 'memory passport') product. Adapter intentionally stubbed until product-of-record is confirmed.",
+        "status": "skipped",
+        "wall_s": 0.0
+      }
+    ],
+    "mempalace": [
+      {
+        "competitor": "mempalace",
+        "reason": "mempalace SDK not installed (pip install mempalace==3.3.1): ModuleNotFoundError(\"No module named 'mempalace'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      },
+      {
+        "competitor": "mempalace",
+        "reason": "mempalace SDK not installed (pip install mempalace==3.3.1): ModuleNotFoundError(\"No module named 'mempalace'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      }
+    ],
+    "openai_memory": [
+      {
+        "competitor": "openai_memory",
+        "reason": "openai SDK not installed (pip install openai>=2.32.0): ModuleNotFoundError(\"No module named 'openai'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      },
+      {
+        "competitor": "openai_memory",
+        "reason": "openai SDK not installed (pip install openai>=2.32.0): ModuleNotFoundError(\"No module named 'openai'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      }
+    ],
+    "zep": [
+      {
+        "competitor": "zep",
+        "reason": "zep-cloud not installed (pip install zep-cloud==3.20.0): ModuleNotFoundError(\"No module named 'zep_cloud'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      },
+      {
+        "competitor": "zep",
+        "reason": "zep-cloud not installed (pip install zep-cloud==3.20.0): ModuleNotFoundError(\"No module named 'zep_cloud'\")",
+        "status": "skipped",
+        "wall_s": 0.0
       }
     ]
   },
@@ -128,7 +597,7 @@
       "hit_at_5_stdev": 0.0,
       "mrr_mean": 0.2901,
       "mrr_stdev": 0.0,
-      "n_runs_ok": 1,
+      "n_runs_ok": 2,
       "ndcg_at_10_mean": 0.2919,
       "ndcg_at_10_stdev": 0.0,
       "ndcg_at_1_mean": 0.2,
@@ -137,7 +606,7 @@
       "ndcg_at_20_stdev": 0.0,
       "ndcg_at_5_mean": 0.2697,
       "ndcg_at_5_stdev": 0.0,
-      "pinned_version": "2.3.2",
+      "pinned_version": "2.4.1",
       "recall_at_10_mean": 0.3987,
       "recall_at_10_stdev": 0.0,
       "recall_at_1_mean": 0.1695,
@@ -147,7 +616,68 @@
       "recall_at_5_mean": 0.3287,
       "recall_at_5_stdev": 0.0,
       "status": "ok",
-      "wall_s_mean": 19.35
+      "wall_s_mean": 9.86
+    },
+    "brainctl-cmd": {
+      "estimated_cost_usd": 0.0,
+      "hit_at_10_mean": 0.12,
+      "hit_at_10_stdev": 0.0,
+      "hit_at_1_mean": 0.08,
+      "hit_at_1_stdev": 0.0,
+      "hit_at_20_mean": 0.14,
+      "hit_at_20_stdev": 0.0,
+      "hit_at_5_mean": 0.08,
+      "hit_at_5_stdev": 0.0,
+      "mrr_mean": 0.0869,
+      "mrr_stdev": 0.0,
+      "n_runs_ok": 2,
+      "ndcg_at_10_mean": 0.0855,
+      "ndcg_at_10_stdev": 0.0,
+      "ndcg_at_1_mean": 0.08,
+      "ndcg_at_1_stdev": 0.0,
+      "ndcg_at_20_mean": 0.0939,
+      "ndcg_at_20_stdev": 0.0,
+      "ndcg_at_5_mean": 0.08,
+      "ndcg_at_5_stdev": 0.0,
+      "pinned_version": "2.4.1",
+      "recall_at_10_mean": 0.0907,
+      "recall_at_10_stdev": 0.0,
+      "recall_at_1_mean": 0.08,
+      "recall_at_1_stdev": 0.0,
+      "recall_at_20_mean": 0.1213,
+      "recall_at_20_stdev": 0.0,
+      "recall_at_5_mean": 0.08,
+      "recall_at_5_stdev": 0.0,
+      "status": "ok",
+      "wall_s_mean": 424.83
+    },
+    "cognee": {
+      "reason": "cognee not installed (pip install cognee==1.0.0): ModuleNotFoundError(\"No module named 'cognee'\")",
+      "status": "skipped"
+    },
+    "letta": {
+      "reason": "letta-client not installed (pip install letta-client==1.10.3): ModuleNotFoundError(\"No module named 'letta_client'\")",
+      "status": "skipped"
+    },
+    "mem0": {
+      "reason": "mem0ai SDK not installed (pip install mem0ai==2.0.0): ModuleNotFoundError(\"No module named 'mem0'\")",
+      "status": "skipped"
+    },
+    "memorylake": {
+      "reason": "ambiguous-product: PyPI memorylake==0.1.0 exists but lacks documented agent-memory API surface; the 'MemoryLake' competitor referenced in the brainctl matrix may be a different (Web3 'memory passport') product. Adapter intentionally stubbed until product-of-record is confirmed.",
+      "status": "skipped"
+    },
+    "mempalace": {
+      "reason": "mempalace SDK not installed (pip install mempalace==3.3.1): ModuleNotFoundError(\"No module named 'mempalace'\")",
+      "status": "skipped"
+    },
+    "openai_memory": {
+      "reason": "openai SDK not installed (pip install openai>=2.32.0): ModuleNotFoundError(\"No module named 'openai'\")",
+      "status": "skipped"
+    },
+    "zep": {
+      "reason": "zep-cloud not installed (pip install zep-cloud==3.20.0): ModuleNotFoundError(\"No module named 'zep_cloud'\")",
+      "status": "skipped"
     }
   },
   "top_k": 5
