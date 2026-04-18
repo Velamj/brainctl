@@ -5,6 +5,95 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.3.1] — 2026-04-18
+
+### Fixed — closed an 18× retrieval-quality gap on cold-start data
+
+brain memory id 1690 documented an 18× Hit@5 gap between `cmd_search` and
+`Brain.search` on the LOCOMO benchmark (0.0424 vs 0.5716). The CLI/MCP path
+applied recency / salience / Q-value rerankers on top of FTS+vec fusion,
+but on cold-start data (uniform timestamps, zero recall history, default
+trust) those signals were uninformative and *scrambled* the FTS ranking
+they received. **This wasn't just a synthetic-data problem — every
+brainctl user on Day 1 of a fresh `brain.db` hit the same shape.**
+
+**Two fixes shipped together:**
+
+1. **`brainctl search --benchmark` flag (immediate escape hatch).** Skips
+   the recency / salience / Q-value / source-weight / context-match /
+   quantum / temporal-contiguity / PageRank rerankers; keeps trust as the
+   single provenance signal that's not stale-data-sensitive. Returns the
+   raw FTS+vec RRF-fused ranking. The MCP `memory_search` tool gets a
+   matching `benchmark: bool = False` kwarg. Stderr emits a one-line note
+   when the flag fires so it's never silent.
+
+2. **Auto-detect uninformative rerankers (the proper fix).** Each
+   reranker now performs a signal-informativeness check on the candidate
+   set BEFORE applying its weight:
+   - **Recency:** if `stdev(created_at) < 60s` → weight 0.0
+   - **Salience:** if `stdev(replay_priority) < 0.05` OR no affect data → weight 0.0
+   - **Q-value:** if `sum(recalled_count) < 3` → weight 0.0 (not enough recall history)
+   - **Trust:** if `stdev(trust_score) < 0.02` → weight 0.0 (everything's the default)
+
+   Every downweight decision lands in the search response's `_debug` dict
+   so an auditor can see WHY a particular ranking happened. Thresholds
+   are module-level constants — `_RECENCY_STDEV_FLOOR_SECONDS`,
+   `_SALIENCE_PRIORITY_STDEV_FLOOR`, `_QVALUE_RECALL_FLOOR`,
+   `_TRUST_STDEV_FLOOR` — tunable and documented inline with rationale.
+
+**Before/after on `tests/bench/` (the existing internal benchmark, which
+has the same cold-start shape as LOCOMO):**
+
+| metric | baseline | post-fix | delta |
+|---|---:|---:|---:|
+| `p_at_1` | 0.45 | **0.60** | **+15pp** |
+| `mrr` | 0.5375 | **0.625** | **+8.75pp** |
+| `ndcg_at_5` | 0.496 | **0.5579** | +6.2pp |
+| `p_at_5` | 0.18 | 0.18 | 0 |
+| `recall_at_5` | 0.5083 | 0.5083 | 0 |
+
+cmd_search is now ~73% of the FTS-only ceiling instead of ~63%. New
+`tests/test_reranker_robustness.py` (31 cases) regression-guards both
+the synthetic-data behavior (rerankers stay quiet) and the real-data
+behavior (rerankers still fire on informative signals).
+
+### Added — external benchmark CI gates
+
+Two industry-standard memory benchmarks added to `tests/bench/`,
+opt-in via `BRAINCTL_RUN_BENCH=1` env gate so they don't slow the
+default `pytest` (datasets are gitignored).
+
+**LOCOMO** (Long-term Conversational Memory, Stanford SNAP, MIT-licensed)
+— 1,982 questions across 5 categories. Run via:
+```bash
+BRAINCTL_RUN_BENCH=1 pytest tests/test_locomo_bench.py
+```
+
+Baseline captured (Brain.search backend, full sweep, 267s wall):
+
+| metric | overall | single-hop | multi-hop | temporal | open-domain | adversarial |
+|---|---:|---:|---:|---:|---:|---:|
+| Hit@1 | 0.3406 | — | — | — | — | — |
+| Hit@5 | **0.5716** | 0.4291 | 0.3152 | 0.6480 | 0.6017 | 0.6031 |
+| MRR | 0.4447 | — | — | — | — | — |
+| nDCG@5 | 0.4365 | — | — | — | — | — |
+
+A dated pre-fix snapshot at `tests/bench/baselines/locomo_pre_fix_2026_04_18.json`
+captures the broken cmd_search path for historical comparison.
+
+**LongMemEval** (long-term agent memory, ~289 retrieval-friendly entries
+from the `_s_cleaned` split). Run via:
+```bash
+BRAINCTL_RUN_BENCH=1 pytest tests/test_longmemeval_bench.py
+```
+
+Baseline (Brain.search, 30s wall): Overall Hit@5 = **0.9758**, single-session
+1.000, multi-session 0.985, single-session-preference 0.833.
+
+Shared `tests/bench/external_runner.py` with `ingest_conversation_into_brain`
+and `eval_questions` helpers for future benchmarks (HotPotQA, BEIR, etc.).
+Documentation lives in `tests/bench/EXTERNAL_BENCHMARKS.md`.
+
 ## [2.3.0] — 2026-04-17
 
 ### Added — signed memory exports (new subsystem)
