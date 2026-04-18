@@ -1,0 +1,9 @@
+# Cached dataset downloads — too large for the repo, regenerated on demand.
+# The loaders in this directory check these paths first; on miss they fetch
+# from the upstream source and write here. Never commit the cached data.
+locomo/
+longmemeval/
+hotpotqa/
+*.json.gz
+*.tar.gz
+*.zip
