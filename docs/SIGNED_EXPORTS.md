@@ -7,6 +7,88 @@ verify` checks the signature offline. With `--pin-onchain` /
 from) the Solana memo program, giving anyone in the world a tamper-
 proof, timestamped receipt that you attested to that exact bundle.
 
+---
+
+## Quick start (no Solana experience required)
+
+You don't need the Solana CLI, you don't need to "have a wallet"
+already, you don't need to know what a keypair is. brainctl ships with
+a **managed wallet** subcommand suite that takes care of all of that
+for you.
+
+**30-second setup:**
+
+```bash
+pip install 'brainctl[signing]'           # one-time
+brainctl wallet new --yes                 # creates ~/.brainctl/wallet.json
+brainctl wallet address                   # prints just your address (pipe-friendly)
+brainctl export --sign -o my-bundle.json  # auto-uses the new wallet
+brainctl verify my-bundle.json            # offline check; exit 0 = good
+```
+
+That's it. You now have a tamper-evident memory bundle on disk that
+anyone in the world can verify without trusting (or installing)
+brainctl. See "Reference verification recipe" below for the 30-line
+verifier in pure Python.
+
+**The wallet is non-custodial.** The keystore lives at
+`~/.brainctl/wallet.json` on YOUR disk with `chmod 0600`. brainctl
+never transmits, copies, or backs up the private key. To back it up
+yourself, run `brainctl wallet export ~/Backups/brainctl-wallet.json`
+and store the copy somewhere safe (a USB drive, an encrypted vault,
+etc.).
+
+### Funding the wallet (optional, only for on-chain pinning)
+
+The `--pin-onchain` flag posts the bundle's SHA-256 hash as a
+public, timestamped receipt on the Solana blockchain. This is
+**optional** — offline signatures alone already make bundles
+tamper-evident. You only need to fund the wallet if you want the
+public receipt.
+
+To fund:
+
+1. Run `brainctl wallet address` and copy the address.
+2. Send any small amount of SOL (~$1 buys you ~1,000 pins) to that
+   address. SOL can be bought from any major exchange (Coinbase,
+   Kraken, Binance, etc.) and withdrawn to your address.
+3. Check it landed: `brainctl wallet balance`.
+4. Sign + pin: `brainctl export --sign --pin-onchain -o pinned.json`.
+
+Pinning costs ~$0.001 per bundle. brainctl will refuse to attempt the
+pin if the wallet has 0 SOL — it skips the pin and tells you what to
+do, exiting cleanly so the offline signature is still saved.
+
+### Wallet subcommand reference
+
+| Command                                | What it does                                                |
+| -------------------------------------- | ----------------------------------------------------------- |
+| `brainctl wallet new [--force] [--yes]`| Generate a fresh Ed25519 keypair, chmod 0600                |
+| `brainctl wallet address`              | Print just the address (pipe-friendly)                      |
+| `brainctl wallet balance [--rpc-url]`  | Fetch SOL balance via JSON-RPC                              |
+| `brainctl wallet show [--json]`        | Address + balance + path + perms + mtime                    |
+| `brainctl wallet export <path>`        | Copy the keystore to a backup file (chmod 0600 the copy)    |
+| `brainctl wallet import <path>`        | Import an existing Solana CLI keystore JSON                 |
+| `brainctl wallet rm [--yes]`           | Delete the keystore (asks for confirmation)                 |
+| `brainctl wallet onboard [--yes]`      | Guided one-shot setup: creates wallet + prints next steps   |
+
+### For agents driving brainctl
+
+If you're an AI agent with `brainctl` in your toolbox, you can
+auto-create a wallet for the user mid-flow:
+
+```bash
+brainctl export --sign --auto-setup-wallet -o bundle.json --json
+```
+
+`--auto-setup-wallet` creates the managed wallet inline if none
+exists, then signs the bundle. The JSON output includes
+`auto_created_wallet.address` so you can surface it to the user. The
+MCP tools `wallet_show` and `wallet_create` give you the same control
+without shelling out.
+
+---
+
 This is **local-first by design**. Memory contents never leave your
 machine. The on-chain footprint is tiny (one memo transaction, ~$0.001
 at current SOL prices) and contains only the bundle's SHA-256 hash and

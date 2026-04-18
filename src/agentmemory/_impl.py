@@ -16080,6 +16080,10 @@ def build_parser():
     from agentmemory.commands.sign import register_parser as _sign_register
     _sign_register(sub)
 
+    # --- wallet (managed Solana wallet for signed exports, 2.3.2+) ---
+    from agentmemory.commands.wallet import register_parser as _wallet_register
+    _wallet_register(sub)
+
     return p
 
 # ---------------------------------------------------------------------------
@@ -17194,6 +17198,13 @@ def main():
     elif args.command == "verify":
         from agentmemory.commands.sign import cmd_verify as _cmd_verify
         _cmd_verify(args)
+        return
+    elif args.command == "wallet":
+        # Managed wallet subcommand suite (2.3.2+). The dispatch table
+        # lives in commands/wallet.py so this branch stays a single
+        # import + call.
+        from agentmemory.commands.wallet import cmd_wallet as _cmd_wallet
+        _cmd_wallet(args)
         return
     else:
         fn = dispatch.get(args.command)

@@ -541,13 +541,24 @@ def test_cli_verify_check_onchain_missing_exits_2(tmp_path, keystore_file, monke
 def test_cli_export_without_keystore_exits_1(tmp_path, monkeypatch):
     db_p = _make_db(tmp_path)
     monkeypatch.delenv("BRAINCTL_SIGNING_KEY_PATH", raising=False)
+    # 2.3.2 added a managed-wallet auto-discovery path. Force the
+    # wallet location to a tmp path that doesn't exist so this test
+    # actually exercises the "no keystore at all" branch — otherwise
+    # a real ~/.brainctl/wallet.json on the dev machine would silently
+    # satisfy the resolver and the test would assert the wrong thing.
     r = _run_cli(["export", "--sign", "--json"],
                  db_path=db_p,
-                 env_extra={"BRAINCTL_SIGNING_KEY_PATH": ""})
+                 env_extra={
+                     "BRAINCTL_SIGNING_KEY_PATH": "",
+                     "BRAINCTL_WALLET_PATH": str(tmp_path / "nonexistent-wallet.json"),
+                 })
     assert r.returncode == 1
     payload = json.loads(r.stdout)
     assert payload["ok"] is False
-    assert "keystore" in payload["error"]
+    # 2.3.2 changed the error wording: it now mentions both "wallet new"
+    # and "--keystore" as recovery paths. Match on either keyword so the
+    # test stays informative across both phrasings.
+    assert ("keystore" in payload["error"]) or ("wallet" in payload["error"])
 
 
 def test_cli_export_without_sign_exits_2(tmp_path, keystore_file):
