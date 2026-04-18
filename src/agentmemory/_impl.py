@@ -8170,6 +8170,233 @@ def cmd_dashboard(args):
     print()
 
 
+def cmd_status(args):
+    """Friendly single-screen brain health overview.
+
+    Combines `stats` (counts + DB size) and `doctor` (issue detection) with
+    a fresh layer of service-availability checks (Ollama reachable? sqlite-vec
+    loadable? signing extras installed? managed wallet configured?).
+
+    Exits 0 when everything is green. Exits 1 if any "needs attention" item
+    fires (pending migrations, missing services that brainctl actively
+    relies on, etc.). `--json` for machine-readable; `--issues` to skip
+    the green checkmarks and only show what needs fixing.
+    """
+    import importlib.util as _ilu
+    import urllib.request as _urlreq
+    import urllib.error as _urlerr
+
+    json_mode = getattr(args, "json", False)
+    issues_only = getattr(args, "issues", False)
+    use_color = sys.stdout.isatty() and not json_mode
+
+    GREEN = "\033[32m" if use_color else ""
+    RED = "\033[31m" if use_color else ""
+    YELLOW = "\033[33m" if use_color else ""
+    DIM = "\033[2m" if use_color else ""
+    BOLD = "\033[1m" if use_color else ""
+    RESET = "\033[0m" if use_color else ""
+
+    payload: Dict[str, Any] = {"ok": True, "checks": {}, "warnings": [], "errors": []}
+
+    # ─── Version ───────────────────────────────────────────────────────────
+    try:
+        from importlib.metadata import version as _pkgversion
+        ver = _pkgversion("brainctl")
+    except Exception:
+        ver = "unknown"
+    payload["version"] = ver
+
+    # ─── DB existence + size ───────────────────────────────────────────────
+    db_exists = DB_PATH.exists()
+    payload["checks"]["db_exists"] = db_exists
+    db_size_mb = 0.0
+    wal_size_mb = 0.0
+    if db_exists:
+        db_size_mb = round(DB_PATH.stat().st_size / 1048576, 2)
+        wal_path = DB_PATH.with_suffix(".db-wal")
+        wal_size_mb = round(wal_path.stat().st_size / 1048576, 2) if wal_path.exists() else 0.0
+    payload["db_path"] = str(DB_PATH)
+    payload["db_size_mb"] = db_size_mb
+    payload["wal_size_mb"] = wal_size_mb
+
+    if not db_exists:
+        payload["ok"] = False
+        payload["errors"].append(f"brain.db not found at {DB_PATH} — run `brainctl init`")
+        if json_mode:
+            json_out(payload)
+            return
+        print(f"{RED}✗{RESET} brain.db not found at {DB_PATH}")
+        print(f"  Run: {BOLD}brainctl init{RESET}")
+        sys.exit(1)
+
+    # ─── Schema state ──────────────────────────────────────────────────────
+    pending_migrations = 0
+    schema_warning = None
+    try:
+        db = get_db()
+        applied = {r[0] for r in db.execute("SELECT version FROM schema_versions").fetchall()}
+        from agentmemory.migrate import _get_migrations
+        all_migrations = _get_migrations()
+        pending = [m for m in all_migrations if m[0] not in applied]
+        pending_migrations = len(pending)
+    except Exception as exc:
+        schema_warning = f"could not query schema_versions: {exc}"
+    payload["checks"]["pending_migrations"] = pending_migrations
+
+    # ─── Counts ────────────────────────────────────────────────────────────
+    counts: Dict[str, int] = {}
+    for table in ("agents", "memories", "events", "entities", "decisions",
+                  "handoff_packets", "context", "access_log"):
+        try:
+            counts[table] = db.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+        except Exception:
+            counts[table] = 0
+    try:
+        counts["active_memories"] = db.execute(
+            "SELECT count(*) FROM memories WHERE retired_at IS NULL"
+        ).fetchone()[0]
+    except Exception:
+        counts["active_memories"] = 0
+    payload["counts"] = counts
+
+    # ─── Most-active agent ─────────────────────────────────────────────────
+    try:
+        row = db.execute(
+            "SELECT agent_id, count(*) c FROM access_log "
+            "WHERE created_at >= datetime('now', '-1 day') "
+            "GROUP BY agent_id ORDER BY c DESC LIMIT 1"
+        ).fetchone()
+        most_active = (row[0], row[1]) if row else (None, 0)
+    except Exception:
+        most_active = (None, 0)
+    payload["most_active_agent_24h"] = {"agent_id": most_active[0], "access_count": most_active[1]}
+
+    # ─── Service checks ────────────────────────────────────────────────────
+    services: Dict[str, Dict[str, Any]] = {}
+
+    # Ollama
+    ollama_url = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    try:
+        req = _urlreq.Request(f"{ollama_url}/api/tags", headers={"Accept": "application/json"})
+        with _urlreq.urlopen(req, timeout=2) as resp:
+            data = json.loads(resp.read())
+            models = [m["name"] for m in data.get("models", [])]
+            services["ollama"] = {"reachable": True, "url": ollama_url, "models": models}
+    except (_urlerr.URLError, _urlerr.HTTPError, ConnectionRefusedError, TimeoutError, OSError):
+        services["ollama"] = {"reachable": False, "url": ollama_url, "models": []}
+    except Exception as exc:
+        services["ollama"] = {"reachable": False, "url": ollama_url, "error": str(exc)[:80]}
+
+    # sqlite-vec
+    try:
+        import sqlite_vec  # noqa: F401
+        services["sqlite_vec"] = {"installed": True}
+    except ImportError:
+        services["sqlite_vec"] = {"installed": False}
+
+    # Signing (solders)
+    services["signing"] = {"installed": _ilu.find_spec("solders") is not None}
+
+    # Managed wallet
+    wallet_path_env = os.environ.get("BRAINCTL_WALLET_PATH")
+    wallet_path = Path(wallet_path_env) if wallet_path_env else (Path.home() / ".brainctl" / "wallet.json")
+    services["wallet"] = {"configured": wallet_path.exists(), "path": str(wallet_path)}
+
+    payload["services"] = services
+
+    # ─── MCP tools count (best-effort) ─────────────────────────────────────
+    mcp_tools = None
+    try:
+        # Lazy import — mcp_server may pull heavy deps
+        from agentmemory import mcp_server as _mcp_srv
+        mcp_tools = len(getattr(_mcp_srv, "TOOLS", []))
+    except Exception:
+        mcp_tools = None
+    payload["mcp_tools"] = mcp_tools
+
+    # ─── Plugins count ─────────────────────────────────────────────────────
+    plugins_dir = Path(__file__).resolve().parent.parent.parent / "plugins"
+    if plugins_dir.exists():
+        plugins = sorted([p.name for p in plugins_dir.iterdir() if p.is_dir() and (p / "brainctl").exists()])
+        payload["plugins"] = plugins
+    else:
+        payload["plugins"] = []
+
+    # ─── Determine overall health ──────────────────────────────────────────
+    if pending_migrations > 0:
+        payload["warnings"].append(f"{pending_migrations} pending migration(s) — run `brainctl migrate`")
+    if schema_warning:
+        payload["warnings"].append(schema_warning)
+    if not services["ollama"]["reachable"]:
+        payload["warnings"].append("Ollama unreachable — vector embeddings will be skipped on memory_add")
+    if not services["sqlite_vec"]["installed"]:
+        payload["warnings"].append("sqlite-vec not installed — `pip install brainctl[vec]` to enable hybrid retrieval")
+
+    if payload["warnings"]:
+        payload["ok"] = False
+
+    # ─── Output ────────────────────────────────────────────────────────────
+    if json_mode:
+        json_out(payload)
+        if not payload["ok"]:
+            sys.exit(1)
+        return
+
+    # Human-readable rendering
+    def _row(label: str, value: str, ok: Optional[bool] = None, hint: str = "") -> None:
+        if issues_only and ok is not False:
+            return
+        if ok is True:
+            mark = f"{GREEN}✓{RESET}"
+        elif ok is False:
+            mark = f"{RED}✗{RESET}"
+        else:
+            mark = " "
+        suffix = f"  {DIM}{hint}{RESET}" if hint else ""
+        print(f"  {mark} {label:<24} {value}{suffix}")
+
+    print(f"{BOLD}brainctl {ver}{RESET}  {DIM}({DB_PATH}){RESET}")
+    print()
+    _row("brain.db", f"{db_size_mb} MB" + (f"  +{wal_size_mb}MB WAL" if wal_size_mb > 0 else ""), ok=True)
+    _row("schema", f"{pending_migrations} pending", ok=(pending_migrations == 0),
+         hint="run `brainctl migrate`" if pending_migrations > 0 else "")
+    print()
+    _row("memories", f"{counts['active_memories']:,} active  ({counts['memories']:,} total)", ok=True)
+    _row("events", f"{counts['events']:,}", ok=True)
+    _row("entities", f"{counts['entities']:,}", ok=True)
+    _row("decisions", f"{counts['decisions']:,}", ok=True)
+    _row("handoff_packets", f"{counts['handoff_packets']:,}", ok=True)
+    _row("agents", f"{counts['agents']:,} registered", ok=True)
+    if most_active[0]:
+        _row("most active 24h", f"{most_active[0]} ({most_active[1]} ops)", ok=True)
+    print()
+    _row("ollama", "reachable" if services["ollama"]["reachable"] else "unreachable",
+         ok=services["ollama"]["reachable"], hint=services["ollama"]["url"])
+    _row("sqlite-vec", "installed" if services["sqlite_vec"]["installed"] else "not installed",
+         ok=services["sqlite_vec"]["installed"],
+         hint="" if services["sqlite_vec"]["installed"] else "pip install brainctl[vec]")
+    _row("signing (solders)", "installed" if services["signing"]["installed"] else "not installed",
+         ok=services["signing"]["installed"],
+         hint="" if services["signing"]["installed"] else "pip install brainctl[signing]")
+    _row("managed wallet", "configured" if services["wallet"]["configured"] else "not configured",
+         ok=services["wallet"]["configured"],
+         hint="" if services["wallet"]["configured"] else "brainctl wallet new")
+    print()
+    if mcp_tools is not None:
+        _row("mcp tools", f"{mcp_tools}", ok=True)
+    _row("plugins", f"{len(payload['plugins'])} first-party", ok=True)
+    print()
+
+    if payload["ok"]:
+        print(f"{GREEN}{BOLD}all good{RESET}")
+        sys.exit(0)
+    else:
+        for w in payload["warnings"]:
+            print(f"  {YELLOW}!{RESET} {w}")
+        sys.exit(1)
+
+
 def cmd_doctor(args):
     """Quick diagnostic: is the brain working?"""
     use_color = sys.stdout.isatty() and not getattr(args, "json", False)
@@ -15827,6 +16054,14 @@ def build_parser():
     sub.add_parser("cost", help="Token cost analysis — shows format savings, query costs, and optimization tips")
     sub.add_parser("validate", help="Validate database integrity")
 
+    # --- status ---
+    status_p = sub.add_parser(
+        "status",
+        help="Friendly single-screen brain health overview (combines stats + doctor + service checks)",
+    )
+    status_p.add_argument("--json", action="store_true", help="Output structured JSON instead of human-readable")
+    status_p.add_argument("--issues", action="store_true", help="Show only failing checks (skip the green stuff)")
+
     # --- perf ---
     perf = sub.add_parser(
         "perf",
@@ -17430,6 +17665,7 @@ def main():
         "init": cmd_init,
         "doctor": cmd_doctor,
         "stats": cmd_stats,
+        "status": cmd_status,
         "cost": cmd_cost,
         "perf": cmd_perf,
         "affect": None,  # subcommand dispatch below

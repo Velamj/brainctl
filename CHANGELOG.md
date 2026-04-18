@@ -5,6 +5,65 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.4.2] — 2026-04-18
+
+### Added — `brainctl status` (single-screen brain health overview)
+
+```
+brainctl 2.4.2  (/Users/.../brain.db)
+
+  ✓ brain.db                 51.89 MB
+  ✗ schema                   17 pending  run `brainctl migrate`
+
+  ✓ memories                 220 active  (1,696 total)
+  ✓ events                   3,936
+  ✓ entities                 327
+  ✓ decisions                105
+  ✓ handoff_packets          96
+  ✓ agents                   290 registered
+  ✓ most active 24h          default (132 ops)
+
+  ✗ ollama                   unreachable  http://localhost:11434
+  ✓ sqlite-vec               installed
+  ✗ signing (solders)        not installed  pip install brainctl[signing]
+  ✗ managed wallet           not configured  brainctl wallet new
+
+  ✓ mcp tools                201
+  ✓ plugins                  16 first-party
+
+  ! 17 pending migration(s) — run `brainctl migrate`
+  ! Ollama unreachable — vector embeddings will be skipped on memory_add
+```
+
+Combines the existing `stats` (DB counts + size) and `doctor` (issue
+detection) with a fresh layer of service-availability checks: Ollama
+reachable, sqlite-vec loadable, signing extras installed, managed wallet
+configured. Reports pending migrations, most-active agent in last 24h,
+MCP tool count, and plugin count.
+
+`brainctl status [--json] [--issues]` — `--json` for machine-readable;
+`--issues` skips the green checkmarks and only shows what needs fixing.
+Exits 0 when everything is green; exits 1 when any "needs attention"
+item fires (so it slots cleanly into shell scripts and CI).
+
+Useful for: users who want a sanity-check after install, agents that
+need to know what services are available before deciding which tools
+to call (e.g., skip `--pin-onchain` if the wallet's not set up), and
+ops scripts that need a clean exit code on health.
+
+Lives in `src/agentmemory/_impl.py:cmd_status`. Pure stdlib (no new
+deps); Ollama check uses `urllib.request` with a 2s timeout so it can't
+hang. No regressions: **1857 passed, 0 failed**.
+
+### Wallet smoke-test verification (2.3.2 follow-up)
+
+Confirmed the wallet UX shipped in 2.3.2 degrades gracefully when
+`solders` isn't installed — every `wallet *` impl returns
+`{ok: False, error: "solders not installed — pip install 'brainctl[signing]'"}`
+instead of crashing. The user-facing message is actionable and the
+exit code is 1, so wrapping scripts can detect the missing-extras
+condition without parsing.
+
 ## [2.4.1] — 2026-04-18
 
 ### Fixed — vec.py write-path perf
