@@ -74,9 +74,12 @@ async function buildSummary(
   agentId: string,
   project: string,
 ): Promise<string> {
-  // Pull a tail of recent events for THIS agent; collapse into one sentence.
+  // Pull recent events for THIS agent and collapse into one sentence.
+  // Use `event search` (not `event tail`) because tail has no --project /
+  // --limit / --json flags — search emits JSON by default and supports
+  // both filters.
   try {
-    const proc = await $`brainctl --agent ${agentId} event tail --project ${project} --limit 30 --json`
+    const proc = await $`brainctl --agent ${agentId} event search --project ${project} --limit 30`
       .quiet()
       .nothrow();
     if (proc.exitCode !== 0) return "opencode session ended";
@@ -120,8 +123,13 @@ async function wrapUp(
   const agentId = `${AGENT_ID_PREFIX}-${shortId(sessionId)}`;
   const project = projectScope(directory);
   const summary = await buildSummary($, agentId, project);
+  // Pass next-step / open-loops too — brainctl wrap-up otherwise defaults
+  // them to placeholders. Ours give the next agent_orient a more useful
+  // breadcrumb without the model having to do anything special.
+  const nextStep = "resume from last tool call; check session_start event for prior context";
+  const openLoops = "session ended via opencode lifecycle hook";
   try {
-    await $`brainctl --agent ${agentId} wrap-up --summary ${summary} --project ${project}`
+    await $`brainctl --agent ${agentId} wrap-up --summary ${summary} --project ${project} --next-step ${nextStep} --open-loops ${openLoops}`
       .quiet()
       .nothrow();
   } catch (err) {
