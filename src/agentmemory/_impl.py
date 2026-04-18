@@ -8113,6 +8113,87 @@ def cmd_init(args):
         json_out({"ok": False, "error": str(e)})
 
 
+def cmd_perf(args):
+    """Run the latency harness against the user's brain.db (read-only).
+
+    Default: a quick subset of read-only ops at the user's current corpus
+    size — runs in ~2-5s and answers "is brainctl slow on my data?".
+
+    --full runs the entire harness (write ops included), which seeds tmp dbs
+    at 100/1k/10k and takes 3-5 minutes. The --full variant is what the
+    regression gate uses; users rarely need it interactively.
+
+    The harness lives in tests.bench.latency to keep it close to the
+    regression test fixtures. We import lazily so a `brainctl --help`
+    doesn't pay the import cost. The harness has no third-party deps
+    (pure stdlib) so the import is cheap once we do trigger it.
+
+    Resolving the harness path: source-tree installs put tests/ next to
+    src/. Wheel installs may exclude tests/. We probe the repo layout
+    relative to this file (src/agentmemory/_impl.py → ../../tests/bench),
+    then fall back to a normal import (tests/ on PYTHONPATH or in cwd).
+    """
+    # Probe the source-tree layout so source-checkout installs work without
+    # the user fiddling with PYTHONPATH. This file lives at
+    # ``<repo>/src/agentmemory/_impl.py``; the harness is at
+    # ``<repo>/tests/bench/latency.py``.
+    _here = Path(__file__).resolve().parent
+    _repo_root = _here.parent.parent  # …/src/agentmemory → …
+    _bench_dir = _repo_root / "tests"
+    if _bench_dir.exists() and str(_repo_root) not in sys.path:
+        sys.path.insert(0, str(_repo_root))
+
+    # Lazy import — keeps `brainctl --help` and unrelated commands fast.
+    try:
+        from tests.bench.latency import (
+            run_sweep, format_table, OPS_QUICK, OPS_DEFAULT, DEFAULT_SCALES,
+        )
+    except ModuleNotFoundError as exc:
+        # The bench harness ships in source-tree installs but is excluded from
+        # wheels by some packagers. Don't crash — explain what's missing.
+        json_out({
+            "error": f"perf harness unavailable: {exc}",
+            "hint": ("brainctl perf needs tests/bench/latency.py from the source tree. "
+                     "Install brainctl from a source checkout (`pip install -e .` from "
+                     "the cloned repo) or run the harness directly: "
+                     "`python -m tests.bench.latency --quick --db <your-brain.db>`."),
+        })
+        sys.exit(1)
+
+    full = bool(getattr(args, "full", False))
+    output = getattr(args, "output", "table")
+
+    if full:
+        ops = OPS_DEFAULT
+        scales = DEFAULT_SCALES
+        report = run_sweep(scales=scales, n_runs=100, n_warmup=5, ops=ops)
+    else:
+        # Quick mode: read-only ops against the user's actual db, single scale
+        # (the user's real corpus size), reduced run count for snappy output.
+        ops = OPS_QUICK
+        # We pass the user's brain.db. db_path_override skips the seed branch
+        # and points all ops at it. Read-only ops are safe; write ops are
+        # excluded from OPS_QUICK precisely so users can run `brainctl perf`
+        # against production data without polluting it.
+        report = run_sweep(
+            scales=(0,),  # 0 = "user db, scale unknown"
+            n_runs=30,
+            n_warmup=3,
+            ops=ops,
+            db_path_override=DB_PATH,
+        )
+
+    if output == "json":
+        json_out(report.as_dict())
+    else:
+        # Human table on stdout. The footer line summarises target attainment.
+        print(format_table(report))
+        if not full:
+            print()
+            print("Tip: `brainctl perf --full` runs the complete harness "
+                  "(seeds tmp dbs at 100/1k/10k, ~3-5 min).")
+
+
 def cmd_cost(args):
     """Estimate token cost of brain operations — helps users understand and reduce model usage."""
     db = get_db()
@@ -15314,6 +15395,18 @@ def build_parser():
     sub.add_parser("cost", help="Token cost analysis — shows format savings, query costs, and optimization tips")
     sub.add_parser("validate", help="Validate database integrity")
 
+    # --- perf ---
+    perf = sub.add_parser(
+        "perf",
+        help="Latency check — read-only by default, --full runs the full harness"
+    )
+    perf.add_argument("--full", action="store_true",
+                      help="Run the full latency harness (3-5 min, seeds tmp dbs at "
+                           "100/1k/10k). Without --full, runs a quick read-only subset "
+                           "against your real brain.db (~5s).")
+    perf.add_argument("--output", choices=["table", "json"], default="table",
+                      help="Output format (default: table; json for scripting)")
+
     # --- affect ---
     aff = sub.add_parser("affect", help="Functional affect tracking")
     aff_sub = aff.add_subparsers(dest="affect_cmd")
@@ -16869,6 +16962,7 @@ def main():
         "doctor": cmd_doctor,
         "stats": cmd_stats,
         "cost": cmd_cost,
+        "perf": cmd_perf,
         "affect": None,  # subcommand dispatch below
         "report": cmd_report,
         "lint": cmd_lint,
