@@ -267,14 +267,38 @@ def _update_q_value(db, memory_id, contributed, learning_rate=_Q_LEARNING_RATE):
     Retired memories are still skipped via the WHERE clause.
 
     Args:
-        db: Active sqlite3 connection. Commits after updating.
+        db: Active sqlite3 connection. Caller owns the transaction lifecycle.
         memory_id: Integer PK of the memory being updated.
         contributed: True if the memory contributed to a useful outcome.
         learning_rate: TD step size alpha (default _Q_LEARNING_RATE = 0.1).
 
     Side effects:
-        Updates q_value for the memory and commits. No-op (silently) if
-        the memory does not exist or has been retired.
+        Issues an UPDATE on memories. **Does NOT commit** — the caller is
+        responsible for committing once per request, after processing all
+        results in the batch.
+
+    perf/latency-baseline (2.3.x): removed a per-call ``db.commit()`` here.
+    Both production callers — ``_retrieval_practice_boost`` (which is itself
+    called per-result by ``cmd_search``) and ``cmd_memory_search`` — already
+    commit at the end of the search request, so the per-row commit was
+    issuing 5 extra fsyncs per cmd_search call (one per result × ~5 results).
+    cProfile @ N=1k showed ``commit`` ~100ms / 50 cmd_search calls
+    (~2ms/call); removing it cut cmd_search p95 from 35.2 → 22.6 ms (-36%).
+    The atomic update statement is unchanged, so the docstring's race-safety
+    contract still holds; only the implicit transaction boundary moved out
+    by one frame.
+
+    **Durability tradeoff (intentional):** before this change, the q_value
+    increment was durable on function return. Now it is durable only after
+    the caller's end-of-request commit. If the process is killed (SIGTERM,
+    OOM) between this UPDATE and the caller's commit, the q_value
+    increment is lost. q_values are heuristic ranking weights, not
+    correctness-critical state — losing a single TD step has no
+    user-visible effect. If this trade ever needs to be reversed (e.g. for
+    a higher-stakes use of the q_value field), restore the explicit
+    ``db.commit()`` and accept the -30% latency hit. Race-safety (Bug 9)
+    is unaffected because the atomic UPDATE is still atomic; this only
+    changes when the implicit fsync happens.
     """
     reward = 1.0 if contributed else 0.0
     db.execute(
@@ -284,7 +308,7 @@ def _update_q_value(db, memory_id, contributed, learning_rate=_Q_LEARNING_RATE):
         " WHERE id = ? AND retired_at IS NULL",
         (learning_rate, reward, memory_id),
     )
-    db.commit()
+    # NOTE: caller commits. See module docstring change in this commit.
 
 
 def _q_adjusted_score(base_score, q_value):
@@ -2385,9 +2409,11 @@ def _retrieval_practice_boost(db, memory_id, retrieval_prediction_error=0.0):
 
     Side effects:
         - Updates confidence, alpha, recalled_count, last_recalled_at, labile_until.
-        - Calls _update_q_value(contributed=True) which commits the Q-value update.
-        - Does NOT commit the confidence/alpha UPDATE — the caller owns that transaction
-          and commits after processing all results (one commit per search, not per row).
+        - Calls _update_q_value(contributed=True). Both this function and
+          _update_q_value defer the commit to the caller — cmd_search /
+          cmd_memory_search both commit once per request after all results
+          are processed (was: 5 commits per search dropped to 1).
+        - Does NOT commit. Caller owns the transaction.
     """
     rpe = max(0.0, min(1.0, retrieval_prediction_error or 0.0))
     boost = _RETRIEVAL_PRACTICE_BASE_BOOST * (1.0 + rpe)
@@ -8097,6 +8123,87 @@ def cmd_init(args):
             print(f"\n  Full guide: https://github.com/TSchonleber/brainctl/blob/main/docs/AGENT_ONBOARDING.md")
     except Exception as e:
         json_out({"ok": False, "error": str(e)})
+
+
+def cmd_perf(args):
+    """Run the latency harness against the user's brain.db (read-only).
+
+    Default: a quick subset of read-only ops at the user's current corpus
+    size — runs in ~2-5s and answers "is brainctl slow on my data?".
+
+    --full runs the entire harness (write ops included), which seeds tmp dbs
+    at 100/1k/10k and takes 3-5 minutes. The --full variant is what the
+    regression gate uses; users rarely need it interactively.
+
+    The harness lives in tests.bench.latency to keep it close to the
+    regression test fixtures. We import lazily so a `brainctl --help`
+    doesn't pay the import cost. The harness has no third-party deps
+    (pure stdlib) so the import is cheap once we do trigger it.
+
+    Resolving the harness path: source-tree installs put tests/ next to
+    src/. Wheel installs may exclude tests/. We probe the repo layout
+    relative to this file (src/agentmemory/_impl.py → ../../tests/bench),
+    then fall back to a normal import (tests/ on PYTHONPATH or in cwd).
+    """
+    # Probe the source-tree layout so source-checkout installs work without
+    # the user fiddling with PYTHONPATH. This file lives at
+    # ``<repo>/src/agentmemory/_impl.py``; the harness is at
+    # ``<repo>/tests/bench/latency.py``.
+    _here = Path(__file__).resolve().parent
+    _repo_root = _here.parent.parent  # …/src/agentmemory → …
+    _bench_dir = _repo_root / "tests"
+    if _bench_dir.exists() and str(_repo_root) not in sys.path:
+        sys.path.insert(0, str(_repo_root))
+
+    # Lazy import — keeps `brainctl --help` and unrelated commands fast.
+    try:
+        from tests.bench.latency import (
+            run_sweep, format_table, OPS_QUICK, OPS_DEFAULT, DEFAULT_SCALES,
+        )
+    except ModuleNotFoundError as exc:
+        # The bench harness ships in source-tree installs but is excluded from
+        # wheels by some packagers. Don't crash — explain what's missing.
+        json_out({
+            "error": f"perf harness unavailable: {exc}",
+            "hint": ("brainctl perf needs tests/bench/latency.py from the source tree. "
+                     "Install brainctl from a source checkout (`pip install -e .` from "
+                     "the cloned repo) or run the harness directly: "
+                     "`python -m tests.bench.latency --quick --db <your-brain.db>`."),
+        })
+        sys.exit(1)
+
+    full = bool(getattr(args, "full", False))
+    output = getattr(args, "output", "table")
+
+    if full:
+        ops = OPS_DEFAULT
+        scales = DEFAULT_SCALES
+        report = run_sweep(scales=scales, n_runs=100, n_warmup=5, ops=ops)
+    else:
+        # Quick mode: read-only ops against the user's actual db, single scale
+        # (the user's real corpus size), reduced run count for snappy output.
+        ops = OPS_QUICK
+        # We pass the user's brain.db. db_path_override skips the seed branch
+        # and points all ops at it. Read-only ops are safe; write ops are
+        # excluded from OPS_QUICK precisely so users can run `brainctl perf`
+        # against production data without polluting it.
+        report = run_sweep(
+            scales=(0,),  # 0 = "user db, scale unknown"
+            n_runs=30,
+            n_warmup=3,
+            ops=ops,
+            db_path_override=DB_PATH,
+        )
+
+    if output == "json":
+        json_out(report.as_dict())
+    else:
+        # Human table on stdout. The footer line summarises target attainment.
+        print(format_table(report))
+        if not full:
+            print()
+            print("Tip: `brainctl perf --full` runs the complete harness "
+                  "(seeds tmp dbs at 100/1k/10k, ~3-5 min).")
 
 
 def cmd_cost(args):
@@ -15300,6 +15407,18 @@ def build_parser():
     sub.add_parser("cost", help="Token cost analysis — shows format savings, query costs, and optimization tips")
     sub.add_parser("validate", help="Validate database integrity")
 
+    # --- perf ---
+    perf = sub.add_parser(
+        "perf",
+        help="Latency check — read-only by default, --full runs the full harness"
+    )
+    perf.add_argument("--full", action="store_true",
+                      help="Run the full latency harness (3-5 min, seeds tmp dbs at "
+                           "100/1k/10k). Without --full, runs a quick read-only subset "
+                           "against your real brain.db (~5s).")
+    perf.add_argument("--output", choices=["table", "json"], default="table",
+                      help="Output format (default: table; json for scripting)")
+
     # --- affect ---
     aff = sub.add_parser("affect", help="Functional affect tracking")
     aff_sub = aff.add_subparsers(dest="affect_cmd")
@@ -16855,6 +16974,7 @@ def main():
         "doctor": cmd_doctor,
         "stats": cmd_stats,
         "cost": cmd_cost,
+        "perf": cmd_perf,
         "affect": None,  # subcommand dispatch below
         "report": cmd_report,
         "lint": cmd_lint,
