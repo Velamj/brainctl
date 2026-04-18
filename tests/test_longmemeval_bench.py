@@ -89,8 +89,9 @@ def baseline():
 def bench_result():
     from tests.bench.longmemeval_eval import run as run_lme
     limit = None if BENCH_FULL else DEFAULT_LIMIT
-    backend = os.environ.get("BRAINCTL_BENCH_BACKEND", "brain")
-    return run_lme(backend=backend, limit=limit)
+    # Hardcoded brain backend (same rationale as test_locomo_bench.py);
+    # cmd backend isn't supported on LongMemEval today anyway.
+    return run_lme(backend="brain", limit=limit)
 
 
 def test_baseline_has_gated_metrics(baseline):

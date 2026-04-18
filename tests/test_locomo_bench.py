@@ -82,10 +82,11 @@ def baseline():
 def bench_result():
     from tests.bench.locomo_eval import run as run_locomo
     convo_idx = None if BENCH_FULL else 0
-    # Use the brain backend by default — fast and stable. Set
-    # BRAINCTL_BENCH_BACKEND=cmd to gate the hybrid pipeline instead.
-    backend = os.environ.get("BRAINCTL_BENCH_BACKEND", "brain")
-    return run_locomo(backend=backend, convo_idx=convo_idx)
+    # Hardcoded brain backend so the gate matches the committed baseline.
+    # Switching to cmd via env var would diff against the wrong baseline
+    # (see locomo_pre_fix_2026_04_18.json for the cmd-backend reference);
+    # we don't expose that as a per-run flag because it's a footgun.
+    return run_locomo(backend="brain", convo_idx=convo_idx)
 
 
 def test_baseline_has_gated_metrics(baseline):

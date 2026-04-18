@@ -64,10 +64,14 @@ BRAINCTL_RUN_BENCH=1 BRAINCTL_BENCH_FULL=1 pytest tests/test_locomo_bench.py
 
 # Run the FULL LongMemEval sweep (~30s) instead of the 50-entry subset
 BRAINCTL_RUN_BENCH=1 BRAINCTL_BENCH_FULL=1 pytest tests/test_longmemeval_bench.py
-
-# Hit cmd_search (hybrid) backend instead of Brain.search
-BRAINCTL_RUN_BENCH=1 BRAINCTL_BENCH_BACKEND=cmd pytest tests/test_locomo_bench.py
 ```
+
+The CI tests are pinned to `Brain.search` (FTS5-only) backend on purpose —
+the committed `baselines/locomo.json` and `baselines/longmemeval.json` are
+captured against that backend, and switching at test time would diff
+against the wrong reference. To gate the hybrid `cmd_search` path, run
+the CLI directly: `python3 -m tests.bench.run --bench locomo --backend cmd
+--check`.
 
 ## Datasets
 
