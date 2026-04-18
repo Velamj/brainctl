@@ -98,12 +98,60 @@ class CmdSearchAdapter(_BrainAdapterBase):
 
     Matches the ``_build_cmd_search_fn`` closure in
     ``tests/bench/locomo_eval.py`` so numbers stay aligned with the
-    existing baseline JSON.
+    existing baseline JSON. The critical lifecycle detail (cribbed
+    from the legacy runner): cmd_search opens its OWN sqlite
+    connection to ``DB_PATH``, so the brain writer connection must be
+    WAL-checkpointed and closed BEFORE the first search call —
+    otherwise cmd_search reads a stale DB whose latest writes still
+    live in the WAL file.
+
+    Earlier versions of this adapter ran the checkpoint in
+    ``teardown()`` (after all searches), which silently produced
+    near-zero Hit@5 because cmd_search saw an almost-empty DB. The
+    ``_checkpointed`` flag below ensures we run it exactly once,
+    on the first ``search()`` call after ingest is complete.
     """
 
     name = "brainctl-cmd"
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._checkpointed = False
+
+    def setup(self, tenant_id: str) -> None:
+        super().setup(tenant_id)
+        self._checkpointed = False
+
+    def _checkpoint_and_release_writer(self) -> None:
+        """Flush WAL to the main DB file and close the writer.
+
+        Runs once, just before cmd_search opens its first read
+        connection. Until this runs, recent inserts live in
+        brainctl.db-wal and cmd_search (which opens a fresh
+        connection) won't see them.
+        """
+        if self._checkpointed:
+            return
+        try:
+            if self._brain is not None:
+                conn = self._brain._get_conn()
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            pass
+        try:
+            if self._brain is not None:
+                self._brain.close()
+        except Exception:
+            pass
+        self._brain = None
+        gc.collect()
+        self._checkpointed = True
+
     def search(self, query: str, top_k: int) -> List[Dict[str, Any]]:
+        # Ensure the writer is checkpointed + closed before cmd_search
+        # opens its own reader connection. No-op after the first call.
+        self._checkpoint_and_release_writer()
+
         import contextlib
         import io
         import types
@@ -153,17 +201,8 @@ class CmdSearchAdapter(_BrainAdapterBase):
                             id=r.get("id"))
                 for r in flat[:top_k]]
 
-    def setup(self, tenant_id: str) -> None:
-        super().setup(tenant_id)
-
     def teardown(self) -> None:
-        # cmd_search opens its own connection; make sure the writer
-        # connection is checkpointed and closed before tear-down so
-        # WAL files don't outlive the tmpdir.
-        try:
-            if self._brain is not None:
-                conn = self._brain._get_conn()
-                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        except Exception:
-            pass
+        # If we never searched (and so never checkpointed), still run
+        # the brain.close() path so the tmpdir cleans up cleanly.
         super().teardown()
+        self._checkpointed = False

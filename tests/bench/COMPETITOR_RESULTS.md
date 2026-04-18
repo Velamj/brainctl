@@ -102,7 +102,7 @@ recorded as skipped rather than fabricated.
 | System | Hit@1 | Hit@5 | Hit@10 | MRR | nDCG@5 | Wall (s) | Cost (USD) | Status |
 |---|---|---|---|---|---|---|---|---|
 | **brainctl Brain.search v2.3.2** | 0.200 | 0.400 | 0.480 | 0.290 | 0.270 | 19.4 | $0.00 | ok (n=2 runs, σ=0) |
-| **brainctl cmd_search v2.3.2** | 0.080 | 0.080 | 0.120 | 0.087 | 0.080 | 569.3 | $0.00 | ok (n=2 runs, σ=0) — see caveat |
+| **brainctl cmd_search v2.3.2** | 0.080 | 0.080 | 0.120 | 0.087 | 0.080 | 466 | $0.00 | ok (n=2 runs, σ=0) — see caveat |
 | Mem0 v2.0.0 | — | — | — | — | — | — | — | skipped: SDK not installed |
 | Letta v1.10.3 | — | — | — | — | — | — | — | skipped: SDK not installed |
 | Zep v3.20.0 | — | — | — | — | — | — | — | skipped: SDK not installed |
@@ -110,14 +110,23 @@ recorded as skipped rather than fabricated.
 | MemoryLake | — | — | — | — | — | — | — | skipped: product-of-record ambiguous |
 | OpenAI vector_stores | — | — | — | — | — | — | — | skipped: SDK not installed |
 
-> **brainctl cmd_search smoke caveat**: in this run environment the
-> Ollama embedder backing the vector half of cmd_search wasn't
-> resident, so cmd_search degraded to a partial pipeline (FTS-only
-> with reranker overhead). This is an environment artifact — the
-> already-published baseline at `tests/bench/baselines/locomo.json`
-> shows the post-2.3.1 cmd_search Hit@5 ≈ 0.57 (matching Brain.search
-> after the reranker-gap fix). Re-run the harness in a venv with
-> Ollama + nomic-embed-text resident for the production number.
+> **brainctl cmd_search smoke caveat — discovered during this run**:
+> cmd_search in main 2.3.2 returns Hit@5 = 0.08 on this LOCOMO
+> slice — well below Brain.search's 0.40 on the same slice. We
+> verified this is NOT a harness bug: re-running the existing
+> `tests.bench.locomo_eval.run_conversation(backend='cmd')` on
+> convo 0 of the in-tree LOCOMO directly (no competitor harness in
+> the loop) returns the same Hit@5 = 0.030. The published baseline
+> at `tests/bench/baselines/locomo.json` is **brain-backend only**
+> (`"backend": "brain"`); cmd_search has no published baseline of
+> its own. The post-2.3.1 reranker-gap fix landed for Brain.search
+> regression coverage but the cmd_search-on-LOCOMO path appears to
+> have regressed (or never recovered to Brain.search's level on
+> this dataset). **Flag for the reranker-gap team.** The full
+> competitive comparison should use Brain.search as the brainctl
+> headline number until cmd_search is fixed; cmd_search is still
+> the production MCP `memory_search` path so this also has
+> downstream implications for the launch matrix. See open loops.
 
 ### Full LOCOMO baseline (existing, from `tests/bench/baselines/locomo.json`)
 
@@ -132,8 +141,13 @@ when competitor numbers eventually fill in (they will use the same
 | **brainctl cmd_search (full)** | * | * | * | * | * | * | * |
 
 \* cmd_search baseline at the same K wasn't pinned in `locomo.json`
-(only the FTS5 backend is gated). Run
-`python -m tests.bench.run --bench locomo --backend cmd` to refresh.
+(only the FTS5 backend is gated). The smoke run in this report
+suggests cmd_search has a real quality regression on LOCOMO that
+needs investigation BEFORE it ships into the comparison table —
+running `python -m tests.bench.run --bench locomo --backend cmd`
+to refresh the baseline will produce a number, but that number will
+be much lower than Brain.search until the cmd_search regression is
+fixed (the smoke verifies this).
 
 ### Per-axis breakdown (brainctl Brain.search, full sweep)
 
@@ -351,6 +365,14 @@ Output JSON lands in `tests/bench/competitor_runs/results/<bench>_<date>.json`.
 
 ## Open loops (carry into next session)
 
+* **HIGH PRIORITY — flag for reranker-gap team**: cmd_search Hit@5
+  on LOCOMO convo 0 is 0.030 (legacy `locomo_eval.run_conversation`)
+  vs Brain.search Hit@5 = 0.40+ on the same slice. The published
+  `locomo.json` baseline only covers Brain.search so the regression
+  isn't gated. Either fix cmd_search on LOCOMO, gate it in CI, or
+  document why Brain.search is the brainctl headline for the launch
+  comparison (cmd_search is the prod MCP `memory_search` path, so
+  this matters).
 * Install all five competitor SDKs in the pinned 3.13 venv and
   populate `OPENAI_API_KEY`, `MEM0_API_KEY`, `LETTA_API_KEY`,
   `ZEP_API_KEY` in env.
@@ -366,4 +388,5 @@ Output JSON lands in `tests/bench/competitor_runs/results/<bench>_<date>.json`.
   the matrix, or drop the row.
 * Rebuild brainctl's `cmd_search` baseline JSON (current baseline
   only pins Brain.search). Required to give cmd_search a defensible
-  per-K cell in the comparison table.
+  per-K cell in the comparison table — but only AFTER the regression
+  above is investigated.
