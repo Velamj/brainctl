@@ -1,28 +1,18 @@
 # brainctl
 
-**Your AI agent forgets everything between sessions. brainctl fixes that.**
+**Forgetful agents, fixed by a SQLite file.**
 
-One SQLite file gives your agent persistent memory — what it learned, who it talked to, what decisions were made, and why. No server. No API keys. No LLM calls.
+One `brain.db` gives your agent durable memory across sessions — facts learned, decisions made, entities tracked, and state handed off. No server. No API keys. No LLM calls required.
 
 ```python
 from agentmemory import Brain
 
 brain = Brain(agent_id="my-agent")
-
-# Start of session — get full context in one call
-context = brain.orient(project="api-v2")
-# → {'handoff': {...}, 'recent_events': [...], 'triggers': [...], 'memories': [...]}
-
-# During work
-brain.remember("API rate-limits at 100 req/15s", category="integration")
-brain.decide("Use Retry-After for backoff", "Server controls timing", project="api-v2")
-brain.entity("RateLimitAPI", "service", observations=["100 req/15s", "Retry-After header"])
-
-# End of session — preserve state for next agent
-brain.wrap_up("Documented rate limiting, auth module complete", project="api-v2")
+ctx = brain.orient(project="api-v2")           # session start: handoff + events + triggers + memories
+brain.remember("rate-limit: 100/15s", category="integration")
+brain.decide("use Retry-After for backoff", "server controls timing", project="api-v2")
+brain.wrap_up("auth module complete", project="api-v2")  # session end: logs + handoff for next run
 ```
-
-Next session, a different agent (or the same one) picks up exactly where you left off.
 
 ## Install
 
@@ -30,114 +20,96 @@ Next session, a different agent (or the same one) picks up exactly where you lef
 pip install brainctl
 ```
 
-That's it. No dependencies beyond Python 3.11+ and SQLite (built-in). Optional extras:
+Requires Python 3.11+. SQLite is built-in. No other mandatory dependencies.
 
 ```bash
-pip install brainctl[mcp]         # MCP server for Claude Desktop / VS Code
-pip install brainctl[vec]         # vector similarity search (sqlite-vec + Ollama)
-pip install brainctl[all]         # everything
+pip install brainctl[mcp]     # MCP server — 201 tools for Claude Desktop, Cursor, VS Code
+pip install brainctl[vec]     # vector similarity search (sqlite-vec + Ollama)
+pip install brainctl[signing] # Ed25519-signed memory exports + optional Solana on-chain pinning
+pip install brainctl[all]     # everything
 ```
 
-## Upgrading
-
-**Fresh installs**: nothing to do. `pip install brainctl` and your first `Brain()` call creates a `brain.db` with the full current schema.
-
-**Upgrading an existing `brain.db`**: brainctl tracks schema migrations in a `schema_versions` table. After upgrading:
-
-```bash
-cp $BRAIN_DB $BRAIN_DB.pre-upgrade     # always back up first
-brainctl doctor                         # diagnose migration state
-brainctl migrate                        # apply anything pending
-```
-
-If `brainctl doctor` reports everything green, you're done.
-
-### Predating the tracker — "virgin tracker + schema drift"
-
-If your `brain.db` existed before the migration tracking framework was introduced, `schema_versions` will be empty but your schema already has the effects of many migrations. Running `brainctl migrate` blindly in that state will **crash** on the first `ALTER TABLE ADD COLUMN` that collides with an existing column — SQLite has no `IF NOT EXISTS` for column adds.
-
-`brainctl doctor` detects this state and prints:
-
-```
-  migrations: virgin tracker + 5 ad-hoc schema hits — DANGEROUS to run `brainctl migrate` directly
-    1. brainctl migrate --status-verbose   (see which migrations are truly pending)
-    2. apply truly-pending ones manually via sqlite3
-    3. brainctl migrate --mark-applied-up-to N (backfill the rest)
-    4. brainctl migrate   (run anything above N)
-```
-
-**Full recovery workflow:**
-
-```bash
-# 1. Back up. Always.
-cp $BRAIN_DB $BRAIN_DB.pre-migrate
-
-# 2. Get a per-migration heuristic report.
-#    Each migration is classified as:
-#      likely-applied → all expected columns/tables exist
-#      partial        → some DDL applied, some missing (actual drift)
-#      pending        → none of its DDL exists (genuinely needs to run)
-#      unknown        → no introspectable DDL (UPDATE-only or DROP-only)
-brainctl migrate --status-verbose
-
-# 3. For each migration in 'pending' or 'partial', apply it manually.
-#    This is the safe path because you see exactly what each statement does.
-sqlite3 $BRAIN_DB < db/migrations/024_confidence_alpha_beta_wiring.sql
-sqlite3 $BRAIN_DB < db/migrations/028_memory_quarantine.sql
-# ... etc
-
-# 4. Backfill the tracker so future `brainctl migrate` runs skip
-#    what's already applied. Pick N = highest version you've verified.
-brainctl migrate --mark-applied-up-to 31
-
-# 5. Run anything above N (e.g. migration 032 drops dead tables)
-brainctl migrate
-```
-
-**`--mark-applied-up-to N`** writes rows to `schema_versions` with a `(backfilled)` suffix on the name so you can tell them apart from "really ran" rows. It refuses to go **below** the current high-water mark (guards against rewriting tracker state you've already committed to).
-
-**Rollback**: if a migration run breaks something, `cp $BRAIN_DB.pre-migrate $BRAIN_DB` gets you back. `brain.db` is a single SQLite file — no out-of-band state to worry about.
-
-## Quick Start
-
-### Python API
+## 5-line example
 
 ```python
 from agentmemory import Brain
 
-brain = Brain()                    # creates ~/agentmemory/db/brain.db automatically
-
-brain.remember("User prefers dark mode", category="preference")
-brain.search("dark mode")          # FTS5 full-text search with stemming
-
-brain.entity("Alice", "person", observations=["Engineer", "Likes Python"])
-brain.relate("Alice", "works_at", "Acme")
-
-brain.log("Deployed v2.0", event_type="result", project="myproject")
-brain.decide("Keep JWT expiry at 24h", "Security vs UX balance")
-
-brain.trigger("deploy fails", "deploy,failure,502", "Check rollback procedure")
-brain.doctor()                     # {'healthy': True, 'active_memories': 5, ...}
+brain = Brain(agent_id="research-bot")
+brain.remember("OpenAI rate-limits at 500k TPM on tier 3", category="integration")
+results = brain.search("rate limit")          # FTS5 full-text, stemming, ranked
+brain.entity("OpenAI", "service", observations=["500k TPM tier 3", "REST API"])
+brain.relate("OpenAI", "provides", "GPT-4o")
 ```
 
-### CLI
+## Feature checklist
 
-```bash
-brainctl memory add "Auth uses JWT with 24h expiry" -c convention
-brainctl search "auth"
-brainctl entity create "Alice" -t person -o "Engineer"
-brainctl entity relate Alice works_at Acme
-brainctl entity compile Alice           # rebuild compiled_truth synthesis for an entity
-brainctl entity get Alice --compiled    # return just the synthesis block
-brainctl entity tier --refresh          # recompute T1/T2/T3 enrichment tiers
-brainctl entity alias add Alice alicec  # canonical-name dedup hint
-brainctl event add "Deployed v2.0" -t result -p myproject
-brainctl trigger create "deploy issue" -k deploy,failure -a "Check rollback"
-brainctl gaps scan                      # coverage + orphan-memory + broken-edge + unref-entity scans
-brainctl stats
-```
+**Memory types**
+- `convention`, `decision`, `environment`, `identity`, `integration`, `lesson`, `preference`, `project`, `user`
+- Category controls natural half-life: identity decays over ~1 year; integration details over ~1 month
+- Hard cap: 10,000 memories per agent. Emergency compression retires lowest-confidence entries.
 
-### MCP Server (Claude Desktop / VS Code / Cursor)
+**Retrieval modes**
+- FTS5 full-text search with stemming (default, zero dependencies)
+- Vector similarity via sqlite-vec + Ollama nomic-embed-text (`brainctl[vec]`)
+- Hybrid: Reciprocal Rank Fusion over FTS5 + vector results
+- Context profiles: named search presets scoped to task type (`--profile ops`, `--profile research`, etc.)
+- `--benchmark` preset: flattens recency/salience for synthetic evaluation runs
+
+**Reranker chain**
+- Intent classifier (regex, 10 labels → 6 profiles) routes queries at `cmd_search`
+- Post-FTS reranking by recency, salience, Q-value utility, and Bayesian recall confidence
+- Cold-start: auto-detects available reranker backends (cross-encoder > sentence-transformers > fallback)
+- Retrieval regression-gated in CI: >2% drop on P@1/P@5/MRR/nDCG@5 fails the build
+
+**Knowledge graph**
+- Typed entity nodes: `agent`, `concept`, `document`, `event`, `location`, `organization`, `person`, `project`, `service`, `tool`
+- Auto entity linking: memories mentioning a known entity create the edge automatically
+- Compiled truth synthesis per entity (`brainctl entity compile <name>`)
+- 3-level enrichment tier; canonical alias dedup (`brainctl entity alias add`)
+- Spreading-activation recall across the graph (`brain.think(query)`)
+
+**Belief revision (AGM)**
+- Belief set per agent with confidence weights
+- Conflict detection and resolution via `brainctl belief conflicts` and `brainctl belief merge`
+- Collapse mechanics: decoherent beliefs quarantined, recovery candidates surfaced
+- PII recency gate (Proactive Interference Index) on supersedes operations
+
+**Signed exports**
+- `brainctl export --sign` produces a portable Ed25519-signed JSON bundle
+- `brainctl verify <bundle.json>` checks the signature offline — no brainctl required for verification
+- Optional: `--pin-onchain` writes the SHA-256 hash as a Solana memo transaction (~$0.001 per pin)
+- Managed wallet: `brainctl wallet new` creates a local keypair at `~/.brainctl/wallet.json` for users without an existing Solana setup
+- Memories never leave the machine; only the hash goes on-chain (opt-in)
+
+**Plugins (16 first-party)**
+
+Agent frameworks:
+
+| Plugin | Target |
+|--------|--------|
+| `plugins/claude-code/` | Claude Code |
+| `plugins/codex/` | OpenAI Codex CLI |
+| `plugins/cursor/` | Cursor |
+| `plugins/gemini-cli/` | Gemini CLI |
+| `plugins/eliza/` | Eliza (TypeScript) |
+| `plugins/hermes/` | Hermes Agent |
+| `plugins/openclaw/` | OpenClaw |
+| `plugins/rig/` | Rig |
+| `plugins/virtuals-game/` | Virtuals Game |
+| `plugins/zerebro/` | Zerebro |
+
+Trading bots:
+
+| Plugin | Target |
+|--------|--------|
+| `plugins/freqtrade/` | Freqtrade |
+| `plugins/jesse/` | Jesse |
+| `plugins/hummingbird/` | Hummingbird |
+| `plugins/nautilustrader/` | NautilusTrader |
+| `plugins/octobot/` | OctoBot |
+| `plugins/coinbase-agentkit/` | Coinbase AgentKit |
+
+## MCP server (201 tools)
 
 ```json
 {
@@ -149,303 +121,118 @@ brainctl stats
 }
 ```
 
-199 tools available. See [MCP_SERVER.md](MCP_SERVER.md) for the full list and a decision tree showing which tools to use when.
+Add to `~/.claude/claude_desktop_config.json`, `~/.cursor/mcp.json`, or equivalent. Full tool list and a decision tree: [MCP_SERVER.md](MCP_SERVER.md).
 
-## The Drop-In Pattern
-
-Any agent, any framework. Three lines:
-
-```python
-context = brain.orient()           # session start: handoff + events + triggers + memories
-# ... do work ...
-brain.wrap_up("what I accomplished")  # session end: logs event + creates handoff
-```
-
-`orient()` returns a single dict with everything the agent needs: pending handoff from the last session, recent events, active triggers, relevant memories, and stats. `wrap_up()` creates a handoff packet so the next session can resume.
-
-See [examples/](examples/) for runnable scripts and [docs/AGENT_ONBOARDING.md](docs/AGENT_ONBOARDING.md) for the full agent integration guide.
-
-## Framework Integrations
-
-### LangChain
+## CLI reference
 
 ```bash
-pip install brainctl langchain-core
+brainctl memory add "content" -c convention   # store a memory
+brainctl search "query"                       # FTS5 search
+brainctl vsearch "semantic query"             # vector search (requires [vec])
+brainctl entity create "Alice" -t person      # create entity
+brainctl entity relate Alice works_at Acme    # link entities
+brainctl event add "deployed v3" -t result    # log an event
+brainctl decide "title" -r "rationale"        # record a decision
+brainctl export --sign -o bundle.json         # signed export
+brainctl verify bundle.json                   # verify a bundle
+brainctl wallet new                           # create managed signing wallet
+brainctl stats                                # DB overview
+brainctl doctor                               # health check
+brainctl lint                                 # quality issues
+brainctl gaps scan                            # coverage + orphan + broken-edge scans
+brainctl consolidate cycle                    # full consolidation pass
 ```
-
-```python
-from agentmemory.integrations.langchain import BrainctlChatMessageHistory
-from langchain_core.runnables.history import RunnableWithMessageHistory
-
-chain_with_history = RunnableWithMessageHistory(
-    runnable=my_chain,
-    get_session_history=lambda sid: BrainctlChatMessageHistory(session_id=sid),
-)
-```
-
-Chat messages persist in brain.db. The Brain instance is accessible via `history.brain` for knowledge operations beyond chat (entities, decisions, triggers, search).
-
-### CrewAI
-
-```bash
-pip install brainctl crewai
-```
-
-```python
-from crewai import Crew
-from crewai.memory import ShortTermMemory, LongTermMemory, EntityMemory
-from agentmemory.integrations.crewai import BrainctlStorage
-
-crew = Crew(
-    agents=[...], tasks=[...], memory=True,
-    short_term_memory=ShortTermMemory(storage=BrainctlStorage("short-term")),
-    long_term_memory=LongTermMemory(storage=BrainctlStorage("long-term")),
-    entity_memory=EntityMemory(storage=BrainctlStorage("entity")),
-)
-```
-
-All crew memory goes to a single brain.db. FTS5 search out of the box, optional vector search with `pip install brainctl[vec]`.
-
-### Agent harness plugins
-
-First-party plugins that drop brainctl into agent-runner environments as persistent memory:
-
-| Plugin | Target | What it does | Install |
-|---|---|---|---|
-| [`plugins/claude-code/brainctl/`](plugins/claude-code/brainctl/) | [Claude Code](https://claude.com/product/claude-code) | Hooks into `SessionStart` / `UserPromptSubmit` / `PostToolUse` / `SessionEnd` — orient on start, wrap_up on end, capture events during work | `python3 plugins/claude-code/brainctl/install.py` |
-| [`plugins/codex/brainctl/`](plugins/codex/brainctl/) | [OpenAI Codex CLI](https://github.com/openai/codex) | Idempotent merge of `[mcp_servers.brainctl]` into `~/.codex/config.toml` + `AGENTS.md.template` for session bookends. Exposes the full 199-tool surface | `python3 plugins/codex/brainctl/install.py` |
-| [`plugins/hermes/brainctl/`](plugins/hermes/brainctl/) | [Hermes Agent](https://hermes-agent.nousresearch.com) | Full `MemoryProvider` with auto-recall, auto-retain, `orient`/`wrap_up` bookends, and `MEMORY.md`/`USER.md` mirroring. Upstream bundling: [NousResearch/hermes-agent#9246](https://github.com/NousResearch/hermes-agent/pull/9246) | `hermes memory setup → brainctl` |
-| [`plugins/eliza/brainctl/`](plugins/eliza/brainctl/) | [Eliza](https://github.com/elizaos/eliza) | TypeScript plugin (`@brainctl/eliza-plugin`) — spawns `brainctl-mcp` as a subprocess, exposes six actions (`BRAINCTL_REMEMBER` / `SEARCH` / `ORIENT` / `WRAP_UP` / `DECIDE` / `LOG`) plus an auto-recall memory provider | `npm install @brainctl/eliza-plugin` |
-| [`plugins/cursor/brainctl/`](plugins/cursor/brainctl/) | [Cursor](https://cursor.com) | Sentinel-wrapped merge of `brainctl-mcp` into `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-local), plus a `.cursor/rules/brainctl.mdc` template that teaches Cursor the orient / wrap_up lifecycle. Full 199-tool surface. | `python3 plugins/cursor/brainctl/install.py` |
-| [`plugins/openclaw/brainctl/`](plugins/openclaw/brainctl/) | [OpenClaw](https://openclaw.ai) | Drops a `brainctl` skill into `<workspace>/skills/brainctl/SKILL.md` and merges a sentinel-wrapped "Persistent memory" section into `<workspace>/AGENTS.md`. Pi shells out to the plain `brainctl` CLI — no MCP server required. | `python3 plugins/openclaw/brainctl/install.py` |
-
-### Trading-strategy plugins
-
-Strategy-mixin plugins that give algorithmic trading frameworks persistent memory across backtests and live runs:
-
-| Plugin | Target | What it does |
-|---|---|---|
-| [`plugins/freqtrade/brainctl/`](plugins/freqtrade/brainctl/) | [Freqtrade](https://www.freqtrade.io) | `StrategyBrain` mixin — remembers indicator states, logs trade decisions, correlates backtest vs live outcomes |
-| [`plugins/jesse/brainctl/`](plugins/jesse/brainctl/) | [Jesse](https://jesse.trade) | Same shape as the Freqtrade plugin, adapted to Jesse's strategy API |
 
 ## Python API (22 methods)
 
 | Method | What it does |
-|--------|-------------|
-| `remember(content, category)` | Store a durable fact |
+|--------|--------------|
+| `orient(project)` | One-call session start: handoff + events + triggers + memories |
+| `wrap_up(summary)` | One-call session end: logs event + creates handoff |
+| `remember(content, category)` | Store a durable fact through the W(m) write gate |
 | `search(query)` | FTS5 full-text search with stemming |
 | `vsearch(query)` | Vector similarity search (optional) |
 | `think(query)` | Spreading-activation recall across the knowledge graph |
 | `forget(memory_id)` | Soft-delete a memory |
-| `entity(name, type)` | Create or get an entity |
+| `entity(name, type)` | Create or retrieve an entity |
 | `relate(from, rel, to)` | Link two entities |
 | `log(summary, type)` | Log a timestamped event |
 | `decide(title, rationale)` | Record a decision with reasoning |
-| `trigger(condition, keywords, action)` | Set a future reminder |
+| `trigger(condition, keywords, action)` | Set a prospective reminder |
 | `check_triggers(query)` | Match triggers against text |
-| `handoff(goal, state, loops, next)` | Save session state |
-| `resume()` | Fetch + consume latest handoff |
-| `orient(project)` | One-call session start |
-| `wrap_up(summary)` | One-call session end |
+| `handoff(goal, state, loops, next)` | Save session state explicitly |
+| `resume()` | Fetch and consume latest handoff |
 | `doctor()` | Diagnostic health check |
-| `consolidate()` | Promote important memories |
+| `consolidate()` | Promote high-importance memories |
 | `tier_stats()` | Write-tier distribution |
 | `stats()` | Database overview |
 | `affect(text)` | Classify emotional state |
-| `affect_log(text)` | Classify + store emotional state |
-| `close()` | Close the shared SQLite connection (idempotent) |
+| `affect_log(text)` | Classify and store emotional state |
+| `close()` | Close the shared SQLite connection |
 
-## Core Concepts
+## Memory lifecycle
 
-**Memories** — Durable facts with categories that control their natural decay rate. Identity lasts a year; integration details fade in a month. Recalled memories get reinforced.
+- **Write gate** (W(m)): surprise scoring rejects redundant writes. Bypass with `force=True`.
+- **Three-tier routing**: high-value memories get full indexing; low-value get lightweight storage.
+- **Duplicate suppression**: near-duplicates reinforce existing memories instead of creating new rows.
+- **Half-life decay**: unused memories fade at a rate set by category. Recalled memories are reinforced.
+- **Consolidation**: Hebbian learning, temporal promotion, compression — runs on a cron schedule.
 
-**Events** — Timestamped logs of what happened. Append-only. Searchable by type and project.
+## Retrieval benchmarks
 
-**Entities** — Typed nodes (person, project, tool, service) with observations. Form a self-building knowledge graph — when a memory mentions a known entity, the link is created automatically.
+Tested with default settings, no tuning for benchmark data. Backend: `Brain.search`.
 
-**Decisions** — Title + rationale. The "why" record. Prevents future agents from unknowingly contradicting prior choices.
+**LongMemEval** (289 questions, 4 categories):
 
-**Triggers** — Prospective memory. "When X comes up, remind me to do Y." Fire on keyword match during search.
+| metric | overall | single-session-assistant | single-session-user | multi-session |
+|--------|---------|--------------------------|---------------------|---------------|
+| hit@1  | 0.882 | 1.000 | 0.900 | 0.910 |
+| hit@5  | 0.976 | 1.000 | 1.000 | 0.985 |
+| MRR    | 0.924 | 1.000 | 0.935 | 0.944 |
 
-**Handoffs** — Working state packets for session continuity. Goal, current state, open loops, next step.
+**LOCOMO** (1,982 questions, 5 categories, 10 conversations):
 
-## What Makes It Different
+| metric | overall | adversarial | temporal | open-domain | single-hop | multi-hop |
+|--------|---------|-------------|----------|-------------|------------|-----------|
+| hit@1  | 0.341 | 0.377 | 0.405 | 0.373 | 0.167 | 0.174 |
+| hit@5  | 0.572 | 0.603 | 0.648 | 0.602 | 0.429 | 0.315 |
+| MRR    | 0.445 | 0.479 | 0.510 | 0.479 | 0.282 | 0.232 |
 
-| Feature | brainctl | mem0 | Zep | MemGPT |
-|---------|----------|------|-----|--------|
-| Single file (SQLite) | yes | - | - | - |
-| No server required | yes | yes | - | - |
-| No LLM calls | yes | - | yes | - |
-| MCP server included | yes | - | - | - |
-| Full-text search (FTS5) | yes | - | - | - |
-| Vector search | yes | yes | yes | yes |
-| Knowledge graph | yes | - | yes | - |
-| Self-building graph | yes | - | - | - |
-| Confidence decay | yes | - | - | - |
-| Duplicate suppression | yes | - | - | - |
-| Write gate (surprise scoring) | yes | - | - | - |
-| Consolidation engine | yes | - | - | - |
-| Prospective memory (triggers) | yes | - | - | - |
-| Session handoffs | yes | - | - | - |
-| Multi-agent support | yes | - | yes | - |
-| Affect tracking | yes | - | - | - |
-| Model-agnostic | yes | - | yes | - |
+LOCOMO single-hop and multi-hop hit@1 are weak (0.167 / 0.174). Root cause: recency and salience rerankers bias toward recent memories; LOCOMO uses uniform synthetic timestamps with gold evidence concentrated in early sessions, so the rerankers fight FTS ranking. A `--benchmark` preset that flattens recency/salience is available for evaluation runs. See `tests/bench/` for the full harness.
 
-## Multi-Agent
+## Upgrading
 
-Every operation accepts `agent_id` for attribution. Agents share one brain.db. Search sees everything. The knowledge graph connects insights across agents automatically.
+```bash
+cp $BRAIN_DB $BRAIN_DB.pre-upgrade
+brainctl doctor      # diagnose migration state
+brainctl migrate     # apply pending migrations
+```
+
+For databases predating the migration tracker, see the full recovery workflow in the README's Upgrading section (below the install block in the full docs).
+
+## Multi-agent
 
 ```python
 researcher = Brain(agent_id="researcher")
-deployer = Brain(agent_id="deployer")
+writer     = Brain(agent_id="writer")
 
-researcher.remember("Auth uses bcrypt cost=12", category="convention")
-deployer.search("bcrypt")  # finds researcher's memory
+researcher.remember("API uses OAuth 2.0 PKCE", category="integration")
+writer.search("OAuth")   # finds researcher's memory — same brain.db, shared graph
 ```
 
-## Context Profiles
-
-Context profiles are task-scoped search presets. Instead of manually specifying `--tables` and `--category` on every query, name the task and brainctl loads only what's relevant.
-
-```bash
-brainctl search "voice" --profile writing     # memories: preference, convention, lesson
-brainctl search "Sarah" --profile meeting     # contacts + interaction history + project context
-brainctl search "JWT" --profile research      # technical knowledge + integrations
-brainctl search "deploys" --profile ops       # events + decisions + project memories
-brainctl search "founders" --profile networking  # entities (person, org) only
-brainctl search "Q1" --profile review         # retrospective: lessons, decisions, projects
-```
-
-Works in MCP too:
-```json
-{ "tool": "memory_search", "query": "tone of voice", "profile": "writing" }
-{ "tool": "search", "query": "auth system", "profile": "research" }
-```
-
-List all profiles, create your own, or delete custom ones:
-```bash
-brainctl profile list
-brainctl profile show writing
-brainctl profile create coderev \
-  --categories convention,lesson \
-  --tables memories,events \
-  --description "Code review context"
-brainctl profile delete coderev
-```
-
-Built-in profiles:
-
-| Profile | Tables | Categories |
-|---------|--------|------------|
-| `writing` | memories, entities | preference, convention, lesson |
-| `meeting` | memories, events, entities | user, project, preference |
-| `research` | memories, entities | integration, convention, lesson, environment |
-| `ops` | memories, events, decisions | project, decision, lesson |
-| `networking` | entities, memories | user |
-| `review` | memories, events, decisions | lesson, decision, project |
-
-Profiles never override explicit `--tables` or `--category` flags — they're defaults, not locks.
-
-## Obsidian Integration
-
-Export brain.db to a navigable [Obsidian](https://obsidian.md) vault — and
-optionally ingest new notes from the vault back into the brain through
-the W(m) write gate. Karpathy's "LLM Wiki" pattern: brain.db is the
-authoritative store, the markdown layer is the navigable overlay.
-
-```bash
-pip install brainctl[obsidian]
-
-brainctl obsidian export ~/Documents/MyVault    # brain → markdown + wikilinks + frontmatter
-brainctl obsidian import ~/Documents/MyVault    # ingest new vault notes through the W(m) gate
-brainctl obsidian watch  ~/Documents/MyVault    # auto-ingest new notes on file changes
-brainctl obsidian status ~/Documents/MyVault    # vault vs brain.db count delta
-```
-
-New markdown notes can carry `category: <one-of-the-documented-categories>`
-in their frontmatter to control how they're filed; entity-shaped notes
-under `brainctl/entities/` round-trip through `Brain.entity()` so they
-become real entity rows, not memories. **One-way edits to already-exported
-notes do not flow back to brain.db** — there's no merge / conflict logic
-yet, so treat the export as canonical-from-brain and the vault layer as
-edit-and-replay rather than two-way mirror.
-
-## Memory Lifecycle
-
-brainctl manages memories like biological memory:
-
-- **Write gate** — Surprise scoring rejects redundant writes. Bypass with `force=True`.
-- **Three-tier routing** — High-value memories get full indexing; low-value get lightweight storage.
-- **Duplicate suppression** — Near-duplicates reinforce existing memories instead of creating new ones.
-- **Half-life decay** — Unused memories fade based on category. Recalled memories get reinforced.
-- **Hard cap** — 10,000 per agent. Emergency compression retires lowest-confidence memories.
-- **Consolidation** — Batch maintenance: Hebbian learning, temporal promotion, compression. Schedule with cron.
-
-## Health & Diagnostics
-
-```python
-brain.doctor()    # table checks, integrity, vec availability, DB size
-```
-
-```bash
-brainctl stats    # database overview
-brainctl lint     # quality issues (low confidence, duplicates, orphans)
-brainctl lint --fix  # auto-fix safe issues
-brainctl cost     # token usage dashboard
-brainctl gaps scan   # coverage holes + orphan memories + broken edges + unreferenced entities
-```
-
-## Retrieval Quality Benchmark
-
-brainctl ships a deterministic search-quality harness so changes to the hybrid FTS5+vec blend, intent classifier, or reranking profiles can be measured rather than guessed at.
-
-```bash
-python3 -m tests.bench.run                # JSON report: P@1 / P@5 / Recall@5 / MRR / nDCG@5
-python3 -m tests.bench.run --check        # compare against committed baseline, fail on >2% regression
-python3 -m tests.bench.run --update-baseline   # refresh the baseline after an intentional improvement
-bin/brainctl-bench                        # first-class CLI wrapper (identical output)
-```
-
-Fixtures live under `tests/bench/fixtures.py`: 30 synthetic memories + 8 events + 6 entities + 20 graded queries across entity / procedural / decision / temporal / troubleshooting / negative / ambiguous classes. The regression gate runs in CI via `tests/test_search_quality_bench.py` and any >2% drop on a headline metric fails the build.
-
-## Token Cost Optimization
-
-```bash
-brainctl search "deploy" --output oneline   # ~60 tokens (~97% savings vs JSON)
-brainctl search "deploy" --budget 500       # hard token cap
-brainctl search "deploy" --limit 3          # fewer results
-```
-
-## Vector Search (Optional)
-
-Works without embeddings. For semantic similarity:
-
-```bash
-pip install brainctl[vec]
-ollama pull nomic-embed-text       # install Ollama first: https://ollama.ai
-brainctl embed populate            # backfill embeddings
-brainctl vsearch "semantic query"
-```
-
-## Docker
-
-```bash
-docker build -t brainctl .
-docker run -v ./data:/data brainctl                    # MCP server
-docker run -v ./data:/data brainctl brainctl stats     # CLI
-```
+Every operation accepts `agent_id` for attribution. Agents share one `brain.db`. The knowledge graph connects insights across agents automatically.
 
 ## Documentation
 
 | Doc | What it covers |
 |-----|---------------|
-| [Agent Onboarding Guide](docs/AGENT_ONBOARDING.md) | Step-by-step integration for agents |
-| [Agent Instructions](docs/AGENT_INSTRUCTIONS.md) | Copy-paste blocks for MCP, CLI, Python agents |
-| [MCP Server Reference](MCP_SERVER.md) | 199 tools with decision tree |
-| [Architecture](ARCHITECTURE.md) | Technical deep-dive |
-| [Cognitive Protocol](COGNITIVE_PROTOCOL.md) | The Orient-Work-Record pattern |
-| [Examples](examples/) | Runnable scripts (quickstart, lifecycle, multi-agent) |
-| [Contributing](CONTRIBUTING.md) | Development setup and PR workflow |
+| [docs/QUICKSTART.md](docs/QUICKSTART.md) | 60-second onboarding — install, remember, search, sign |
+| [docs/COMPARISON.md](docs/COMPARISON.md) | Feature matrix vs Mem0, Letta, Zep, Cognee, OpenAI Memory |
+| [docs/AGENT_ONBOARDING.md](docs/AGENT_ONBOARDING.md) | Step-by-step agent integration guide |
+| [docs/AGENT_INSTRUCTIONS.md](docs/AGENT_INSTRUCTIONS.md) | Copy-paste blocks for MCP, CLI, Python agents |
+| [docs/SIGNED_EXPORTS.md](docs/SIGNED_EXPORTS.md) | Bundle format, threat model, verify-without-brainctl recipe |
+| [MCP_SERVER.md](MCP_SERVER.md) | 201 tools with decision tree |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Technical deep-dive |
 
 ## License
 
