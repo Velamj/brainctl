@@ -108,7 +108,7 @@ server over stdio.
 
 ## Which Tools Do I Need?
 
-199 tools is overwhelming. Most agents need ~15 on a daily basis. Here's how to find what you need.
+201 tools is overwhelming. Most agents need ~15 on a daily basis. Here's how to find what you need.
 
 ### Tier 1: Essential (daily use)
 

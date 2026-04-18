@@ -25,7 +25,7 @@ src/agentmemory/
 ├── cli.py             # CLI entry point (delegates to _impl)
 ├── brain.py           # Python API (Brain class, 22 methods)
 ├── profiles.py        # Context profiles — task-scoped search presets
-├── mcp_server.py      # MCP server (199 tools)
+├── mcp_server.py      # MCP server (201 tools)
 ├── mcp_tools_*.py     # MCP tool modules (temporal, beliefs, health, etc.)
 ├── hippocampus.py     # Consolidation engine
 ├── affect.py          # Affect tracking (44 emotions, zero-LLM-cost)

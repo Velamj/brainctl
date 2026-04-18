@@ -180,9 +180,22 @@ brainctl consolidate cycle                    # full consolidation pass
 
 ## Retrieval benchmarks
 
-Tested with default settings, no tuning for benchmark data. Backend: `Brain.search`.
+Tested with default settings, no tuning for benchmark data. Two harnesses
+ship in the tree:
 
-**LongMemEval** (289 questions, 4 categories):
+* `tests/bench/` — single-system retrieval baselines for `Brain.search`
+  and `cmd_search`, gated against regression in CI.
+* `tests/bench/competitor_runs/` — same-fixture head-to-head harness
+  with adapters for Mem0, Letta, Zep, Cognee, MemPalace, OpenAI Memory.
+  Skip-not-fabricate contract: missing SDK / API key raises
+  `CompetitorUnavailable` instead of returning a fake 0. Each result
+  row carries a `provenance` block recording `retrieval_mode`,
+  `vector_enabled`, `embedding_model`, `rerankers_active`, and the
+  full `search_args` so the JSON is self-describing.
+
+### brainctl-only baselines (Brain.search, FTS5)
+
+**LongMemEval** (289-question retrieval-friendly subset of `longmemeval_s`):
 
 | metric | overall | single-session-assistant | single-session-user | multi-session |
 |--------|---------|--------------------------|---------------------|---------------|
@@ -198,7 +211,34 @@ Tested with default settings, no tuning for benchmark data. Backend: `Brain.sear
 | hit@5  | 0.572 | 0.603 | 0.648 | 0.602 | 0.429 | 0.315 |
 | MRR    | 0.445 | 0.479 | 0.510 | 0.479 | 0.282 | 0.232 |
 
-LOCOMO single-hop and multi-hop hit@1 are weak (0.167 / 0.174). Root cause: recency and salience rerankers bias toward recent memories; LOCOMO uses uniform synthetic timestamps with gold evidence concentrated in early sessions, so the rerankers fight FTS ranking. A `--benchmark` preset that flattens recency/salience is available for evaluation runs. See `tests/bench/` for the full harness.
+LOCOMO single-hop and multi-hop hit@1 are weak (0.167 / 0.174). Root
+cause: recency and salience rerankers bias toward recent memories;
+LOCOMO uses uniform synthetic timestamps with gold evidence
+concentrated in early sessions, so the rerankers fight FTS ranking. A
+`--benchmark` preset that flattens recency/salience is available for
+evaluation runs.
+
+### Head-to-head vs MemPalace (measured 2026-04-18)
+
+Same machine (Intel Core Ultra 7 258V / 33.9 GB RAM / Windows 10),
+same datasets, same scoring. Repro:
+`python benchmarks/compare_memory_engines.py --label full_compare`.
+
+| benchmark | scoring | brainctl | mempalace | delta |
+|---|---|---|---|---|
+| LoCoMo (n=1,986) | session-level avg recall | **0.9217** | 0.6028 | +0.319 |
+| LongMemEval (n=470) | R@5 | **0.9702** | 0.9660 | +0.004 |
+| LongMemEval (n=470) | R@10 | **0.9894** | 0.9830 | +0.006 |
+| MemBench FirstAgent (n=200) | hit@5 | **0.930** | 0.885 | +0.045 |
+| ConvoMem | — | blocked | blocked | n/a |
+
+**Honesty caveat (verbatim from the artifact bundle):** the
+vector-on/off flag for the `cmd_search` run was not persisted in that
+specific bundle. Subsequent runs through `tests/bench/competitor_runs/`
+record `retrieval_mode` + `vector_enabled` automatically (commit
+40c1ed2), so the gap is closed for any future re-run. We will not
+cite the cmd_search numbers above as a clean vector-vs-FTS statement
+without rerunning that exact variant with the flag captured.
 
 ## Upgrading
 
