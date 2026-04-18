@@ -5,6 +5,82 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.4.0] — 2026-04-18
+
+### Added — "be the best local memory system" wave (5 parallel workers)
+
+Coordinated infrastructure push: pluggable embedding models, optional
+cross-encoder reranker, latency observability, competitor benchmark
+harness, comparison docs, and public `/benchmarks` + `/comparison`
+landing pages. Test suite: **1857 passed, 0 failed (+25 new tests)**.
+
+**Pluggable embedding models** (`src/agentmemory/embeddings.py`).
+Five-model registry — `nomic-embed-text` (default), `bge-m3`,
+`mxbai-embed-large`, `snowflake-arctic-embed2`, `qwen3-embedding:8b` —
+each with declared dim and Ollama tag. Switch via
+`BRAINCTL_EMBED_MODEL=<name>`. New CLI:
+`brainctl reindex --model <name> [--dry-run] [--limit N]` re-embeds
+existing memories with dim-mismatch validation. Bake-off harness at
+`tests/bench/embedding_bakeoff.py` benchmarks each model on LOCOMO +
+LongMemEval (winner-pick deferred — requires Ollama).
+
+**Optional cross-encoder reranker** (`src/agentmemory/rerank.py`).
+`bge-reranker-v2-m3` / `jina-reranker-v2-base-multilingual` /
+`qwen3-reranker-4b` (deferred). `brainctl search --rerank [MODEL]`
++ matching `rerank` kwarg on `mcp__brainctl__memory_search`.
+Lazy-imports `sentence-transformers` behind `pip install brainctl[rerank]`;
+graceful no-op fallback if missing. LRU cache on
+`(query_hash, candidate_hash) → score`. Honest perf disclosure in
+`docs/RERANKER.md`: 94ms p50 / 150ms p95 at top-K=5 on Apple Silicon CPU.
+
+**Latency benchmark + regression gate** (`tests/bench/latency.py`,
+`tests/test_latency_regression.py`). Nine hot-path operations × three
+scales (N=100/1k/10k), p50/p95/p99 over 100 runs each. All targets
+met at the 1k gated scale. Baseline locked at
+`tests/bench/baselines/latency.json`. New CLI: `brainctl perf [--full]`.
+**Perf win shipped:** removed per-row commit in `_update_q_value` →
+`brain_search_hybrid` p95 35→25ms (-30%); `mcp_memory_search` p95
+36→29ms (-20%). Q-value updates now durable only after the caller's
+end-of-request commit.
+
+**Competitor benchmark harness** (`tests/bench/competitor_runs/`).
+Adapters for Mem0, Letta, Zep, Cognee, MemoryLake, OpenAI Memory's
+vector_stores, and brainctl reference. Cost-gated runner
+(`run_all.py --cost-ceiling-usd 5`). `[competitor-bench]` extra in
+pyproject pins each SDK. Methodology in
+`tests/bench/COMPETITOR_RESULTS.md`.
+
+**Documentation + landing.** New `docs/COMPARISON.md` (26-row honest
+matrix vs Mem0 / Letta / Zep / Cognee / OpenAI Memory; unverified
+cells marked `?`). New `docs/QUICKSTART.md` (4-step 60-sec onboarding
+including the 2.3.2 managed-wallet flow). New landing site routes
+`/comparison` and `/benchmarks` (built from `tests/bench/baselines/*.json`
+at `next build` time). Honest gap admissions: no managed cloud
+(deliberate), no UI, LOCOMO single-hop hit@1 = 0.167 root-cause documented.
+
+### Investigated, deferred to 2.4.x
+
+- **The cmd_search vs Brain.search "18× LOCOMO gap" is partially
+  structural.** `Brain.search` is *literally one FTS5 SQL query* —
+  no vec, no rerankers. Comparing it to cmd_search's full hybrid
+  pipeline is apples-to-oranges. The 2.3.1 reranker auto-detect
+  didn't move LOCOMO numbers because the underlying issue is likely
+  the FTS+vec RRF fusion itself: nomic-embed-text on short
+  conversational turns produces noisy vectors that drag down the
+  pure-FTS ranking when fused. Remediation depends on the bake-off
+  surfacing a better embedding for conversational data. Logged to
+  brain (memory 1700).
+
+### Notes for 2.4.x
+
+- Run the embedding bake-off (Ollama required) to pick a default winner.
+- Run the competitor benchmark with `--limit 50` to populate the
+  `/benchmarks` page's "Competitor comparison" section.
+- Five perf escalations queued: FTS join scaling at 10k, vec extension
+  reload per-write, vec dylib auto-discover caching.
+- Cross-encoder rerank doesn't differentiate on LOCOMO due to dataset
+  degeneracy — needs a curated mixed-relevance fixture.
+
 ## [2.3.2] — 2026-04-18
 
 ### Added — managed Solana wallet (zero-friction signing for non-crypto users)
