@@ -1,0 +1,101 @@
+{
+  "bench": "locomo",
+  "cost_projection": {
+    "_total": 4.7584,
+    "cognee": 2.942,
+    "letta": 0.0148,
+    "mem0": 0.5907,
+    "memorylake": 0.0,
+    "openai_memory": 0.0295,
+    "zep": 1.1814
+  },
+  "generated_at": "2026-04-18T06:12:27.842429+00:00",
+  "ks": [
+    1,
+    5,
+    10,
+    20
+  ],
+  "limit": 5,
+  "n_questions": 50,
+  "n_tenants": 10,
+  "n_turns": 5882,
+  "repeats": 1,
+  "runs": {
+    "cognee": [
+      {
+        "competitor": "cognee",
+        "reason": "cognee not installed (pip install cognee==1.0.0): ModuleNotFoundError(\"No module named 'cognee'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      }
+    ],
+    "letta": [
+      {
+        "competitor": "letta",
+        "reason": "letta-client not installed (pip install letta-client==1.10.3): ModuleNotFoundError(\"No module named 'letta_client'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      }
+    ],
+    "mem0": [
+      {
+        "competitor": "mem0",
+        "reason": "mem0ai SDK not installed (pip install mem0ai==2.0.0): ModuleNotFoundError(\"No module named 'mem0'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      }
+    ],
+    "memorylake": [
+      {
+        "competitor": "memorylake",
+        "reason": "ambiguous-product: PyPI memorylake==0.1.0 exists but lacks documented agent-memory API surface; the 'MemoryLake' competitor referenced in the brainctl matrix may be a different (Web3 'memory passport') product. Adapter intentionally stubbed until product-of-record is confirmed.",
+        "status": "skipped",
+        "wall_s": 0.0
+      }
+    ],
+    "openai_memory": [
+      {
+        "competitor": "openai_memory",
+        "reason": "openai SDK not installed (pip install openai>=2.32.0): ModuleNotFoundError(\"No module named 'openai'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      }
+    ],
+    "zep": [
+      {
+        "competitor": "zep",
+        "reason": "zep-cloud not installed (pip install zep-cloud==3.20.0): ModuleNotFoundError(\"No module named 'zep_cloud'\")",
+        "status": "skipped",
+        "wall_s": 0.0
+      }
+    ]
+  },
+  "summary": {
+    "cognee": {
+      "reason": "cognee not installed (pip install cognee==1.0.0): ModuleNotFoundError(\"No module named 'cognee'\")",
+      "status": "skipped"
+    },
+    "letta": {
+      "reason": "letta-client not installed (pip install letta-client==1.10.3): ModuleNotFoundError(\"No module named 'letta_client'\")",
+      "status": "skipped"
+    },
+    "mem0": {
+      "reason": "mem0ai SDK not installed (pip install mem0ai==2.0.0): ModuleNotFoundError(\"No module named 'mem0'\")",
+      "status": "skipped"
+    },
+    "memorylake": {
+      "reason": "ambiguous-product: PyPI memorylake==0.1.0 exists but lacks documented agent-memory API surface; the 'MemoryLake' competitor referenced in the brainctl matrix may be a different (Web3 'memory passport') product. Adapter intentionally stubbed until product-of-record is confirmed.",
+      "status": "skipped"
+    },
+    "openai_memory": {
+      "reason": "openai SDK not installed (pip install openai>=2.32.0): ModuleNotFoundError(\"No module named 'openai'\")",
+      "status": "skipped"
+    },
+    "zep": {
+      "reason": "zep-cloud not installed (pip install zep-cloud==3.20.0): ModuleNotFoundError(\"No module named 'zep_cloud'\")",
+      "status": "skipped"
+    }
+  },
+  "top_k": 5
+}

@@ -64,6 +64,19 @@ signing = ["solders>=0.21"]
 # rerank module emits a single stderr warning and falls through to
 # the input ordering when the extras are missing.
 rerank = ["sentence-transformers>=3.0", "torch>=2.0"]
+# Competitor benchmark harness (tests/bench/competitor_runs/). Pulls
+# every external memory SDK we score against — kept out of the default
+# install because mem0ai/cognee/letta-client/zep-cloud each transitively
+# pull LangChain + several hundred MB of embedding/LLM dependencies.
+# Pins are PyPI-verified as of 2026-04-16. See
+# tests/bench/competitor_runs/setup.sh and tests/bench/COMPETITOR_RESULTS.md.
+competitor-bench = [
+    "openai==2.32.0",
+    "mem0ai==2.0.0",
+    "letta-client==1.10.3",
+    "zep-cloud==3.20.0",
+    "cognee==1.0.0",
+]
 all = [
     "mcp>=1.27.0",
     "sqlite-vec>=0.1.0",
