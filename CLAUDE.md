@@ -46,3 +46,34 @@ python3 -m tests.bench.run --check                    # fail on >2% regression v
 - Migration files in `db/migrations/` — append-only
 - The W(m) gate logic without understanding surprise scoring
 - Quiet hours scripts — they're cron-scheduled
+
+## Signed exports (2.3.0+)
+
+`brainctl export --sign` and `brainctl verify` produce / check
+portable, signed JSON bundles of memories using the user's Solana
+keypair. Local-first by design — memories never leave the machine;
+only the SHA-256 hash is ever pinned on-chain (opt-in via
+`--pin-onchain`, ~$0.001 per pin). Implementation lives in
+`src/agentmemory/signing.py` (offline + on-chain plumbing) and
+`src/agentmemory/commands/sign.py` (CLI handlers, parser
+registration). Optional dep:
+
+    pip install 'brainctl[signing]'   # pulls solders>=0.21
+
+CLI surface:
+
+    brainctl export --sign --keystore <path> [--filter-agent X]
+        [--category Y] [--scope Z] [--created-after T]
+        [--created-before T] [--ids 1,2,3] [--pin-onchain]
+        [--rpc-url <url>] [-o bundle.json] [--json]
+
+    brainctl verify <bundle.json> [--check-onchain]
+        [--rpc-url <url>] [--json]
+
+Exit codes: `0` ok, `1` tamper / missing keystore / IO, `2` unsigned
+export attempted or `--check-onchain` found no receipt.
+
+No token gating — anyone with brainctl + a Solana keypair can sign
+their own memories (preference memory #1691). Threat model + bundle
+format spec + a 30-line "verify without brainctl" recipe live in
+`docs/SIGNED_EXPORTS.md`.

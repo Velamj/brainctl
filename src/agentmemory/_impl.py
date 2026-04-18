@@ -15764,6 +15764,10 @@ def build_parser():
     from agentmemory.commands.obsidian import register_parser as _obs_register
     _obs_register(sub)
 
+    # --- export / verify (signed memory bundles) ---
+    from agentmemory.commands.sign import register_parser as _sign_register
+    _sign_register(sub)
+
     return p
 
 # ---------------------------------------------------------------------------
@@ -16870,6 +16874,14 @@ def main():
             fn(args)
         else:
             parser.print_help()
+        return
+    elif args.command == "export":
+        from agentmemory.commands.sign import cmd_export as _cmd_export
+        _cmd_export(args)
+        return
+    elif args.command == "verify":
+        from agentmemory.commands.sign import cmd_verify as _cmd_verify
+        _cmd_verify(args)
         return
     else:
         fn = dispatch.get(args.command)
