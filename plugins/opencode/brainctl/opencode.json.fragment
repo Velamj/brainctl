@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "brainctl": {
+      "type": "local",
+      "command": ["brainctl-mcp"],
+      "enabled": true,
+      "environment": {
+        "BRAINCTL_DB": "${HOME}/agentmemory/db/brain.db"
+      }
+    }
+  }
+}
