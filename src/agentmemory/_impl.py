@@ -6217,6 +6217,46 @@ def cmd_search(args):
             except Exception:
                 pass  # PageRank boost is optional; never break search
 
+        # ------------------------------------------------------------------
+        # Cross-encoder reranker (2.4.0+, opt-in)
+        # ------------------------------------------------------------------
+        # Final stage of the ranking chain — fires AFTER all heuristic
+        # rerankers (recency / salience / Q-value / source / context /
+        # trust / PageRank) and BEFORE the final [:limit] trim. Only
+        # activated when the user explicitly passes --rerank; never
+        # default-on, because cross-encoder inference adds 50ms (GPU)
+        # to 600ms (CPU) per query and we don't want to surprise users
+        # with that on the hot search path.
+        #
+        # Composition: when MMR (line ~6273) and quantum (line ~6298)
+        # also run, they pick up the CE-rewritten final_score and
+        # operate on the cross-encoder ordering — which is the right
+        # composition: relevance first, then diversify / phase-correct.
+        #
+        # The rerank module never raises: it returns the input as-is
+        # with a stderr warning when sentence-transformers is missing,
+        # the model can't be loaded, or scoring fails. The search call
+        # always succeeds.
+        ce_model = getattr(args, "rerank", None)
+        if ce_model and merged and not benchmark_mode:
+            # Pick the right text key for this bucket — memories and
+            # context use "content", events use "summary".
+            ce_text_key = "summary" if bucket == "events" else "content"
+            try:
+                from agentmemory.rerank import rerank as _ce_rerank
+                merged = _ce_rerank(
+                    query,
+                    merged,
+                    model=ce_model,
+                    top_k=None,  # final trim is below; let it slice
+                    text_key=ce_text_key,
+                )
+                _debug_skips[f"{bucket}.cross_encoder_applied"] = ce_model
+            except Exception as exc:  # noqa: BLE001 — never break search
+                _debug_skips[f"{bucket}.cross_encoder_skipped"] = (
+                    f"{type(exc).__name__}: {exc}"
+                )
+
         merged.sort(key=lambda r: r["final_score"], reverse=True)
         return merged[:limit]
 
@@ -15228,6 +15268,17 @@ def build_parser():
                        help="Apply phase-aware quantum amplitude re-ranking to memory results")
     srch.add_argument("--benchmark", action="store_true",
                        help="Disable the recency/salience/Q-value/source/context/PageRank/quantum/temporal-contiguity reranker chain and return the raw FTS+vec RRF-fused ranking. Trust reranker is preserved (different signal class). Use this for synthetic-conversational evals (LOCOMO, LongMemEval) where uniform timestamps make rerankers worse than no-op.")
+    # 2.4.0: optional cross-encoder reranker stage (off by default).
+    # Uses nargs="?" + const so `--rerank` alone takes the default
+    # model and `--rerank MODEL` lets the user pin a specific one.
+    # Implementation in src/agentmemory/rerank.py — gracefully no-ops
+    # if sentence-transformers isn't installed. See docs/RERANKER.md.
+    srch.add_argument("--rerank", nargs="?", const="bge-reranker-v2-m3", default=None,
+                       metavar="MODEL", dest="rerank",
+                       help="Run a cross-encoder reranker over the top-K post-fusion candidates. "
+                            "Pass without a value to use the default model (bge-reranker-v2-m3); "
+                            "pass MODEL to pin one of: bge-reranker-v2-m3, jina-reranker-v2-base-multilingual, "
+                            "qwen3-reranker-4b. Requires `pip install 'brainctl[rerank]'`.")
     srch.add_argument("--output", "-o", choices=["json", "compact", "oneline"], default="json",
                        help="Output format: json (default, pretty), compact (minified JSON), oneline (ID|type|text per line)")
     srch.add_argument("--profile",

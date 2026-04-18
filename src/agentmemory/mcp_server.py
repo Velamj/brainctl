@@ -850,7 +850,20 @@ def tool_memory_search(agent_id: str, query: str, category: str = None,
                        multi_pass: bool = False,
                        temporal_expand_hours: int = 0,
                        profile: str = None,
-                       benchmark: bool = False) -> dict:
+                       benchmark: bool = False,
+                       rerank=False) -> dict:
+    """``rerank`` (2.4.0+):
+        - False / None / "" → no cross-encoder rerank (default)
+        - True             → cross-encoder rerank with default model (bge-reranker-v2-m3)
+        - <model name>     → cross-encoder rerank with that model
+
+    See docs/RERANKER.md for the latency/quality tradeoff. Rerank
+    fires AFTER PageRank/quantum reranking and BEFORE multi-pass
+    expansion / temporal neighborhood expansion (those are candidate-set
+    expanders, not rerankers — CE should score the relevance set,
+    expansion adjuncts come after). Falls through gracefully if
+    sentence-transformers isn't installed.
+    """
     if memory_type and memory_type not in ("episodic", "semantic"):
         return {"ok": False, "error": "memory_type must be 'episodic' or 'semantic'"}
 
@@ -956,6 +969,27 @@ def tool_memory_search(agent_id: str, query: str, category: str = None,
         results.sort(key=lambda r: -r.get("_sr_score", 0.0))
         for r in results:
             r.pop("_sr_score", None)
+
+    # Cross-encoder reranker (2.4.0+, opt-in).
+    # Mirrors the CLI `--rerank` behaviour. Fires after the heuristic
+    # reranking stages (PageRank, quantum) and before candidate-set
+    # expansion (multi_pass, temporal_expand_hours) — those are
+    # different operations: rerankers re-score the existing set,
+    # expanders add new candidates. CE should sort the relevance set
+    # before we widen it.
+    #
+    # Bypassed under benchmark=True to match the CLI --benchmark
+    # contract: when the caller explicitly asked for raw FTS rank
+    # order, we don't sneak a cross-encoder reranker in.
+    if rerank and results and not benchmark:
+        try:
+            from agentmemory.rerank import rerank as _ce_rerank, DEFAULT_MODEL as _CE_DEFAULT
+            ce_model = _CE_DEFAULT if rerank is True else str(rerank)
+            results = _ce_rerank(query, results, model=ce_model, top_k=None)
+        except Exception:
+            # Never break search on rerank failure — the rerank module
+            # already prints a stderr warning on degradation.
+            pass
 
     # Multi-pass SDM-style convergence retrieval (issue #36).
     if multi_pass and results:
@@ -2201,6 +2235,7 @@ TOOLS = [
                 "multi_pass": {"type": "boolean", "default": False, "description": "SDM-style iterative convergence: use pass-1 results to build a richer pass-2 query; merge and deduplicate both passes (items in both passes ranked first)."},
                 "temporal_expand_hours": {"type": "integer", "default": 0, "description": "TCM temporal contiguity: after retrieval, add memories created within ±N hours of each result. Surfaces temporally co-occurring memories regardless of semantic similarity."},
                 "benchmark": {"type": "boolean", "default": False, "description": "Disable downstream rerankers (quantum amplitude, PageRank) and return raw FTS rank order. Mirrors `brainctl search --benchmark`. Use for synthetic-conversational evals where rerankers add noise on uniform fixtures."},
+                "rerank": {"type": ["boolean", "string"], "default": False, "description": "Cross-encoder reranker stage (opt-in, 2.4.0+). false (default) skips. true uses the default model (bge-reranker-v2-m3). Pass a model name string to pin one of: bge-reranker-v2-m3, jina-reranker-v2-base-multilingual, qwen3-reranker-4b. Adds 50ms (GPU) to 600ms (CPU) per query in exchange for typically +10-15pp P@1 on standard benchmarks. Requires `pip install 'brainctl[rerank]'`. See docs/RERANKER.md."},
             },
             "required": ["query"],
         },
