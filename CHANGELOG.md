@@ -5,6 +5,91 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-04-17
+
+### Added — signed memory exports (new subsystem)
+
+The first Web3 utility added to brainctl. **Signed memory bundles + optional
+on-chain attestation roots.** Local-first by design: memories never touch
+the chain, only a SHA-256 hash + the signer's pubkey + a version prefix get
+posted (~80 bytes per pin, ~$0.001 at current SOL prices). Anyone can
+verify a bundle's authenticity offline; the on-chain receipt adds tamper-
+evident timestamping the signer can't backdate.
+
+**No token gating.** Anyone with brainctl and a Solana keypair can sign
+their own memories. The token funds development, never gates access.
+(Brand preference memory 1691.)
+
+**CLI surface:**
+
+```
+brainctl export --sign --keystore <path> [--filter-agent X] [--category Y]
+    [--scope Z] [--created-after T] [--created-before T] [--ids 1,2,3]
+    [--pin-onchain] [--rpc-url <url>] [-o bundle.json] [--json]
+
+brainctl verify <bundle.json> [--check-onchain] [--rpc-url <url>] [--json]
+```
+
+Exit codes: `0` ok, `1` tamper detected / missing keystore / IO, `2`
+unsigned export attempted or `--check-onchain` found no receipt.
+
+**Properties:**
+- **Tamper-proof.** Ed25519 signature over SHA-256 of canonical JSON.
+  Tested against 7 distinct tamper classes (memory content, IDs, swapped
+  signature/pubkey, modified filter, modified timestamp, faked hash) —
+  all fail verification. One byte change → invalid.
+- **Opt-in.** Both `--sign` and `--pin-onchain` are explicit flags
+  defaulting to off. Plain `brainctl export` does no crypto.
+- **Not invasive.** `solders` is a lazy import inside the signing
+  functions; the base `pip install brainctl` doesn't pull it in. Run
+  `pip install 'brainctl[signing]'` to enable. Zero background daemons,
+  no telemetry, no auto-signing.
+
+**Bundle sizes (real measurements against the dev brain.db, 210 active
+memories):**
+
+| filter | memories | bundle size |
+|---|---:|---:|
+| 10 most recent | 10 | 13 KB |
+| 100 most recent | 100 | 109 KB |
+| project:brainctl scope | 44 | 52 KB |
+| full active brain | 210 | 296 KB |
+
+A full export of the dev brain is smaller than a single phone screenshot.
+
+**Implementation:**
+- `src/agentmemory/signing.py` (~470 lines) — `build_bundle`,
+  `bundle_hash`, `sign_bundle`, `verify_bundle`, `pin_onchain`,
+  `verify_onchain`. Lazy solders import; raw `urllib.request` for the
+  four Solana RPC methods we use (no asyncio).
+- `src/agentmemory/commands/sign.py` — CLI parser + handlers for
+  `export --sign` and `verify`.
+- `tests/test_signing.py` — 40 cases covering round-trip, 7 tamper
+  classes, filter combinations, canonical-JSON reproducibility, version
+  forward-compat, mock-RPC for on-chain paths, and end-to-end CLI smoke.
+  All 40 pass when `solders` is installed; skip cleanly without it.
+- `docs/SIGNED_EXPORTS.md` — threat model, bundle format, on-chain cost
+  breakdown, and a 30-line "verify without brainctl installed" reference
+  recipe in pure `cryptography` (so any auditor can verify a bundle
+  without the brainctl stack).
+
+**Bundle format spec (v1):** outer wrapper
+`{version, bundle, bundle_hash_hex, signature_b58, signer_pubkey_b58, signed_at}`
+over inner bundle
+`{version, generated_at, filter_used, memories[]}`. Canonical JSON via
+`json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)`.
+Ed25519 sig is over the raw 32-byte SHA-256 of the canonical bundle (not
+the hex string). On-chain memo body:
+`brainctl/v1:<bundle_hash_hex>:<signer_pubkey_b58>` via SPL Memo v2.
+
+### Why this is the response to MemWal
+
+The competition (MemWal/Walrus/Sui) puts memory blobs on-chain — slow,
+expensive, privacy-leaking. brainctl 2.3.0 takes the opposite shape:
+**memories stay local, only the proof goes on-chain.** Same sovereignty +
+portability + tamper-evidence narrative, with sub-millisecond reads,
+zero storage rent, and ~$0.001 per pinned export instead of pay-per-op.
+
 ## [2.2.4] — 2026-04-17
 
 ### Added
