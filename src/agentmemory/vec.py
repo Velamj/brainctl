@@ -36,11 +36,25 @@ def _embed_dimensions() -> int:
         return 768
 
 
+# Module-level cache for the dylib path. The discovery walks site-packages
+# and (on miss) globs two filesystem patterns — ~5-15ms per call cold.
+# `index_memory` calls this twice per write and `vec_search` once per read,
+# so on a hot path doing 5 vec ops we were paying 5-15× this overhead for
+# no reason. The dylib path doesn't change at runtime; cache it once.
+# Sentinel: `False` means "not yet looked up". `None` means "looked up,
+# not found" (legitimate result on systems without sqlite-vec installed).
+_VEC_DYLIB_CACHE: object = False
+
+
 def _find_vec_dylib() -> str | None:
-    """Auto-discover the sqlite-vec loadable extension path."""
+    """Auto-discover the sqlite-vec loadable extension path. Cached."""
+    global _VEC_DYLIB_CACHE
+    if _VEC_DYLIB_CACHE is not False:
+        return _VEC_DYLIB_CACHE  # type: ignore[return-value]
     try:
         import sqlite_vec  # type: ignore[import]
-        return sqlite_vec.loadable_path()
+        _VEC_DYLIB_CACHE = sqlite_vec.loadable_path()
+        return _VEC_DYLIB_CACHE  # type: ignore[return-value]
     except (ImportError, AttributeError):
         pass
     import glob as _glob
@@ -50,7 +64,9 @@ def _find_vec_dylib() -> str | None:
     ]:
         matches = sorted(_glob.glob(pattern), reverse=True)
         if matches:
-            return matches[0]
+            _VEC_DYLIB_CACHE = matches[0]
+            return _VEC_DYLIB_CACHE  # type: ignore[return-value]
+    _VEC_DYLIB_CACHE = None
     return None
 
 
@@ -123,6 +139,68 @@ def init_vec_tables(conn: sqlite3.Connection) -> bool:
         return False
 
 
+# Per-thread vec-loaded connection pool. Loading the sqlite-vec extension
+# is 5-20ms; opening a fresh connection + load_extension on every
+# `index_memory` call (which fires once per memory_add) was a real cost
+# burst on bulk imports. The cached connection has the extension loaded
+# and the vec_memories table guaranteed to exist, so subsequent calls
+# go straight to INSERT. Same pattern as bin/brainctl-mcp's 2.1.2 pool.
+import threading as _threading
+import atexit as _atexit
+
+_VEC_WRITE_POOL: dict[tuple[int, str], sqlite3.Connection] = {}
+_VEC_WRITE_POOL_LOCK = _threading.Lock()
+
+
+@_atexit.register
+def _close_vec_write_pool() -> None:
+    with _VEC_WRITE_POOL_LOCK:
+        for c in list(_VEC_WRITE_POOL.values()):
+            try:
+                c.close()
+            except Exception:
+                pass
+        _VEC_WRITE_POOL.clear()
+
+
+def _get_pooled_vec_conn(db_path: str, dylib: str) -> sqlite3.Connection | None:
+    """Return a per-thread vec-extension-loaded connection to *db_path*.
+
+    Creates + loads + ensures-table on first call per (thread, db_path);
+    returns the cached one on subsequent calls. Live-checks via SELECT 1
+    so a closed/stale connection is reopened transparently.
+    """
+    key = (_threading.get_ident(), db_path)
+    with _VEC_WRITE_POOL_LOCK:
+        cached = _VEC_WRITE_POOL.get(key)
+        if cached is not None:
+            try:
+                cached.execute("SELECT 1").fetchone()
+                return cached
+            except sqlite3.Error:
+                _VEC_WRITE_POOL.pop(key, None)
+                try:
+                    cached.close()
+                except Exception:
+                    pass
+        try:
+            conn = sqlite3.connect(db_path, timeout=10, check_same_thread=False)
+            conn.enable_load_extension(True)
+            conn.load_extension(dylib)
+            conn.enable_load_extension(False)
+            dims = _embed_dimensions()
+            conn.execute(
+                f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_memories "
+                f"USING vec0(embedding float[{dims}])"
+            )
+            conn.commit()
+            _VEC_WRITE_POOL[key] = conn
+            return conn
+        except Exception as exc:
+            _log.debug("vec write pool: connect/load failed — %s", exc)
+            return None
+
+
 def index_memory(
     conn: sqlite3.Connection,
     memory_id: int,
@@ -130,9 +208,10 @@ def index_memory(
 ) -> bool:
     """Embed *content* and upsert the vector into vec_memories.
 
-    Opens a **separate** connection to the same database with sqlite-vec
-    loaded, rather than mutating the caller's connection.  This keeps the
-    caller's transaction state clean.
+    Uses a per-thread pooled vec-extension-loaded connection to the same
+    database, rather than reopening + reloading the extension on every
+    call. The pool keeps the caller's connection's transaction state clean
+    while avoiding the 5-20ms extension-reload tax on bulk imports.
 
     Returns True if the row was indexed, False if vec is unavailable or
     embedding failed.
@@ -151,23 +230,16 @@ def index_memory(
     except Exception:
         db_path = ":memory:"
 
+    vec_conn = _get_pooled_vec_conn(db_path, dylib)
+    if vec_conn is None:
+        return False
+
     try:
-        vec_conn = sqlite3.connect(db_path, timeout=10)
-        vec_conn.enable_load_extension(True)
-        vec_conn.load_extension(dylib)
-        vec_conn.enable_load_extension(False)
-        # Ensure the table exists.
-        dims = _embed_dimensions()
-        vec_conn.execute(
-            f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_memories "
-            f"USING vec0(embedding float[{dims}])"
-        )
         vec_conn.execute(
             "INSERT OR REPLACE INTO vec_memories(rowid, embedding) VALUES (?, ?)",
             (memory_id, embedding),
         )
         vec_conn.commit()
-        vec_conn.close()
         return True
     except Exception as exc:
         _log.debug("index_memory: failed for memory_id=%s — %s", memory_id, exc)

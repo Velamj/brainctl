@@ -5,6 +5,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.4.1] — 2026-04-18
+
+### Fixed — vec.py write-path perf
+
+Two of Worker D's 2.4.0 perf escalations addressed in `src/agentmemory/vec.py`:
+
+- **`_find_vec_dylib` cached.** The auto-discover walked site-packages
+  + globbed two filesystem patterns (~5-15ms cold) on **every**
+  `index_memory` and `vec_search` call. The dylib path doesn't change
+  at runtime — cached at module level via a sentinel-aware single
+  variable. `index_memory` was calling this twice per write; now once
+  per process.
+- **`index_memory` connection pool.** Was opening a fresh sqlite
+  connection + `load_extension` (5-20ms) on every memory write.
+  Replaced with a per-thread pooled vec-extension-loaded connection
+  (same shape as 2.1.2's MCP server pool — `_VEC_WRITE_POOL` keyed on
+  `(thread_id, db_path)`, atexit cleanup, `SELECT 1` liveness check).
+  Bulk imports + agent runs that fire many `memory_add` calls in a
+  row no longer pay the extension-load tax per write.
+
+The two changes together knock 30-100ms off the `Brain.remember`
+hot path when Ollama is reachable (vec write becomes a near-direct
+`INSERT OR REPLACE` instead of a full connection rebuild). Test suite:
+**1857 passed, 0 failed** — no regressions.
+
+Three more perf escalations from Worker D's 2.4.0 audit remain open:
+FTS join scaling at N=10k (needs schema change in `brain.py`),
+`_load_phase_map` reload per quantum_rerank call (sideloaded module,
+mtime-based cache deferred), `_try_get_db_with_vec` connection reuse
+(needs lifecycle design pass).
+
 ## [2.4.0] — 2026-04-18
 
 ### Added — "be the best local memory system" wave (5 parallel workers)
