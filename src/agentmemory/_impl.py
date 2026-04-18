@@ -5642,21 +5642,102 @@ def _surprise_score(db, content: str, blob=None):
         return 0.7, "fts5_error"  # default moderate surprise on error
 
 
-def _embed_query_safe(text: str):
-    """Embed query text via Ollama. Returns packed float32 bytes, or None on failure."""
+_dim_checked = False  # per-process flag: have we validated DB <-> model dim?
+
+
+def _ensure_dim_compatibility() -> None:
+    """Lazy one-shot check that the configured embed model matches brain.db's dim.
+
+    Called from :func:`_embed_query_safe` on its first invocation in a
+    process. If ``vec_memories`` exists with a different dim than the
+    current model produces, raises a clear error pointing the user at
+    ``brainctl vec reindex`` rather than letting sqlite-vec quietly
+    refuse the BLOB and the caller infer "Ollama down" / "no neighbors"
+    forever.
+
+    Safe no-op when:
+      * sqlite-vec isn't loaded (no vec_memories table → fresh / FTS-only)
+      * VEC_DYLIB is None (extension unavailable)
+      * the embeddings module can't be imported
+    """
+    global _dim_checked
+    if _dim_checked:
+        return
+    if VEC_DYLIB is None:
+        # Set the flag — no vec, no risk of dim drift.
+        _dim_checked = True
+        return
     try:
-        import urllib.request, urllib.error, struct
-        payload = json.dumps({"model": EMBED_MODEL, "input": text}).encode()
-        req = urllib.request.Request(
-            OLLAMA_EMBED_URL, data=payload,
-            headers={"Content-Type": "application/json"},
+        from agentmemory.embeddings import (
+            EmbeddingDimMismatchError,
+            validate_db_compatibility,
         )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read())
-            vec = data["embeddings"][0]
-            return struct.pack(f"{len(vec)}f", *vec)
     except Exception:
-        return None
+        # If we can't even import the registry, give up on validation
+        # and let the historical embed path do its thing.
+        _dim_checked = True
+        return
+    try:
+        conn = sqlite3.connect(str(DB_PATH), timeout=5)
+        try:
+            conn.enable_load_extension(True)
+            conn.load_extension(VEC_DYLIB)
+            conn.enable_load_extension(False)
+            validate_db_compatibility(conn, db_path=str(DB_PATH))
+        finally:
+            conn.close()
+    except EmbeddingDimMismatchError:
+        # Surface the error loudly — embedding will fail anyway against
+        # a mismatched vec_memories, and the user needs the migration hint.
+        # Do NOT mark _dim_checked — the next call should also raise so
+        # the user sees the hint even after the first traceback gets eaten
+        # by an outer try/except in their code.
+        raise
+    except Exception:
+        # Any other failure (DB locked, vec not loaded, etc.) — degrade
+        # gracefully and treat as "checked" so we don't re-pay the open
+        # cost on every embed.
+        pass
+    _dim_checked = True
+
+
+def _embed_query_safe(text: str):
+    """Embed query text via Ollama. Returns packed float32 bytes, or None on failure.
+
+    Routes through ``agentmemory.embeddings`` so the resolved model
+    (BRAINCTL_EMBED_MODEL or registry default) and Ollama URL stay in
+    one place. Falls back to the inline urllib path on import failure
+    so this hot path can never hard-crash _impl.py.
+
+    First call per process also runs :func:`_ensure_dim_compatibility`
+    so a mid-life model swap surfaces immediately instead of silently
+    poisoning vec_memories with mismatched-dim BLOBs. Mismatch raises
+    :class:`agentmemory.embeddings.EmbeddingDimMismatchError`; other
+    validator failures are swallowed (validator is best-effort).
+    """
+    _ensure_dim_compatibility()  # raises on dim mismatch, no-op otherwise
+    try:
+        from agentmemory.embeddings import embed_query, pack_embedding
+        vec = embed_query(text)
+        if vec is None:
+            return None
+        return pack_embedding(vec)
+    except Exception:
+        # Last-resort inline path — preserve historical behavior so a
+        # broken embeddings module never breaks the writer.
+        try:
+            import urllib.request, struct
+            payload = json.dumps({"model": EMBED_MODEL, "input": text}).encode()
+            req = urllib.request.Request(
+                OLLAMA_EMBED_URL, data=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
+                vec = data["embeddings"][0]
+                return struct.pack(f"{len(vec)}f", *vec)
+        except Exception:
+            return None
 
 
 _source_weight_cache = {}  # (agent_id, domain) -> strength, cleared on build
@@ -6659,9 +6740,30 @@ def _find_vec_dylib():
     return None
 
 VEC_DYLIB = _find_vec_dylib()
-OLLAMA_EMBED_URL = "http://localhost:11434/api/embed"
-EMBED_MODEL = "nomic-embed-text"
-EMBED_DIMENSIONS = 768
+OLLAMA_EMBED_URL = os.environ.get(
+    "BRAINCTL_OLLAMA_URL", "http://localhost:11434/api/embed"
+)
+# Embedding model + dim are now resolved through the registry in
+# agentmemory.embeddings. We still expose module-level constants so the
+# rest of _impl.py and call sites in mcp_tools_* can read them at import
+# time (existing contract), but the *values* come from the registry.
+# Override at process start via BRAINCTL_EMBED_MODEL / BRAINCTL_EMBED_DIMENSIONS.
+try:
+    from agentmemory.embeddings import (
+        _get_default_embed_model as _embed_default_model,
+        _get_model_dim as _embed_default_dim,
+    )
+    EMBED_MODEL = _embed_default_model()
+    EMBED_DIMENSIONS = _embed_default_dim(EMBED_MODEL)
+except Exception:
+    # embeddings module import should never fail (pure-stdlib + sqlite3),
+    # but if it does we degrade to the historical defaults so the rest of
+    # the brainctl CLI keeps booting.
+    EMBED_MODEL = os.environ.get("BRAINCTL_EMBED_MODEL", "nomic-embed-text")
+    try:
+        EMBED_DIMENSIONS = int(os.environ.get("BRAINCTL_EMBED_DIMENSIONS", "768"))
+    except (TypeError, ValueError):
+        EMBED_DIMENSIONS = 768
 
 
 def _get_db_with_vec() -> sqlite3.Connection:
@@ -6752,23 +6854,290 @@ def cmd_vec_purge_retired(args):
         db_vec.close()
 
 
-def _embed_query(text: str) -> bytes:
-    """Embed query text via Ollama, return packed float32 bytes."""
-    import urllib.request, urllib.error, struct
-    payload = json.dumps({"model": EMBED_MODEL, "input": text}).encode()
-    req = urllib.request.Request(
-        OLLAMA_EMBED_URL,
-        data=payload,
-        headers={"Content-Type": "application/json"},
+def cmd_vec_models(args):
+    """Print the embedding-model registry + the model the current process resolved.
+
+    Useful for users who just want to know "what's available" before
+    running ``brainctl vec reindex --model X``. The currently-default
+    model is read at this moment (so changing BRAINCTL_EMBED_MODEL
+    between invocations is reflected).
+    """
+    from agentmemory.embeddings import (
+        EMBEDDING_MODELS,
+        _get_default_embed_model,
+        get_db_embedding_dim,
     )
+    default = _get_default_embed_model()
+    db_dim = None
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read())
-            vec = data["embeddings"][0]
-            return struct.pack(f"{len(vec)}f", *vec)
-    except urllib.error.URLError as e:
-        print(f"ERROR: Ollama not reachable for embedding: {e}", file=sys.stderr)
-        sys.exit(1)
+        db_vec = _get_db_with_vec()
+        try:
+            db_dim = get_db_embedding_dim(db_vec)
+        finally:
+            db_vec.close()
+    except Exception:
+        pass
+    rows = []
+    for name, meta in EMBEDDING_MODELS.items():
+        rows.append({
+            "name": name,
+            "ollama_tag": meta["ollama_tag"],
+            "dim": meta["dim"],
+            "size_mb": meta["size_mb"],
+            "description": meta["description"],
+            "is_default": (name == default),
+            "matches_db": (db_dim is not None and meta["dim"] == db_dim),
+        })
+    payload = {
+        "ok": True,
+        "default_model": default,
+        "db_embedding_dim": db_dim,
+        "models": rows,
+    }
+    if getattr(args, "json", False):
+        json_out(payload)
+        return
+    print(f"Current default model: {default}")
+    if db_dim is not None:
+        print(f"brain.db vec_memories dim: {db_dim}")
+    print()
+    print(f"{'NAME':32} {'TAG':28} {'DIM':>5} {'SIZE':>6}  STATUS")
+    for r in rows:
+        flags = []
+        if r["is_default"]:
+            flags.append("default")
+        if r["matches_db"]:
+            flags.append("db-match")
+        flag_str = ",".join(flags) if flags else "-"
+        print(
+            f"{r['name'][:32]:32} {r['ollama_tag'][:28]:28} "
+            f"{r['dim']:>5} {r['size_mb']:>5}M  {flag_str}"
+        )
+
+
+def cmd_vec_reindex(args):
+    """Re-embed all active memories under a different embedding model.
+
+    Use case: the user is switching ``BRAINCTL_EMBED_MODEL`` (or following
+    a default-model bump in a brainctl release) and needs to migrate the
+    on-disk ``vec_memories`` virtual table to the new dim. Dim-mismatch
+    crashes are otherwise hard to recover from once the new model has
+    overwritten one or two rows.
+
+    Flow:
+
+    1. Resolve target model from ``--model`` (defaults to the current
+       :data:`EMBED_MODEL`). Look up its dim from the embeddings registry
+       so a typo'd model name fails fast.
+    2. Compare the target dim to the existing vec_memories DDL via
+       :func:`get_db_embedding_dim`. If they match and the user didn't
+       pass ``--force``, exit early — nothing to do.
+    3. Pull all active memory IDs (``retired_at IS NULL``) ordered by id.
+    4. In ``--dry-run`` mode, just print the plan + estimate. Otherwise
+       drop and recreate ``vec_memories`` at the new dim, then re-embed
+       in batches of ``--batch-size`` (default 64), reporting progress
+       every 200 memories.
+    5. Warm Ollama once before the loop so the per-batch latency is the
+       *steady-state* cost, not the cold-start cost.
+
+    The DDL drop+recreate is destructive — we wrap it in ``BEGIN IMMEDIATE``
+    so an interrupted reindex leaves a recoverable WAL tail rather than a
+    half-truncated vec table. If the embed loop crashes mid-run, the user
+    can re-run the command and it'll pick up from "what's missing in
+    vec_memories" — see the missing-rows query below.
+    """
+    from agentmemory.embeddings import (
+        EMBEDDING_MODELS,
+        EmbeddingDimMismatchError,
+        _get_default_embed_model,
+        _get_model_dim,
+        embed_text,
+        estimate_per_memory_seconds,
+        estimate_warmup_seconds,
+        get_db_embedding_dim,
+        pack_embedding,
+        reset_validation_cache,
+        warmup_model,
+    )
+    target_model = getattr(args, "model", None) or _get_default_embed_model()
+    target_dim = _get_model_dim(target_model)
+    dry_run = bool(getattr(args, "dry_run", False))
+    limit = getattr(args, "limit", None)
+    batch_size = max(1, int(getattr(args, "batch_size", None) or 64))
+    force = bool(getattr(args, "force", False))
+
+    db_vec = _get_db_with_vec()
+    try:
+        existing_dim = get_db_embedding_dim(db_vec)
+        active_rows = db_vec.execute(
+            "SELECT id, content FROM memories "
+            "WHERE retired_at IS NULL AND content IS NOT NULL "
+            "ORDER BY id"
+        ).fetchall()
+        active_ids = [(r["id"], r["content"]) for r in active_rows]
+        if limit is not None and limit > 0:
+            active_ids = active_ids[:limit]
+        n_total = len(active_ids)
+
+        if existing_dim == target_dim and not force:
+            json_out({
+                "ok": True,
+                "skipped": True,
+                "reason": "dim_match",
+                "model": target_model,
+                "dim": target_dim,
+                "existing_dim": existing_dim,
+                "n_active_memories": n_total,
+                "message": (
+                    f"vec_memories already at dim={target_dim}; nothing to do. "
+                    "Pass --force to re-embed anyway."
+                ),
+            })
+            return
+
+        warmup_s = estimate_warmup_seconds(target_model)
+        per_mem_s = estimate_per_memory_seconds(target_model)
+        eta_s = warmup_s + per_mem_s * n_total
+        plan = {
+            "ok": True,
+            "model": target_model,
+            "ollama_tag": EMBEDDING_MODELS.get(target_model, {}).get(
+                "ollama_tag", target_model
+            ),
+            "target_dim": target_dim,
+            "existing_dim": existing_dim,
+            "n_active_memories": n_total,
+            "batch_size": batch_size,
+            "estimated_warmup_s": round(warmup_s, 1),
+            "estimated_per_memory_s": round(per_mem_s, 3),
+            "estimated_total_s": round(eta_s, 1),
+            "dry_run": dry_run,
+        }
+        if dry_run:
+            plan["message"] = "Dry run — no embeddings written."
+            json_out(plan)
+            return
+
+        # ---- destructive: drop and recreate vec_memories at new dim ----
+        if existing_dim is not None:
+            db_vec.execute("BEGIN IMMEDIATE")
+            try:
+                db_vec.execute("DROP TABLE IF EXISTS vec_memories")
+                db_vec.commit()
+            except Exception:
+                db_vec.rollback()
+                raise
+        db_vec.execute(
+            f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_memories "
+            f"USING vec0(embedding float[{target_dim}])"
+        )
+        db_vec.commit()
+        reset_validation_cache()
+
+        print(
+            f"[reindex] warming model={target_model} (~{warmup_s:.1f}s)...",
+            file=sys.stderr,
+        )
+        if not warmup_model(target_model):
+            json_out({
+                "ok": False,
+                "error": "warmup_failed",
+                "model": target_model,
+                "message": (
+                    f"Could not embed a probe with model={target_model!r}. "
+                    f"Make sure `ollama serve` is running and the model is "
+                    f"pulled (`ollama pull {target_model}`)."
+                ),
+            })
+            return
+
+        embedded = 0
+        skipped = 0
+        t0 = time.perf_counter()
+        last_log = t0
+        for batch_start in range(0, n_total, batch_size):
+            batch = active_ids[batch_start : batch_start + batch_size]
+            with db_vec:
+                for mid, content in batch:
+                    vec = embed_text(content, model=target_model)
+                    if vec is None:
+                        skipped += 1
+                        continue
+                    if len(vec) != target_dim:
+                        # Should never happen — Ollama lied about the dim.
+                        skipped += 1
+                        continue
+                    db_vec.execute(
+                        "INSERT OR REPLACE INTO vec_memories(rowid, embedding) "
+                        "VALUES (?, ?)",
+                        (mid, pack_embedding(vec)),
+                    )
+                    embedded += 1
+            now = time.perf_counter()
+            if now - last_log >= 5.0 or (batch_start + batch_size) >= n_total:
+                rate = embedded / max(0.001, now - t0)
+                remaining = max(0, n_total - (batch_start + batch_size))
+                eta_remain = remaining / max(0.001, rate)
+                print(
+                    f"[reindex] {embedded}/{n_total} done "
+                    f"({rate:.1f}/s, ~{eta_remain:.0f}s left)",
+                    file=sys.stderr,
+                )
+                last_log = now
+
+        elapsed = time.perf_counter() - t0
+        json_out({
+            "ok": True,
+            "model": target_model,
+            "dim": target_dim,
+            "n_active_memories": n_total,
+            "embedded": embedded,
+            "skipped": skipped,
+            "elapsed_s": round(elapsed, 2),
+            "rate_per_s": round(embedded / max(0.001, elapsed), 2),
+        })
+    finally:
+        db_vec.close()
+
+
+def _embed_query(text: str) -> bytes:
+    """Embed query text via Ollama, return packed float32 bytes.
+
+    Hard-error variant of :func:`_embed_query_safe` — used by paths
+    where Ollama unreachable is a fatal user-facing error (CLI
+    commands that print "no vector matches" otherwise). Routes through
+    the ``agentmemory.embeddings`` registry so model selection stays
+    consistent with the soft-error path.
+    """
+    try:
+        from agentmemory.embeddings import embed_query as _eq, pack_embedding
+        vec = _eq(text)
+        if vec is None:
+            print(
+                f"ERROR: Ollama not reachable for embedding (model={EMBED_MODEL}). "
+                "Is `ollama serve` running?",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        return pack_embedding(vec)
+    except SystemExit:
+        raise
+    except Exception:
+        import urllib.request, urllib.error, struct
+        payload = json.dumps({"model": EMBED_MODEL, "input": text}).encode()
+        req = urllib.request.Request(
+            OLLAMA_EMBED_URL,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read())
+                vec = data["embeddings"][0]
+                return struct.pack(f"{len(vec)}f", *vec)
+        except urllib.error.URLError as e:
+            print(f"ERROR: Ollama not reachable for embedding: {e}", file=sys.stderr)
+            sys.exit(1)
 
 
 def _normalize(scores: list[float]) -> list[float]:
@@ -15595,6 +15964,43 @@ def build_parser():
     vec_purge.add_argument("--limit", type=int, default=None,
                            help="Cap the number of vec rows deleted in this run (for chunked operation)")
 
+    vec_models = vec_sub.add_parser(
+        "models",
+        help="List embedding models known to brainctl (registry + current default)",
+    )
+    vec_models.add_argument("--json", action="store_true",
+                            help="Emit machine-readable JSON instead of a table")
+
+    vec_reindex = vec_sub.add_parser(
+        "reindex",
+        help="Re-embed all active memories under a different model "
+             "(use after switching BRAINCTL_EMBED_MODEL)",
+    )
+    vec_reindex.add_argument(
+        "--model", default=None,
+        help="Target embedding model name (default: current BRAINCTL_EMBED_MODEL "
+             "or registry default)",
+    )
+    vec_reindex.add_argument(
+        "--dry-run", action="store_true",
+        help="Print plan + ETA without modifying vec_memories",
+    )
+    vec_reindex.add_argument(
+        "--limit", type=int, default=None,
+        help="Cap the number of memories re-embedded in this run "
+             "(useful for staged migrations of large brain.dbs)",
+    )
+    vec_reindex.add_argument(
+        "--batch-size", type=int, default=64,
+        help="Memories committed per write transaction (default 64). "
+             "Larger = faster, smaller = better crash-recovery granularity",
+    )
+    vec_reindex.add_argument(
+        "--force", action="store_true",
+        help="Re-embed even when the existing index is already at the "
+             "target model's dim (e.g. to refresh after a model upgrade)",
+    )
+
     # --- gaps ---
     p_weights = sub.add_parser("weights", help="Show adaptive retrieval weights and store diagnostics")
     p_weights.add_argument("--query", "-q", help="Optional query to show query-type adjusted weights")
@@ -17075,7 +17481,11 @@ def main():
         dispatch = {"status": cmd_budget_status}
         fn = dispatch.get(args.budget_cmd)
     elif args.command == "vec":
-        dispatch = {"purge-retired": cmd_vec_purge_retired}
+        dispatch = {
+            "purge-retired": cmd_vec_purge_retired,
+            "reindex": cmd_vec_reindex,
+            "models": cmd_vec_models,
+        }
         fn = dispatch.get(args.vec_cmd)
     elif args.command == "weights":
         fn = cmd_weights
