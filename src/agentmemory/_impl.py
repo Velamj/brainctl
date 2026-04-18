@@ -352,6 +352,206 @@ def _thompson_confidence(alpha=1.0, beta=1.0):
 
 
 # ---------------------------------------------------------------------------
+# Reranker signal-informativeness gates (2.3.1)
+# ---------------------------------------------------------------------------
+# The cmd_search reranker chain (recency / salience / Q-value / trust) was
+# observed to scramble FTS+vec ranking on cold-start brains and synthetic
+# benchmarks (LOCOMO Hit@5: cmd_search 0.03 vs Brain.search 0.56 — see
+# memory id 1690). The root cause is uninformative signals: every fresh-DB
+# memory shares uniform timestamps, zero recall history, and the default
+# trust score, so the rerankers introduce noise on top of FTS+vec.
+#
+# Each gate computes a single statistic over the candidate set and reports
+# whether the signal carries useful variance. cmd_search uses these to
+# downweight (skip) the corresponding reranker when the gate trips.
+#
+# Thresholds are conservative — chosen so they trip only when the candidate
+# set is genuinely uniform (cold-start, synthetic data), not on real corpora
+# where real signal exists. See the per-gate docstring for the rationale.
+
+# Stdev floor for created_at timestamps, in seconds. Below this, the candidate
+# set's age range is too compressed for an exp(-lambda * days_since) decay to
+# meaningfully reorder anything: a 60s spread translates to ≤0.0007 days, so
+# even at lambda=0.030 the decay weight varies by less than 2e-5.
+_RECENCY_STDEV_FLOOR_SECONDS = 60.0
+
+# Stdev floor for replay_priority. The salience reranker upweights memories
+# with high replay-queue priority; if every candidate is in a tight band, the
+# multiplier collapses to a constant and the reranker only adds rounding
+# noise. 0.05 is roughly the granularity at which downstream consumers stop
+# being able to tell two priorities apart.
+_SALIENCE_PRIORITY_STDEV_FLOOR = 0.05
+
+# Minimum total recall count across the candidate set before the Q-value
+# reranker fires. Q-value updates by ±0.05 per recall, so with N<3 cumulative
+# recalls the entire set is within ±0.05 of the 0.5 default. _q_adjusted_score
+# would map that to a multiplier in [0.98, 1.02] — pure noise on top of FTS+vec.
+_QVALUE_RECALL_FLOOR = 3
+
+# Stdev floor for trust_score. Schema default is 1.0; mcp_tool source stamps
+# 0.85; human_verified stamps 1.0 — on a fresh DB the column is effectively
+# constant. 0.02 is below the resolution at which trust source distinctions
+# would be observable in the multiplier.
+_TRUST_STDEV_FLOOR = 0.02
+
+
+def _stdev_seconds(timestamps):
+    """Return stdev across a list of ISO-8601 timestamp strings, in seconds.
+
+    Skips None / unparseable values. Returns 0.0 if fewer than 2 valid values
+    remain — a single timestamp has no variance and the gate should trip.
+    """
+    if not timestamps:
+        return 0.0
+    parsed = []
+    for ts in timestamps:
+        if not ts:
+            continue
+        try:
+            # str() guards against datetime objects sneaking through; rstrip
+            # the trailing Z that brainctl writes via _utc_now_iso().
+            parsed.append(datetime.fromisoformat(str(ts).rstrip("Z")).timestamp())
+        except (ValueError, TypeError):
+            continue
+    if len(parsed) < 2:
+        return 0.0
+    mean = sum(parsed) / len(parsed)
+    var = sum((p - mean) ** 2 for p in parsed) / len(parsed)
+    return math.sqrt(var)
+
+
+def _stdev_floats(values):
+    """Return stdev across a list of float-like values; skips None.
+
+    Returns 0.0 if fewer than 2 valid values remain.
+    """
+    nums = [float(v) for v in values if v is not None]
+    if len(nums) < 2:
+        return 0.0
+    mean = sum(nums) / len(nums)
+    var = sum((n - mean) ** 2 for n in nums) / len(nums)
+    return math.sqrt(var)
+
+
+def _reranker_signal_check(candidates):
+    """Inspect a candidate set and decide which rerankers carry usable signal.
+
+    Returns a dict with one entry per reranker:
+        {
+          "recency": {"informative": bool, "reason": str, "stat": float},
+          "salience": {...},
+          "q_value": {...},
+          "trust": {...},
+        }
+    The reason string is human-readable (e.g. "uniform_timestamps_stdev_3.2s")
+    so it can be surfaced in the search response's _debug dict for auditors.
+
+    Pure function: takes a list of dict-like rows, returns a dict. No DB I/O.
+    Each gate falls back to "informative" when its column is missing entirely
+    (events / context paths don't carry q_value or trust_score) — those rerankers
+    won't trigger anyway, so we let them through and avoid spurious "skipped"
+    annotations on non-memory result sets.
+    """
+    if not candidates:
+        # Empty candidate set — no rerankers will fire; report all informative
+        # so we don't pollute _debug with vacuous skip reasons.
+        return {
+            "recency":  {"informative": True, "reason": "no_candidates",     "stat": 0.0},
+            "salience": {"informative": True, "reason": "no_candidates",     "stat": 0.0},
+            "q_value":  {"informative": True, "reason": "no_candidates",     "stat": 0.0},
+            "trust":    {"informative": True, "reason": "no_candidates",     "stat": 0.0},
+        }
+
+    out = {}
+
+    # Recency: stdev of created_at across the candidate set.
+    rec_stdev = _stdev_seconds([c.get("created_at") for c in candidates])
+    out["recency"] = {
+        "informative": rec_stdev >= _RECENCY_STDEV_FLOOR_SECONDS,
+        "reason": (
+            f"uniform_timestamps_stdev_{rec_stdev:.1f}s"
+            if rec_stdev < _RECENCY_STDEV_FLOOR_SECONDS
+            else f"timestamps_stdev_{rec_stdev:.1f}s"
+        ),
+        "stat": round(rec_stdev, 3),
+    }
+
+    # Salience: stdev of replay_priority across the set. Some rows may not
+    # carry the column (events/context), in which case we treat the signal
+    # as informative-by-default — the salience reranker only fires on memory
+    # rows anyway, so a non-memory bucket should not be marked "skipped".
+    sal_values = [c.get("replay_priority") for c in candidates
+                  if c.get("replay_priority") is not None]
+    if not sal_values:
+        # No replay_priority column on these rows — gate doesn't apply.
+        out["salience"] = {
+            "informative": True, "reason": "no_priority_data", "stat": 0.0,
+        }
+    else:
+        sal_stdev = _stdev_floats(sal_values)
+        out["salience"] = {
+            "informative": sal_stdev >= _SALIENCE_PRIORITY_STDEV_FLOOR,
+            "reason": (
+                f"uniform_replay_priority_stdev_{sal_stdev:.4f}"
+                if sal_stdev < _SALIENCE_PRIORITY_STDEV_FLOOR
+                else f"replay_priority_stdev_{sal_stdev:.4f}"
+            ),
+            "stat": round(sal_stdev, 4),
+        }
+
+    # Q-value: total recall count across the set. None and missing both treated
+    # as zero so a fresh-DB candidate set (recalled_count=0 everywhere) trips
+    # the gate.
+    total_recalls = sum(int(c.get("recalled_count") or 0) for c in candidates)
+    out["q_value"] = {
+        "informative": total_recalls >= _QVALUE_RECALL_FLOOR,
+        "reason": (
+            f"insufficient_recall_history_total_{total_recalls}"
+            if total_recalls < _QVALUE_RECALL_FLOOR
+            else f"recall_history_total_{total_recalls}"
+        ),
+        "stat": total_recalls,
+    }
+
+    # Trust: stdev of m.trust_score across the set. Same fallback as salience
+    # for non-memory rows that don't carry the column.
+    trust_values = [c.get("trust_score") for c in candidates
+                    if c.get("trust_score") is not None]
+    if not trust_values:
+        out["trust"] = {
+            "informative": True, "reason": "no_trust_data", "stat": 0.0,
+        }
+    else:
+        trust_stdev = _stdev_floats(trust_values)
+        out["trust"] = {
+            "informative": trust_stdev >= _TRUST_STDEV_FLOOR,
+            "reason": (
+                f"uniform_trust_stdev_{trust_stdev:.4f}"
+                if trust_stdev < _TRUST_STDEV_FLOOR
+                else f"trust_stdev_{trust_stdev:.4f}"
+            ),
+            "stat": round(trust_stdev, 4),
+        }
+
+    return out
+
+
+def _trust_adjusted_score(base_score, trust_score):
+    """Multiply base score by trust weight. trust=1.0 is neutral.
+
+    Maps trust_score in [0, 1] to a multiplier in [0.7, 1.0]:
+        multiplier = 0.7 + 0.3 * trust
+
+    A retracted memory (trust=0.05) gets ~0.71x; a fully-trusted one (1.0)
+    gets 1.0x. Asymmetric on purpose: trust never *boosts* a result above
+    its base score — provenance reduces noise, it doesn't manufacture
+    relevance.
+    """
+    t = trust_score if trust_score is not None else 1.0
+    return base_score * (0.7 + 0.3 * t)
+
+
+# ---------------------------------------------------------------------------
 # Temporal recency helpers
 # ---------------------------------------------------------------------------
 
@@ -5620,7 +5820,26 @@ def cmd_search(args):
     use_mmr = getattr(args, "mmr", False)                # --mmr: MMR diversity reranking
     mmr_lambda = getattr(args, "mmr_lambda", 0.7)        # --mmr-lambda: relevance/diversity trade-off
     use_explore = getattr(args, "explore", False)        # --explore: curiosity mode
+    # --benchmark (2.3.1): bypass the recency/salience/Q-value reranker chain
+    # and return raw FTS+vec RRF-fused ranking. Trust reranker is *retained*
+    # because trust is provenance, not stale-data leakage. The flag exists as
+    # an escape hatch for synthetic-conversational benchmarks (LOCOMO,
+    # LongMemEval) where uniform timestamps and zero recall history make the
+    # rerankers worse than no-op. See memory id 1690 and tests/test_reranker_robustness.
+    benchmark_mode = getattr(args, "benchmark", False)
+    if benchmark_mode:
+        # One-line stderr note so the user can see the reranker chain went
+        # silent. Avoids log spam on the hot path while still being visible.
+        print(
+            "[brainctl] --benchmark: reranker chain disabled, returning raw FTS+vec ranking",
+            file=sys.stderr,
+        )
     results = {"memories": [], "events": [], "context": [], "decisions": []}
+    # Accumulator for which signal-informativeness gates tripped this call.
+    # Each value is a string reason like "uniform_timestamps_stdev_3.2s" or a
+    # boolean True for benchmark-mode hard skips. Surfaced under the top-level
+    # "_debug" key so auditors can see WHY a particular ranking happened.
+    _debug_skips: Dict[str, Any] = {}
 
     # Read neuromod state to modulate retrieval parameters
     _nm = _neuro_get_state(db)
@@ -5684,7 +5903,8 @@ def cmd_search(args):
             "SELECT m.id, 'memory' as type, m.category, m.content, m.confidence, m.scope, "
             "m.created_at, m.recalled_count, m.temporal_class, m.last_recalled_at, f.rank as fts_rank, "
             "m.retrieval_prediction_error, m.alpha, m.beta, m.agent_id, "
-            "m.encoding_task_context, m.encoding_context_hash, m.q_value, m.confidence_phase "
+            "m.encoding_task_context, m.encoding_context_hash, m.q_value, m.confidence_phase, "
+            "m.trust_score, m.replay_priority "
             "FROM memories m JOIN memories_fts f ON m.id = f.rowid "
             "WHERE memories_fts MATCH ? AND m.retired_at IS NULL ORDER BY rank LIMIT ?",
             (fts_query, fetch_limit)
@@ -5709,7 +5929,8 @@ def cmd_search(args):
         src_rows = db_vec.execute(
             f"SELECT id, 'memory' as type, category, content, confidence, scope, "
             f"created_at, recalled_count, temporal_class, last_recalled_at, retrieval_prediction_error, alpha, beta, agent_id, "
-            f"encoding_task_context, encoding_context_hash, q_value, confidence_phase "
+            f"encoding_task_context, encoding_context_hash, q_value, confidence_phase, "
+            f"trust_score, replay_priority "
             f"FROM memories WHERE id IN ({ph}) AND retired_at IS NULL",
             rowids
         ).fetchall()
@@ -5787,9 +6008,51 @@ def cmd_search(args):
         out.sort(key=lambda r: r["distance"])
         return out
 
-    def _apply_recency_and_trim(merged, scope_fn, use_adaptive_salience=False):
+    def _apply_recency_and_trim(merged, scope_fn, use_adaptive_salience=False, bucket="memories"):
         if no_recency:
             return merged[:limit]
+
+        # ------------------------------------------------------------------
+        # Reranker activation gates (2.3.1)
+        # ------------------------------------------------------------------
+        # Two layers decide whether each reranker fires for this merged set:
+        #
+        #   1. --benchmark hard-disable (recency / salience / q_value only;
+        #      trust is preserved because it's a provenance signal, not a
+        #      stale-data signal).
+        #   2. Per-signal informativeness gates (--benchmark unset). When the
+        #      candidate set has no usable variance for a signal, applying the
+        #      reranker would only add rounding noise on top of FTS+vec.
+        #
+        # `use_*` booleans are local to this call — three buckets call this
+        # helper (memories, events, context) and they each get their own gate
+        # decisions based on their own candidates.
+        signal = _reranker_signal_check(merged)
+
+        if benchmark_mode:
+            use_recency  = False
+            use_salience = False
+            use_qvalue   = False
+            # Trust preserved under --benchmark (different signal class).
+            use_trust    = signal["trust"]["informative"]
+            # Surface the hard-skip reasons exactly once per cmd_search call,
+            # tagged by bucket so an auditor can tell which set was affected.
+            _debug_skips[f"{bucket}.recency_skipped"]  = "benchmark_mode"
+            _debug_skips[f"{bucket}.salience_skipped"] = "benchmark_mode"
+            _debug_skips[f"{bucket}.qvalue_skipped"]   = "benchmark_mode"
+        else:
+            use_recency  = signal["recency"]["informative"]
+            use_salience = signal["salience"]["informative"]
+            use_qvalue   = signal["q_value"]["informative"]
+            use_trust    = signal["trust"]["informative"]
+            if not use_recency:
+                _debug_skips[f"{bucket}.recency_skipped"]  = signal["recency"]["reason"]
+            if not use_salience:
+                _debug_skips[f"{bucket}.salience_skipped"] = signal["salience"]["reason"]
+            if not use_qvalue:
+                _debug_skips[f"{bucket}.qvalue_skipped"]   = signal["q_value"]["reason"]
+        if not use_trust:
+            _debug_skips[f"{bucket}.trust_skipped"]    = signal["trust"]["reason"]
 
         # Lazy-compute max_recalls once for adaptive salience importance normalization
         if use_adaptive_salience and _adaptive_weights and _SAL_AVAILABLE:
@@ -5824,7 +6087,19 @@ def cmd_search(args):
             scope = scope_fn(r)
             r["age"] = _age_str(r.get("created_at"))
 
-            if use_adaptive_salience and _adaptive_weights and _SAL_AVAILABLE and r.get("recalled_count") is not None:
+            # ------------------------------------------------------------------
+            # Recency / salience reranker (gated by use_recency + use_salience)
+            # ------------------------------------------------------------------
+            # Adaptive salience and the simpler temporal-decay path BOTH
+            # consume `created_at`-derived recency, so the recency gate
+            # collapses both branches when it trips. When recency is OFF we
+            # fall through to plain RRF (final_score = rrf_score), which is
+            # the FTS+vec ranking the bench harness would have computed.
+            if not use_recency:
+                r["temporal_weight"] = 1.0
+                r["final_score"] = round(r.get("rrf_score", 0.0), 8)
+            elif (use_adaptive_salience and use_salience and _adaptive_weights
+                  and _SAL_AVAILABLE and r.get("recalled_count") is not None):
                 # Full adaptive salience formula: rrf_score → similarity input
                 # Thompson sampling: draw confidence from Beta(alpha, beta) instead
                 # of using the point estimate. Converts static confidence into an
@@ -5847,7 +6122,8 @@ def cmd_search(args):
                 r["temporal_weight"] = 1.0  # subsumed in salience
                 r["final_score"] = round(salience, 8)
             else:
-                # Original temporal decay path (events, context, fallback)
+                # Original temporal decay path (events, context, fallback,
+                # OR memories when salience gate trips but recency doesn't)
                 # permanent and long temporal_class are immune to temporal decay
                 if r.get("temporal_class") in ("permanent", "long"):
                     tw = 1.0
@@ -5861,7 +6137,8 @@ def cmd_search(args):
 
             # Source weighting: boost/attenuate memories from agents with domain expertise
             # Factor: 0.90 + 0.10 * strength (neutral=1.0 for unknown agents, max 1.0 for experts)
-            if r.get("agent_id"):
+            # Skipped under --benchmark to keep raw RRF visible.
+            if r.get("agent_id") and not benchmark_mode:
                 mem_domain = _expertise_scope_to_domain(r.get("scope") or "global") or r.get("category")
                 sw = _get_source_weight(db, r["agent_id"], mem_domain) if mem_domain else 1.0
                 r["source_weight"] = round(sw, 4)
@@ -5870,26 +6147,32 @@ def cmd_search(args):
             # Context-matching reranking boost: memories encoded in the same project/agent
             # context receive up to 20% score boost. (Smith & Vela 2001, Heald et al. 2023,
             # HippoRAG 2024: context overlap at retrieval time improves recall precision.)
-            try:
-                ctx_score = _context_match_score(
-                    r.get("encoding_task_context"), r.get("encoding_context_hash"),
-                    _current_ctx, _current_hash,
-                )
-                if ctx_score > 0:
-                    r["final_score"] = round(r["final_score"] * (1.0 + 0.2 * ctx_score), 8)
-            except Exception:
-                pass  # context-match boost is optional; never break search
+            # Skipped under --benchmark.
+            if not benchmark_mode:
+                try:
+                    ctx_score = _context_match_score(
+                        r.get("encoding_task_context"), r.get("encoding_context_hash"),
+                        _current_ctx, _current_hash,
+                    )
+                    if ctx_score > 0:
+                        r["final_score"] = round(r["final_score"] * (1.0 + 0.2 * ctx_score), 8)
+                except Exception:
+                    pass  # context-match boost is optional; never break search
 
             # Q-value utility reranking: memories with high Q (frequently contributed)
             # are boosted up to 1.2x; low Q memories are attenuated to 0.8x.
             # (Zhang et al. 2026 / MemRL; Q=0.5 neutral → 1.0x multiplier)
-            if r.get("type") == "memory":
+            # Gated by use_qvalue — when the candidate set has insufficient
+            # recall history, every Q-value sits at the 0.5 default and the
+            # reranker collapses to a constant 1.0x multiplier (i.e. noise).
+            if r.get("type") == "memory" and use_qvalue:
                 r["final_score"] = round(_q_adjusted_score(r["final_score"], r.get("q_value")), 8)
                 # Quantum amplitude scoring (brainctl quantum research Wave 1, V2-5).
                 # Only activates when confidence_phase is non-null and non-zero — progressive
                 # rollout, since most memories default to 0.0.
+                # Bypassed under --benchmark to keep raw RRF visible.
                 q_phase = r.get("confidence_phase")
-                if q_phase is not None and q_phase != 0.0:
+                if q_phase is not None and q_phase != 0.0 and not benchmark_mode:
                     q_amp = _quantum_amplitude_score(
                         confidence=r.get("confidence") or 0.5,
                         phase=q_phase,
@@ -5897,9 +6180,18 @@ def cmd_search(args):
                     )
                     r["final_score"] = round(0.5 * r["final_score"] + 0.5 * q_amp, 8)
 
+            # Trust reranker (m.trust_score): provenance multiplier in [0.7, 1.0].
+            # Gated by use_trust — on a fresh DB every memory has the schema
+            # default (1.0) so the multiplier collapses to 1.0x and adds only
+            # rounding noise. Retained under --benchmark because trust is a
+            # provenance signal, not a stale-data signal.
+            if r.get("type") == "memory" and use_trust and r.get("trust_score") is not None:
+                r["final_score"] = round(_trust_adjusted_score(r["final_score"], r.get("trust_score")), 8)
+
         # PageRank reranking boost: score *= (1 + alpha * norm_pagerank)
+        # Bypassed under --benchmark — caller asked for raw FTS+vec.
         pr_alpha = getattr(args, "pagerank_boost", 0.0)
-        if pr_alpha and pr_alpha > 0:
+        if pr_alpha and pr_alpha > 0 and not benchmark_mode:
             try:
                 import json as _pjson
                 _pr_row = db.execute(
@@ -5970,7 +6262,7 @@ def cmd_search(args):
                 merged = _rrf_fuse(fts_list, vec_list)
             else:
                 merged = [r | {"rrf_score": 0.0, "source": "keyword"} for r in fts_list]
-            trimmed = _apply_recency_and_trim(merged, lambda r: r.get("scope"), use_adaptive_salience=True)
+            trimmed = _apply_recency_and_trim(merged, lambda r: r.get("scope"), use_adaptive_salience=True, bucket="memories")
             # MMR diversity reranking — applied after salience scoring, before graph expand
             if use_mmr and trimmed:
                 trimmed = _mmr_rerank(trimmed, lambda_mmr=mmr_lambda)
@@ -5978,7 +6270,10 @@ def cmd_search(args):
             # same agent within a 30-minute window (Dong et al. 2026, Trends Cog Sci).
             # Applied post-scoring so it nudges final ranking without interfering with
             # salience or recency decay weights.
-            if trimmed:
+            # Bypassed under --benchmark (caller asked for raw FTS+vec, and the
+            # bonus is itself a recency-style signal — same uniform-timestamp
+            # failure mode that motivated the gate).
+            if trimmed and not benchmark_mode:
                 try:
                     _tc_ref = datetime.fromisoformat(str(trimmed[0]["created_at"]).rstrip("Z"))
                     _tc_agent = getattr(args, "agent", None) or "unknown"
@@ -5990,12 +6285,15 @@ def cmd_search(args):
             graph = _graph_expand(db, trimmed, "memories", already)
             trimmed.extend(graph)
 
-        # Quantum amplitude re-ranking
-        use_quantum = getattr(args, "quantum", False) or getattr(args, "benchmark", False)
+        # Quantum amplitude re-ranking.
+        # 2.3.1 polarity flip: --benchmark used to imply --quantum (compare
+        # classical vs quantum side-by-side). Now --benchmark means "raw
+        # FTS+vec" — quantum is exactly the kind of reranker we want
+        # disabled in that mode. Use --quantum explicitly to opt back in.
+        use_quantum = getattr(args, "quantum", False) and not benchmark_mode
         if use_quantum and _QUANTUM_AVAILABLE and trimmed:
             try:
-                _bench = getattr(args, "benchmark", False)
-                trimmed = _quantum_rerank(trimmed, db_path=str(DB_PATH), benchmark=_bench)
+                trimmed = _quantum_rerank(trimmed, db_path=str(DB_PATH), benchmark=False)
             except Exception:
                 pass  # quantum re-ranking is optional; never break search
 
@@ -6015,7 +6313,8 @@ def cmd_search(args):
             merged = [r | {"rrf_score": 0.0, "source": "keyword"} for r in fts_list]
         trimmed = _apply_recency_and_trim(
             merged,
-            lambda r: ("project:" + r["project"]) if r.get("project") else "global"
+            lambda r: ("project:" + r["project"]) if r.get("project") else "global",
+            bucket="events",
         )
         if not no_graph:
             already = {r["id"] for r in trimmed}
@@ -6032,7 +6331,8 @@ def cmd_search(args):
             merged = [r | {"rrf_score": 0.0, "source": "keyword"} for r in fts_list]
         trimmed = _apply_recency_and_trim(
             merged,
-            lambda r: ("project:" + r["project"]) if r.get("project") else "global"
+            lambda r: ("project:" + r["project"]) if r.get("project") else "global",
+            bucket="context",
         )
         if not no_graph:
             already = {r["id"] for r in trimmed}
@@ -6292,6 +6592,13 @@ def cmd_search(args):
     _out = {"mode": mode, "metacognition": {"tier": tier, "label": tier_label, "note": tier_note, **_intent_meta}, **results}
     if _triggered:
         _out["triggered_memories"] = _triggered
+    # 2.3.1: surface reranker signal-informativeness gate decisions so an
+    # auditor can see WHY a particular ranking happened (e.g. uniform
+    # timestamps tripped the recency gate). Kept outside `results` so it
+    # doesn't pollute the per-bucket result counts. Only emitted when at
+    # least one gate tripped — silent when all rerankers fired normally.
+    if _debug_skips:
+        _out["_debug"] = dict(_debug_skips)
     _ofmt = getattr(args, "output", "json")
     if _ofmt == "oneline":
         oneline_out(_out)
@@ -14915,7 +15222,7 @@ def build_parser():
     srch.add_argument("--quantum", action="store_true",
                        help="Apply phase-aware quantum amplitude re-ranking to memory results")
     srch.add_argument("--benchmark", action="store_true",
-                       help="Compare classical vs quantum scores side-by-side; implies --quantum")
+                       help="Disable the recency/salience/Q-value/source/context/PageRank/quantum/temporal-contiguity reranker chain and return the raw FTS+vec RRF-fused ranking. Trust reranker is preserved (different signal class). Use this for synthetic-conversational evals (LOCOMO, LongMemEval) where uniform timestamps make rerankers worse than no-op.")
     srch.add_argument("--output", "-o", choices=["json", "compact", "oneline"], default="json",
                        help="Output format: json (default, pretty), compact (minified JSON), oneline (ID|type|text per line)")
     srch.add_argument("--profile",

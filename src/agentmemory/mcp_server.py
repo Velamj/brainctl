@@ -849,7 +849,8 @@ def tool_memory_search(agent_id: str, query: str, category: str = None,
                        borrow_from: str = None,
                        multi_pass: bool = False,
                        temporal_expand_hours: int = 0,
-                       profile: str = None) -> dict:
+                       profile: str = None,
+                       benchmark: bool = False) -> dict:
     if memory_type and memory_type not in ("episodic", "semantic"):
         return {"ok": False, "error": "memory_type must be 'episodic' or 'semantic'"}
 
@@ -920,8 +921,10 @@ def tool_memory_search(agent_id: str, query: str, category: str = None,
             if r.get("memory_type") == "semantic":
                 r["confidence"] = min(1.0, (r.get("confidence") or 1.0) * _SEMANTIC_CONFIDENCE_BONUS)
 
-    # Quantum amplitude re-ranking — transparent to callers
-    if _QUANTUM_AVAILABLE and results:
+    # Quantum amplitude re-ranking — transparent to callers.
+    # Bypassed under benchmark=True so the MCP path returns raw FTS rank order
+    # (matches the cmd_search --benchmark contract: raw, unreranked baseline).
+    if _QUANTUM_AVAILABLE and results and not benchmark:
         try:
             results = _quantum_rerank(results, db_path=str(DB_PATH))
         except Exception:
@@ -931,7 +934,8 @@ def tool_memory_search(agent_id: str, query: str, category: str = None,
     # pagerank_boost=0 (default) leaves ranking unchanged.
     # pagerank_boost=1.0 weights FTS rank and PageRank equally.
     # Implements Millidge 2025: Personalized PageRank == Successor Representation.
-    if pagerank_boost > 0.0 and results:
+    # Bypassed under benchmark=True (caller asked for raw ranking).
+    if pagerank_boost > 0.0 and results and not benchmark:
         pr_keys = [f"pagerank_memories_{r['id']}" for r in results]
         key_placeholders = ",".join("?" * len(pr_keys))
         pr_rows = db.execute(
@@ -2196,6 +2200,7 @@ TOOLS = [
                 "borrow_from": {"type": "string", "description": "Agent ID to borrow from. When set, searches only that agent's scope='global' memories and logs the cross-agent access in access_log."},
                 "multi_pass": {"type": "boolean", "default": False, "description": "SDM-style iterative convergence: use pass-1 results to build a richer pass-2 query; merge and deduplicate both passes (items in both passes ranked first)."},
                 "temporal_expand_hours": {"type": "integer", "default": 0, "description": "TCM temporal contiguity: after retrieval, add memories created within ±N hours of each result. Surfaces temporally co-occurring memories regardless of semantic similarity."},
+                "benchmark": {"type": "boolean", "default": False, "description": "Disable downstream rerankers (quantum amplitude, PageRank) and return raw FTS rank order. Mirrors `brainctl search --benchmark`. Use for synthetic-conversational evals where rerankers add noise on uniform fixtures."},
             },
             "required": ["query"],
         },
