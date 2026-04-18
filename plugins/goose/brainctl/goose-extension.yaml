@@ -1,0 +1,13 @@
+brainctl:
+  bundled: false
+  enabled: true
+  name: "brainctl"
+  type: "stdio"
+  timeout: 300
+  cmd: "brainctl-mcp"
+  args: []
+  description: "brainctl agent memory — 201 MCP tools, local-first SQLite, MIT-licensed"
+  env_keys: []
+  envs:
+    BRAINCTL_DB: "${HOME}/agentmemory/db/brain.db"
+  available_tools: []
