@@ -5,6 +5,64 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.4.3] — 2026-04-18
+
+### Added — three new agent-framework plugins (16 → 19)
+
+Three workers in parallel; each new plugin in its own canonical
+`plugins/<framework>/brainctl/` directory. All three pre-research-verified
+against the framework's actual integration model — no guessing.
+
+**Goose** (`plugins/goose/brainctl/`) — Block / now AAIF (Linux Foundation),
+the open-source on-machine AI agent. **MCP-only** (Goose has no hook
+surface). Ships `goose-extension.yaml` fragment + idempotent
+`install.py` that merges into `~/.config/goose/config.yaml` (with
+`%APPDATA%\Block\goose\config\config.yaml` on Windows). Flags: `--config`,
+`--dry-run`, `--uninstall`, `--force`, `--no-validate`, `--yes`. Falls
+back to a tiny manual YAML emitter when `pyyaml` isn't installed.
+11/11 smoke tests pass. Plugin doc lives at `GOOSE.md`.
+
+**OpenCode** (`plugins/opencode/brainctl/`) — anomalyco/opencode (was
+sst/opencode), the 145k-star Claude-Code-style coding agent. **MCP +
+TypeScript hook plugins** — first plugin in the brainctl tree using
+TS hooks (gemini-cli used Python via subprocess; OpenCode runs JS/TS
+in its own runtime). Three TS hook plugins:
+- `brainctl-orient.ts` — `session.created` → `agent_orient` + injects 1-line context block via `client.app.log`
+- `brainctl-tool-log.ts` — `tool.execute.after` → `event_add` (skips noisy tools, 200-char input cap, never logs full output)
+- `brainctl-wrap-up.ts` — `session.idle` + `session.deleted` → `agent_wrap_up` (deduped via `${TMPDIR}/brainctl-opencode-wrapped/{shortid}.flag` to handle session.idle firing on every pause)
+
+`install.py` supports `--scope global|project`, `--mcp-only` /
+`--plugins-only` opt-out flags, full uninstall path. Hooks shell out
+to `brainctl` CLI (not `client.mcp.tool` — that surface isn't documented
+in OpenCode's plugin client API; CLI path is stable and dependency-free
+since bun ships inside opencode). All 11 smoke tests pass; TS files
+compile clean via `bun --check`.
+
+**Pi** (`plugins/pi/brainctl/`) — `@mariozechner/pi-coding-agent` (Mario
+Zechner's minimal terminal coding harness, popularized by Armin Ronacher's
+"The Minimal Agent Within OpenClaw" essay). Pi deliberately has no
+built-in MCP support (anti-bloat philosophy), so the plugin depends on
+the community-standard `pi-mcp-adapter` (Nico Bailon) which exposes
+MCP servers via a single proxy tool with lazy loading.
+
+`install.py` detects `pi-mcp-adapter` via two paths (Pi extensions dir
++ `npm list -g`), prints actionable install instructions when missing
+(or runs `pi install npm:pi-mcp-adapter` itself with `--auto-install-adapter`),
+then merges brainctl into `~/.pi/agent/mcp.json` under `mcpServers.brainctl`.
+**Important: Pi proxy convention is `mcp({tool: "agent_orient", args: '{"agent_id": "..."}'})` — the `args` field is a JSON STRING, not a nested object.** AGENTS.md documents this so models don't hallucinate `mcp__brainctl__*` calls (which would be the gemini-cli convention). 10/10 smoke tests pass.
+
+### Numbers
+
+- **19 first-party plugins** (was 16): agent frameworks (Claude Code,
+  Codex CLI, Cursor, Gemini CLI, **Goose, OpenCode, Pi**, Eliza, Hermes,
+  OpenClaw, Rig, Virtuals Game, Zerebro) + trading bots (Freqtrade,
+  Jesse, Hummingbot, NautilusTrader, OctoBot, Coinbase AgentKit)
+- **1857 tests passing, 0 failed** — no regressions
+- New plugin types covered: TypeScript hook plugins (OpenCode), proxy-
+  via-adapter MCP (Pi), pure-MCP YAML registration (Goose)
+
+
+
 ## [2.4.2] — 2026-04-18
 
 ### Added — `brainctl status` (single-screen brain health overview)
