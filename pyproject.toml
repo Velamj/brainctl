@@ -54,7 +54,24 @@ crewai = ["crewai>=0.80.0"]
 # needed. brainctl imports cleanly without solders; signing CLI
 # commands print an install hint if the extra is missing.
 signing = ["solders>=0.21"]
-all = ["mcp>=1.27.0", "sqlite-vec>=0.1.0", "watchdog>=3.0.0", "solders>=0.21"]
+# Cross-encoder reranker stage (2.4.0+, opt-in via `brainctl search
+# --rerank`). sentence-transformers loads the supported cross-encoder
+# models (BAAI/bge-reranker-v2-m3, jinaai/jina-reranker-v2-base-
+# multilingual) directly from the Hugging Face Hub on first use.
+# torch is a hard dep of sentence-transformers and adds ~1GB to the
+# install — that's why this is gated behind an optional extra rather
+# than the base install. brainctl imports cleanly without these; the
+# rerank module emits a single stderr warning and falls through to
+# the input ordering when the extras are missing.
+rerank = ["sentence-transformers>=3.0", "torch>=2.0"]
+all = [
+    "mcp>=1.27.0",
+    "sqlite-vec>=0.1.0",
+    "watchdog>=3.0.0",
+    "solders>=0.21",
+    "sentence-transformers>=3.0",
+    "torch>=2.0",
+]
 
 [project.scripts]
 brainctl = "agentmemory.cli:main"
