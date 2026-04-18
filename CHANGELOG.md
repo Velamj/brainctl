@@ -5,6 +5,103 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.3.2] — 2026-04-18
+
+### Added — managed Solana wallet (zero-friction signing for non-crypto users)
+
+2.3.0 shipped signed memory exports requiring `--keystore <path>` to a
+Solana CLI keystore. That UX assumed users had Solana CLI installed, had
+run `solana-keygen new`, knew where the keystore lived, and how to fund
+it. Most brainctl users (chat-bot operators, agent builders) are not
+crypto-native and bounced off that flow. **2.3.2 makes the signing path
+work end-to-end without ever touching `solana-keygen` or any external
+crypto tooling.**
+
+**`brainctl wallet` subcommand suite** (`src/agentmemory/commands/wallet.py`):
+
+| subcommand | what it does |
+|---|---|
+| `brainctl wallet new [--force] [--yes]` | Generate Ed25519 keypair, store at `~/.brainctl/wallet.json`, `chmod 0600`, print address + safety warning |
+| `brainctl wallet address` | Print the public address only (pipe-friendly: `$(brainctl wallet address)`) |
+| `brainctl wallet balance [--rpc-url]` | Fetch SOL balance via JSON-RPC `getBalance` |
+| `brainctl wallet show [--json]` | Full diagnostic — address, balance, keystore path, perms, mtime |
+| `brainctl wallet export <path> [--force]` | Backup the keystore to a chosen path with `chmod 0600` + warning |
+| `brainctl wallet import <path> [--force] [--yes]` | Bring an existing Solana CLI keystore into brainctl's managed slot |
+| `brainctl wallet rm [--yes]` | Delete the managed keystore (with confirmation) |
+| `brainctl wallet onboard [--yes]` | Guided interactive flow — creates wallet + prints next-step funding instructions + offers to sign a sample export |
+
+**Auto-discovery in `brainctl export --sign`:** if no `--keystore` is
+passed and a managed wallet exists at `~/.brainctl/wallet.json`, brainctl
+uses it automatically. If neither exists, exits with an actionable
+message: *"No wallet found. Run `brainctl wallet new` to create one
+(takes 2 seconds, brainctl never sees the key). Or pass `--keystore <path>`
+to use an existing Solana CLI wallet."*
+
+**`--auto-setup-wallet` flag for agent-driven flows:** if the user's
+agent decides they should sign something, `brainctl export --sign --auto-setup-wallet`
+will create a wallet on the fly (with `--yes` semantics — non-interactive)
+and proceed with the export.
+
+**Friendly 0-SOL guidance during `--pin-onchain`:** before attempting
+the on-chain post, brainctl checks the wallet balance via RPC. If 0 SOL,
+exits cleanly with: *"Your wallet at \<address\> has 0 SOL. To pin
+on-chain (~$0.001 per pin), send any small amount of SOL to that
+address. Skipping the on-chain pin — the offline signature is still
+valid in your bundle file."* Offline signing always succeeds whether or
+not the on-chain pin works.
+
+**MCP wallet tools** so AI agents can guide users through onboarding:
+- `mcp__brainctl__wallet_show` — read-only view (address, balance,
+  keystore path, perms, mtime). Description leads with *"SAFETY: this
+  tool only READS the wallet."*
+- `mcp__brainctl__wallet_create` — creates the managed wallet (needs
+  explicit `force=true` to overwrite an existing one — no surprise
+  destruction). Description includes the non-custodial safety warning
+  so the AI agent knows to surface it to the user.
+
+These let an AI agent in conversation say *"I notice you don't have a
+brainctl wallet yet — want me to create one for you?"* and walk a
+non-technical user through the whole flow without them touching the CLI.
+
+**Security & UX decisions (worth knowing):**
+- **Non-custodial.** Wallet file lives on the user's disk. brainctl
+  never transmits the key, never backs it up to a server, never asks the
+  user to trust us with custody. Loud in every user-facing string.
+- **Atomic 0600 write** via `os.open(O_CREAT|O_WRONLY|O_EXCL, 0o600)` —
+  file never momentarily world-readable. Parent dir `~/.brainctl/`
+  hardened to `0700` on first wallet write. Skipped silently on Windows.
+- **Non-TTY safety.** Every interactive prompt has a `--yes` non-interactive
+  escape. When stdin isn't a TTY and `--yes` wasn't passed, brainctl
+  exits 1 with a "use --yes to confirm" hint rather than hanging — so
+  agent wrappers can't stall.
+- **Keystore precedence:** `--keystore` > managed wallet > legacy
+  `$BRAINCTL_SIGNING_KEY_PATH` env var > friendly error. 2.3.0 users
+  who set the env var are not broken.
+- **Backup is verbatim.** Solana CLI keystore IS the secret material
+  (no BIP39 seed to re-derive). `wallet export` chmods the backup
+  `0600` and warns the user the backup is just as sensitive as the
+  source.
+- **Test isolation:** every test pins `BRAINCTL_WALLET_PATH` to a
+  per-test `tmp_path` via autouse fixture, so the suite cannot pollute
+  or destroy `~/.brainctl/wallet.json` on a real machine.
+
+**41 new tests** in `tests/test_wallet_cmd.py`. All 41 pass plus the
+40 signing tests from 2.3.0 = 81/81 in the wallet+signing suite. Full
+suite: 1832 passed, 0 failed.
+
+**Quick start (the new non-crypto-user path, end to end):**
+
+```bash
+pip install 'brainctl[signing]'
+brainctl wallet new --yes               # 2 seconds; prints your address
+# (optional) send any small amount of SOL to that address
+brainctl export --sign --pin-onchain    # uses managed wallet, prompts
+                                        # gracefully if 0 SOL
+brainctl verify bundle.json             # anyone can verify offline
+```
+
+That's it. No `solana-keygen`, no `--keystore`, no manual file paths.
+
 ## [2.3.1] — 2026-04-18
 
 ### Fixed — closed an 18× retrieval-quality gap on cold-start data
