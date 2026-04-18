@@ -287,6 +287,18 @@ def _update_q_value(db, memory_id, contributed, learning_rate=_Q_LEARNING_RATE):
     The atomic update statement is unchanged, so the docstring's race-safety
     contract still holds; only the implicit transaction boundary moved out
     by one frame.
+
+    **Durability tradeoff (intentional):** before this change, the q_value
+    increment was durable on function return. Now it is durable only after
+    the caller's end-of-request commit. If the process is killed (SIGTERM,
+    OOM) between this UPDATE and the caller's commit, the q_value
+    increment is lost. q_values are heuristic ranking weights, not
+    correctness-critical state — losing a single TD step has no
+    user-visible effect. If this trade ever needs to be reversed (e.g. for
+    a higher-stakes use of the q_value field), restore the explicit
+    ``db.commit()`` and accept the -30% latency hit. Race-safety (Bug 9)
+    is unaffected because the atomic UPDATE is still atomic; this only
+    changes when the implicit fsync happens.
     """
     reward = 1.0 if contributed else 0.0
     db.execute(

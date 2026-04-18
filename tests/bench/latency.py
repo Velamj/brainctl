@@ -226,7 +226,10 @@ DEFAULT_RUNS = 100
 DEFAULT_WARMUP = 5
 
 # Regression tolerance — forgiving so laptop noise does not flap CI.
-REGRESSION_THRESHOLD = 1.25  # 25% slower than baseline = fail
+# Empirically calibrated against three back-to-back full sweeps showing
+# 30-50% drift between runs as the machine warms up. See
+# tests/test_latency_regression.py docstring for the full rationale.
+REGRESSION_THRESHOLD = 1.50  # 50% slower than baseline = fail
 
 
 # ---------------------------------------------------------------------------
