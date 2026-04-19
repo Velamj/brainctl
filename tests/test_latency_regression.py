@@ -93,6 +93,27 @@ SUB_MS_BUDGET_MS = 1.0
 # exhibit much tighter variance and ARE gated.
 GATED_SCALES = (100, 1_000)
 
+# Ops excluded from the cross-platform ratio gate. These measure wall-clock
+# of a subprocess (brainctl CLI launched via `python -m`), and per-op cost
+# is dominated by Python interpreter startup + module import + dylib load,
+# all of which differ 50-100% between macOS and ubuntu-latest on GitHub
+# Actions. Observed on CI: cli_search_cold@100 darwin 137ms vs ubuntu 261ms,
+# cli_search_cold@1000 149ms vs 262ms — none of those deltas are real
+# regressions, they're platform-dependent Python cold-start. Library-level
+# ops (brain_search_*, brain_remember_*, vec_*) stay gated because they
+# don't carry subprocess startup in their timing.
+#
+# To catch real CLI regressions, run the bench on a machine whose platform
+# matches the baseline's platform (see `baseline["platform"]`) and use
+# `brainctl perf --full` manually; the CI gate is intentionally narrower.
+SUBPROCESS_BOUND_OPS = frozenset({
+    "cli_search_cold",
+    "cli_search_warm",
+    "cli_remember_cold",
+    "cli_remember_warm",
+    "cli_stats",
+})
+
 
 def _bench_enabled() -> bool:
     if not BENCH_GATE:
@@ -158,10 +179,23 @@ def test_no_p95_regression_beyond_threshold(baseline, fresh_run):
     fresh_idx = _index(fresh_run)
 
     failures: list[str] = []
+    # If the fresh run is on a different platform than the baseline, the
+    # CLI-subprocess ops have un-reconcilable cross-platform variance and
+    # get excluded. Library-level ops still pass the ratio test because
+    # their timing is dominated by sqlite3 + FTS5 which behave consistently.
+    cross_platform = (
+        baseline.get("platform") != fresh_run.get("platform")
+        if isinstance(baseline, dict) and isinstance(fresh_run, dict)
+        else False
+    )
     for key, base_row in base_idx.items():
         op, scale = key
         # Skip scales we don't gate on. See GATED_SCALES docstring above.
         if scale not in GATED_SCALES:
+            continue
+        # Skip subprocess-bound ops across platforms. Documented in the
+        # SUBPROCESS_BOUND_OPS constant above.
+        if cross_platform and op in SUBPROCESS_BOUND_OPS:
             continue
         fresh_row = fresh_idx.get(key)
         if fresh_row is None:
