@@ -5,6 +5,103 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.4.6] — 2026-04-19 — *DEFCON Special*
+
+Plan `plan-20260419-085511` (top-heavy retrieval lift) shipped end-to-end
+across a 6-way swarm (codex + claude-code). Rollout is the current `main`
+default; no runtime config change needed to pick up the lift.
+
+### Added — Top-heavy retrieval controls (I2/I3/I4)
+
+Unified `Brain.search` with the CLI `cmd_search` pipeline so programmatic
+callers and the CLI produce identical top-K results (same FTS5 + vec RRF
+fusion, same reranker chain, same signal-informativeness gates). Old
+`Brain.search` was an FTS5-only path that diverged from `cmd_search` on
+uniform-timestamp corpora — caught by the 2026-04-18 audit.
+
+Adaptive retrieval controls: dynamic fetch window, narrowed candidate set
+for factoid queries, skip of non-informative recency/salience signals on
+intent-classified factoid/general queries. Regex-based intent router
+normalises 10 intent labels onto 6 rerank profiles (`bin/intent_classifier.py`).
+Last-mile CE reranker with a p95-budget gate (`BRAINCTL_CE_P95_BUDGET_MS`,
+default 350ms) — falls back to RRF ordering if the rerank window would
+blow the budget.
+
+### Added — Strict retrieval gates in CI (I8)
+
+New `retrieval-gate` job runs on every PR that touches retrieval code
+paths (`src/agentmemory/{search,rerank,embeddings,retrieval}.py`,
+`bin/intent_classifier.py`, `tests/bench/**`). Gates:
+
+- `hit_at_{1,5,10}`, `mrr`, `ndcg_at_5`, `recall_at_5` at -0.2pp absolute
+- per-slice `hit_at_1` / `mrr` / `ndcg_at_5` at -1.0pp per `question_type`
+  on LongMemEval and per `category` on LoCoMo
+- p95 latency (cross-platform-aware — skips subprocess-bound ops when
+  baseline and fresh platform differ)
+
+Per-bench budgets live in `tests/bench/budgets/{longmemeval,locomo}.yaml`
+so tolerances adjust via config, not code changes. New `--check-strict`
+and `--report-json` flags on `tests/bench/run.py`. PR-comment summary of
+the bench matrix on every retrieval PR.
+
+### Added — Frozen baseline snapshot (I1)
+
+`benchmarks/snapshots/baseline-20260419/` holds per-bench metric JSON +
+per-query `.traces.jsonl`, plus `manifest.json` with SHA256 of every
+artifact. `--traces PATH` flag on the bench harness captures per-query
+traces for post-hoc slice analysis.
+
+### Added — Calibration matrix + ablation bypass (I5)
+
+`benchmarks/snapshots/calibration-20260419/` has a 3-cell ablation
+(FULL / NO_INTENT / ROLLBACK) × LongMemEval(289) + LoCoMo hybrid, with
+traces per cell and a rollout recommendation against the plan envelope.
+Added `BRAINCTL_DISABLE_INTENT_ROUTER=1` ablation-only bypass in
+`cmd_search` (no behaviour change when unset).
+
+Headline numbers (FULL = current `main`):
+- **LoCoMo hybrid:** Hit@1 +25.5pp, MRR +36.2pp vs pre-lift (plan envelope
+  +1.0pp / +0.5pp — crushed by an order of magnitude).
+- **LongMemEval:** flat within measurement noise on n=289. FULL beats
+  ROLLBACK by +62.3pp Hit@1 on a like-for-like Ollama-up comparison.
+
+### Added — Staged rollout controls + docs (I6/I7)
+
+`BRAINCTL_TOPHEAVY_ROLLBACK=1` emergency bypass (pre-I2 behaviour).
+Landing page / comparison docs updated with new metrics.
+
+### Fixed
+
+- `init_schema.sql` synced to include the `code_ingest_cache` table +
+  indexes from migration 051 (brainctl 2.4.5 `[code]` extra). Fresh
+  installs now match upgrade-path schemas without a post-init migrate
+  step. Test: `tests/test_schema_parity.py`.
+- `test_connection_lifecycle.py::test_public_methods_reuse_single_connection`
+  assertion widened to filter by originating file. After the
+  `Brain.search` → `cmd_search` unification, `_try_get_db_with_vec` opens
+  a short-lived vec-loaded conn (same pattern `vec.index_memory` already
+  uses); the core invariant "at most one `brain.py`-originated shared
+  conn per Brain lifecycle" is now what's asserted.
+- Cross-platform `latency-gate` false positives on ubuntu CI against
+  darwin-calibrated baselines. `tests/test_latency_regression.py`
+  detects `baseline.platform != fresh.platform` and skips the five
+  subprocess-bound ops (`cli_search_*`, `cli_remember_*`, `cli_stats`)
+  whose per-op cost is dominated by Python interpreter cold-start.
+  Library-level ops (`brain_search_*`, `brain_remember_*`, `vec_*`) stay
+  gated cross-platform.
+
+### Known follow-ups (not blocking)
+
+- CE rerank dimension unreachable via bench harness (`args.rerank` not
+  populated by `tests/bench/{locomo,longmemeval}_eval.py`). Wire it to
+  measure CE in the calibration matrix.
+- Intent router is a no-op at current bench granularity (FULL == NO_INTENT
+  on all metrics to 4dp). Per-`question_type` slice analysis before
+  deciding to remove.
+- I5 driver `_extract_metrics` couldn't parse per-query timings →
+  `baseline_p95_ms` still missing in budget YAMLs; p95 leg is advisory
+  until populated.
+
 ## [2.4.5] — 2026-04-19
 
 ### Added — `brainctl[code]` extra: tree-sitter code ingestion into the knowledge graph
