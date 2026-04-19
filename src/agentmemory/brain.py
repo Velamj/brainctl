@@ -374,12 +374,56 @@ class Brain:
         return mid
 
     def search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Search memories using FTS5 full-text search with porter stemming.
+        """Search memories via the unified hybrid + reranker pipeline.
 
-        Falls back to LIKE search if FTS5 table is unavailable (older DBs).
+        Delegates to ``agentmemory._impl.cmd_search`` so programmatic callers
+        and the CLI produce identical top-K results (same FTS+vec candidate
+        assembly, same RRF fusion, same reranker chain with the same
+        signal-informativeness gates). Older ``Brain.search`` users got a
+        lighter FTS5-only path that diverged from ``cmd_search`` on
+        uniform-timestamp corpora — see the 2026-04-18 audit.
+
+        Returns a list of memory dicts (may include richer fields like
+        ``rrf_score``, ``final_score``, ``age``, ``temporal_weight`` from the
+        reranker pipeline). Falls back to the lightweight FTS/LIKE path if
+        the unified pipeline is unavailable for any reason.
         """
         if not query or not query.strip():
             return []
+        # Primary path: unified pipeline via cmd_search.
+        try:
+            from types import SimpleNamespace
+            from agentmemory._impl import cmd_search as _cmd_search
+            args = SimpleNamespace(
+                query=query,
+                limit=limit,
+                output="return",
+                tables=None,
+                profile=None,
+                no_recency=False,
+                no_graph=False,
+                budget=None,
+                min_salience=None,
+                mmr=False,
+                mmr_lambda=0.7,
+                explore=False,
+                benchmark=False,
+                agent=self.agent_id,
+                project=None,
+            )
+            with self._lock:
+                out = _cmd_search(args, db=self._get_conn(), db_path=str(self.db_path))
+            if isinstance(out, dict):
+                mems = out.get("memories") or []
+                if isinstance(mems, list):
+                    return mems[:limit]
+        except Exception:
+            # Fall through to the lightweight path — unified pipeline failures
+            # should never take down Brain.search, which has a minimal
+            # dependency surface by contract.
+            pass
+
+        # Fallback path: FTS5 then LIKE (the pre-unification behaviour).
         with self._lock:
             db = self._get_conn()
             try:

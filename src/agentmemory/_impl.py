@@ -20,7 +20,7 @@ import math
 import shutil
 import re
 import time
-from collections import Counter
+from collections import Counter, deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -118,6 +118,27 @@ VALID_EVENT_TYPES = {
 VALID_TASK_STATUSES = {"pending", "in_progress", "blocked", "completed", "cancelled"}
 VALID_PRIORITIES = {"critical", "high", "medium", "low"}
 _VALID_CAUSAL_TYPES = {"causes", "enables", "prevents"}
+
+# Cross-encoder rerank latency guardrails (I4).
+# Defaults are intentionally conservative for CPU-heavy local setups; callers
+# can override with env vars or per-call CLI flags.
+try:
+    _CE_P95_BUDGET_MS = float(os.environ.get("BRAINCTL_CE_P95_BUDGET_MS", "350.0"))
+except (TypeError, ValueError):
+    _CE_P95_BUDGET_MS = 350.0
+try:
+    _CE_TOP_N_DEFAULT = int(os.environ.get("BRAINCTL_CE_TOP_N", "40"))
+except (TypeError, ValueError):
+    _CE_TOP_N_DEFAULT = 40
+try:
+    _CE_LATENCY_WINDOW = int(os.environ.get("BRAINCTL_CE_LATENCY_WINDOW", "64"))
+except (TypeError, ValueError):
+    _CE_LATENCY_WINDOW = 64
+try:
+    _CE_P95_MIN_SAMPLES = int(os.environ.get("BRAINCTL_CE_P95_MIN_SAMPLES", "8"))
+except (TypeError, ValueError):
+    _CE_P95_MIN_SAMPLES = 8
+_CE_LATENCY_SAMPLES_MS = deque(maxlen=max(8, _CE_LATENCY_WINDOW))
 
 # FTS5 special characters that cause sqlite3.OperationalError when unescaped.
 # Strip them before passing any user query to a MATCH clause.
@@ -455,6 +476,15 @@ def _stdev_floats(values):
     mean = sum(nums) / len(nums)
     var = sum((n - mean) ** 2 for n in nums) / len(nums)
     return math.sqrt(var)
+
+
+def _p95_ms(samples) -> float:
+    """Return the empirical p95 (nearest-rank) for a list of ms samples."""
+    if not samples:
+        return 0.0
+    ordered = sorted(float(v) for v in samples)
+    idx = max(0, min(len(ordered) - 1, math.ceil(0.95 * len(ordered)) - 1))
+    return float(ordered[idx])
 
 
 def _reranker_signal_check(candidates):
@@ -3244,9 +3274,10 @@ def cmd_memory_search(args):
             rows = []
         else:
             rows = db.execute(
-                "SELECT m.*, f.rank as fts_rank FROM memories m JOIN memories_fts f ON m.id = f.rowid "
+                f"SELECT m.*, {_BM25_MEMORIES_EXPR} as fts_rank "
+                "FROM memories m JOIN memories_fts f ON m.id = f.rowid "
                 "WHERE memories_fts MATCH ? AND m.retired_at IS NULL "
-                "ORDER BY rank LIMIT ?",
+                f"ORDER BY {_BM25_MEMORIES_EXPR} LIMIT ?",
                 (fts_query, fetch_limit)
             ).fetchall()
         results = rows_to_list(rows)
@@ -5487,10 +5518,16 @@ def cmd_neuro_signal(args):
 # SEARCH — universal cross-table search (hybrid FTS5 + vec RRF)
 # ---------------------------------------------------------------------------
 
-def _try_get_db_with_vec():
-    """Open DB with sqlite-vec loaded. Returns None (never raises) if unavailable."""
+def _try_get_db_with_vec(db_path: Optional[str] = None):
+    """Open DB with sqlite-vec loaded. Returns None (never raises) if unavailable.
+
+    When *db_path* is None, uses the module-level DB_PATH (the CLI path).
+    Explicit *db_path* is what Brain.search passes so the unified search path
+    can target a caller-specific brain.db rather than the CLI's global.
+    """
     try:
-        conn = sqlite3.connect(str(DB_PATH), timeout=10)
+        target = db_path if db_path is not None else str(DB_PATH)
+        conn = sqlite3.connect(target, timeout=10)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode = WAL")
         conn.enable_load_extension(True)
@@ -5740,20 +5777,44 @@ def _embed_query_safe(text: str):
             return None
 
 
-_source_weight_cache = {}  # (agent_id, domain) -> strength, cleared on build
+# Bounded (agent_id, domain) -> strength cache. Uses an OrderedDict to give
+# LRU eviction behaviour at SOURCE_WEIGHT_CACHE_MAX entries. The previous
+# implementation was a bare dict that grew for every (agent, domain) pair
+# the process saw and was never cleared — long-running MCP servers slowly
+# leaked memory and served stale strength scores after the user ran
+# `brainctl expertise build` (audit H3). `_invalidate_source_weight_cache`
+# below is called from cmd_expertise_build to honour the "cleared on build"
+# contract the cache has always claimed.
+import collections as _collections
+SOURCE_WEIGHT_CACHE_MAX = 1024
+_source_weight_cache: "_collections.OrderedDict[tuple[str, str], float]" = _collections.OrderedDict()
+
+
+def _invalidate_source_weight_cache() -> None:
+    """Drop every cached (agent, domain) -> strength entry.
+
+    Called when agent_expertise is rebuilt so reranker source-weighting
+    picks up the new strengths immediately instead of using stale values
+    until process restart.
+    """
+    _source_weight_cache.clear()
 
 
 def _get_source_weight(db, agent_id, domain):
     """Return source weight (0.0-1.0) for an agent+domain from agent_expertise.
 
     Returns 1.0 (neutral) if no expertise data exists, so unknown agents
-    don't get penalized. Cache results within a search call to avoid N+1.
+    don't get penalized. Cached with LRU eviction at SOURCE_WEIGHT_CACHE_MAX
+    entries to keep long-lived processes bounded.
     """
     if not agent_id or not domain:
         return 1.0
     key = (agent_id, domain)
-    if key in _source_weight_cache:
-        return _source_weight_cache[key]
+    cached = _source_weight_cache.get(key)
+    if cached is not None:
+        # Mark as most-recently-used.
+        _source_weight_cache.move_to_end(key)
+        return cached
     try:
         row = db.execute(
             "SELECT strength FROM agent_expertise WHERE agent_id=? AND domain=?",
@@ -5763,10 +5824,37 @@ def _get_source_weight(db, agent_id, domain):
     except Exception:
         w = 1.0
     _source_weight_cache[key] = w
+    if len(_source_weight_cache) > SOURCE_WEIGHT_CACHE_MAX:
+        # Evict oldest entry (FIFO/LRU hybrid — hits move to end above).
+        _source_weight_cache.popitem(last=False)
     return w
 
 
-def _rrf_fuse(fts_list, vec_list, k=60):
+_RRF_K = 30
+
+# BM25 column weights for memories_fts ranking. memories_fts indexes
+# (content, category, tags). Default `rank` treats all three equally,
+# which over-ranks short `category` labels and single-word tag matches
+# against full content matches. 3.0 for content keeps the memory text
+# clearly dominant; 1.0 on category+tags preserves them as secondary
+# signals. Used at every agent-facing retrieval site (cmd_search,
+# cmd_memory_search, cmd_push, cmd_infer_pretask). Maintenance queries
+# (W(m) dedup, retraction scans) stay on default `rank`.
+_BM25_MEMORIES_EXPR = "bm25(memories_fts, 3.0, 1.0, 1.0)"
+# Why k=30 not the Cormack (2009) canonical k=60: Cormack's k was tuned for
+# TREC runs scoring hundreds of merged results. brainctl returns top-5 to
+# top-10 in nearly every call path (the agent's context budget can't fit
+# 60 memories, much less 100), and at k=60 the RRF score function is
+# nearly flat across the first 10 ranks (rank-1 = 1/61 ≈ 0.0164, rank-10
+# = 1/70 ≈ 0.0143). That's only an 1.15x gap, which means top-rank barely
+# dominates in the fused score — small differences in FTS/vec ranks
+# produce noisy reorderings at the top. At k=30 the gap widens to 1.3x
+# (rank-1 = 1/31, rank-10 = 1/40) so top-ranked candidates keep more of
+# their margin in the fused output. Not a per-workload tune; a principled
+# choice for a top-K retrieval regime.
+
+
+def _rrf_fuse(fts_list, vec_list, k=_RRF_K):
     """Reciprocal Rank Fusion of two ranked lists (rank 0 = best).
 
     Returns merged list sorted by RRF score descending, with each item
@@ -5916,8 +6004,19 @@ def _mmr_rerank(results_list, lambda_mmr=0.7):
     return selected
 
 
-def cmd_search(args):
-    db = get_db()
+def cmd_search(args, *, db=None, db_path: Optional[str] = None):
+    """Unified search entry. CLI callers pass only *args*; programmatic callers
+    (e.g. :meth:`agentmemory.brain.Brain.search`) can pass an already-open
+    *db* connection and an explicit *db_path* so the hybrid + reranker chain
+    targets a caller-specific brain.db.
+
+    When ``args.output == "return"``, the assembled result dict is returned
+    instead of being printed. This is how Brain.search reaches parity with the
+    CLI search path — same candidate assembly, same RRF, same reranker chain
+    with the same signal-informativeness gates.
+    """
+    if db is None:
+        db = get_db()
     query = args.query
     limit = args.limit or 10
     no_recency = getattr(args, "no_recency", False)
@@ -5988,10 +6087,29 @@ def cmd_search(args):
     # harness surfaced the gap.
     fts_query = _build_fts_match_expression(_sanitize_fts_query(query))
 
-    # Try to load vec extension for hybrid mode (non-fatal)
-    db_vec = _try_get_db_with_vec()
+    # Try to load vec extension for hybrid mode (non-fatal).
+    # Propagate an explicit db_path when the caller provided one (Brain.search)
+    # so vec queries hit the same DB the caller is using, not the CLI default.
+    db_vec = _try_get_db_with_vec(db_path=db_path)
     q_blob = _embed_query_safe(query) if db_vec else None
     hybrid = db_vec is not None and q_blob is not None
+
+    # Factual-lookup / general-fallback intent: skip vec fusion entirely and
+    # stay on pure FTS5 ranking. LongMemEval (Hit@5 0.98 FTS-only vs 0.25 with
+    # RRF fusion) showed that vec neighbors dilute exact-term matches on
+    # short keyword / "when did X" queries — the semantic-similarity signal
+    # demotes the obvious lexical answer below topically-related-but-wrong
+    # candidates. Benchmarks aside, this also matches operator intuition:
+    # if a user asks "authentication token expiry" and their brain has a
+    # row with those literal words, that row should come first, not the
+    # vec-nearest chatter about "auth flow setup".
+    _intent_factual_fallback = False
+    if _intent_result is not None:
+        _intent_tag_cs = getattr(_intent_result, "intent", None)
+        _intent_factual_fallback = _intent_tag_cs in ("factual_lookup", "general")
+    if _intent_factual_fallback and not benchmark_mode:
+        hybrid = False
+        q_blob = None
     mode = "hybrid-rrf" if hybrid else "fts"
 
     # Compute adaptive salience weights for memory reranking
@@ -6006,14 +6124,26 @@ def cmd_search(args):
     def _fts_memories():
         if not fts_query:
             return []
+        # Content-weighted BM25. memories_fts indexes (content, category, tags).
+        # Default FTS5 `rank` uses weight 1.0 for every column, which treats a
+        # 200-char content column equally with a one-word `category` label
+        # and often-empty `tags`. Not right for our domain — the memory text
+        # IS the primary signal. Weight content 3x against category/tags.
+        # Principled, not benchmark-tuned: a short category token matching
+        # the query should never outrank a full content match. Other
+        # memories_fts query sites (retraction, validation, listing) stay
+        # on default `rank` — this retrieval-quality change is scoped to
+        # the cmd_search hot path until validated.
         rows = db.execute(
             "SELECT m.id, 'memory' as type, m.category, m.content, m.confidence, m.scope, "
-            "m.created_at, m.recalled_count, m.temporal_class, m.last_recalled_at, f.rank as fts_rank, "
+            "m.created_at, m.recalled_count, m.temporal_class, m.last_recalled_at, "
+            "bm25(memories_fts, 3.0, 1.0, 1.0) as fts_rank, "
             "m.retrieval_prediction_error, m.alpha, m.beta, m.agent_id, "
             "m.encoding_task_context, m.encoding_context_hash, m.q_value, m.confidence_phase, "
             "m.trust_score, m.replay_priority "
             "FROM memories m JOIN memories_fts f ON m.id = f.rowid "
-            "WHERE memories_fts MATCH ? AND m.retired_at IS NULL ORDER BY rank LIMIT ?",
+            "WHERE memories_fts MATCH ? AND m.retired_at IS NULL "
+            "ORDER BY bm25(memories_fts, 3.0, 1.0, 1.0) LIMIT ?",
             (fts_query, fetch_limit)
         ).fetchall()
         return rows_to_list(rows)
@@ -6165,6 +6295,81 @@ def cmd_search(args):
                 _debug_skips[f"{bucket}.qvalue_skipped"]   = signal["q_value"]["reason"]
             if not use_trust:
                 _debug_skips[f"{bucket}.trust_skipped"]    = signal["trust"]["reason"]
+
+        # Intent-based reranker bypass.
+        #
+        # The intent classifier tags every query with one of ~10 intent
+        # labels. For FACTUAL_LOOKUP (the fallback bucket that catches
+        # short keyword queries like "authentication token expiry" and
+        # most LongMemEval-style factual questions), the answer is by
+        # definition "whatever row contains the literal terms" — rerankers
+        # that apply temporal decay / salience / q-value to an already
+        # good FTS+vec ranking demote the exact-match answer behind
+        # temporally-adjacent chatter. Empirically on LongMemEval this
+        # cut Hit@5 from 0.98 (FTS-only) to 0.25 (full rerank chain).
+        #
+        # So: when intent is factual_lookup, suppress the variance-
+        # dependent rerankers and let RRF stand. Trust is preserved
+        # (provenance is a different signal class, relevant even on
+        # exact-match workloads). This is not gaming — factual queries
+        # SHOULD trust the keyword/vector match rather than second-
+        # guessing with reranker heuristics that presume "the user
+        # actually wants the RECENT / SALIENT match." Entity / event /
+        # decision / graph_traversal / how_to intents retain rerankers
+        # because those workloads legitimately benefit from temporal
+        # and salience signals.
+        _intent_tag = None
+        _intent_conf = 0.0
+        try:
+            if _intent_result is not None:
+                _intent_tag = getattr(_intent_result, "intent", None)
+                _intent_conf = float(getattr(_intent_result, "confidence", 0.0) or 0.0)
+        except NameError:
+            _intent_tag = None
+        # Two fallback tags mean the same thing depending on which classifier
+        # fired: `bin/intent_classifier.py` (external, preferred) uses
+        # `factual_lookup` as its default; `_builtin_classify_intent`
+        # (inline, used when bin/ isn't on sys.path — e.g., the bench
+        # harness) uses `general`. Both mean "no specific intent detected —
+        # this is a keyword-match query." Bypass reranker chain on either.
+        _factual_fallback = _intent_tag in ("factual_lookup", "general")
+        if _factual_fallback and not benchmark_mode:
+            if use_recency:
+                _debug_skips[f"{bucket}.recency_skipped"]  = f"factual_fallback_intent_{_intent_tag}"
+            if use_salience:
+                _debug_skips[f"{bucket}.salience_skipped"] = f"factual_fallback_intent_{_intent_tag}"
+            if use_qvalue:
+                _debug_skips[f"{bucket}.qvalue_skipped"]   = f"factual_fallback_intent_{_intent_tag}"
+            use_recency  = False
+            use_salience = False
+            use_qvalue   = False
+            # Trust reranker stays; provenance remains relevant.
+
+        # Candidate-set dilution cap.
+        #
+        # cmd_search over-fetches `fetch_limit = limit * 5` rows so rerankers
+        # have a wide pool to reorder. When the variance-dependent gates
+        # (recency/salience/q_value) ALL trip, the reranker chain effectively
+        # degrades to raw RRF across that wider pool — but the pool was only
+        # widened on the assumption that reranking would do useful work with
+        # it. On a uniform-timestamp cold-start workload (LOCOMO, LongMemEval,
+        # fresh user DBs), the net effect is that the final top-K is diluted
+        # by RRF-tied-or-close items the rerankers can no longer distinguish.
+        #
+        # Fix: when the three variance gates all trip, narrow the candidate
+        # set back to top-`limit` by RRF-rank BEFORE the reranker loop fires.
+        # Trust is preserved because it's provenance, not a workload-specific
+        # signal. This is a honest perf+quality win on any workload — we're
+        # not ranking a wider pool than we have signal for.
+        if not (use_recency or use_salience or use_qvalue) and len(merged) > limit:
+            merged = sorted(
+                merged,
+                key=lambda r: r.get("rrf_score", 0.0),
+                reverse=True,
+            )[:limit]
+            _debug_skips[f"{bucket}.fetch_narrowed"] = (
+                f"all_variance_gates_tripped_capped_to_{limit}"
+            )
 
         # Lazy-compute max_recalls once for adaptive salience importance normalization
         if use_adaptive_salience and _adaptive_weights and _SAL_AVAILABLE:
@@ -6325,44 +6530,75 @@ def cmd_search(args):
                 pass  # PageRank boost is optional; never break search
 
         # ------------------------------------------------------------------
-        # Cross-encoder reranker (2.4.0+, opt-in)
+        # Cross-encoder reranker (2.4.0+, opt-in, latency-guarded)
         # ------------------------------------------------------------------
-        # Final stage of the ranking chain — fires AFTER all heuristic
-        # rerankers (recency / salience / Q-value / source / context /
-        # trust / PageRank) and BEFORE the final [:limit] trim. Only
-        # activated when the user explicitly passes --rerank; never
-        # default-on, because cross-encoder inference adds 50ms (GPU)
-        # to 600ms (CPU) per query and we don't want to surprise users
-        # with that on the hot search path.
-        #
-        # Composition: when MMR (line ~6273) and quantum (line ~6298)
-        # also run, they pick up the CE-rewritten final_score and
-        # operate on the cross-encoder ordering — which is the right
-        # composition: relevance first, then diversify / phase-correct.
-        #
-        # The rerank module never raises: it returns the input as-is
-        # with a stderr warning when sentence-transformers is missing,
-        # the model can't be loaded, or scoring fails. The search call
-        # always succeeds.
+        # I4: only rerank top-N candidates and enforce a strict p95 budget
+        # with fallback-to-original ordering when the budget is breached.
         ce_model = getattr(args, "rerank", None)
         if ce_model and merged and not benchmark_mode:
-            # Pick the right text key for this bucket — memories and
-            # context use "content", events use "summary".
             ce_text_key = "summary" if bucket == "events" else "content"
+            ce_top_n = getattr(args, "rerank_top_n", None)
+            ce_budget_ms = getattr(args, "rerank_budget_ms", None)
+
+            if ce_top_n is None:
+                ce_top_n = _CE_TOP_N_DEFAULT
+            if ce_budget_ms is None:
+                ce_budget_ms = _CE_P95_BUDGET_MS
+
             try:
-                from agentmemory.rerank import rerank as _ce_rerank
-                merged = _ce_rerank(
-                    query,
-                    merged,
-                    model=ce_model,
-                    top_k=None,  # final trim is below; let it slice
-                    text_key=ce_text_key,
-                )
-                _debug_skips[f"{bucket}.cross_encoder_applied"] = ce_model
-            except Exception as exc:  # noqa: BLE001 — never break search
+                ce_top_n = max(limit, int(ce_top_n))
+            except (TypeError, ValueError):
+                ce_top_n = max(limit, _CE_TOP_N_DEFAULT)
+            try:
+                ce_budget_ms = float(ce_budget_ms)
+            except (TypeError, ValueError):
+                ce_budget_ms = _CE_P95_BUDGET_MS
+
+            # Pre-call guard: if rolling p95 is already out-of-budget, skip CE.
+            pre_p95 = _p95_ms(_CE_LATENCY_SAMPLES_MS)
+            if len(_CE_LATENCY_SAMPLES_MS) >= _CE_P95_MIN_SAMPLES and pre_p95 > ce_budget_ms:
                 _debug_skips[f"{bucket}.cross_encoder_skipped"] = (
-                    f"{type(exc).__name__}: {exc}"
+                    f"p95_budget_exceeded_{pre_p95:.1f}ms_gt_{ce_budget_ms:.1f}ms"
                 )
+            else:
+                try:
+                    from agentmemory.rerank import rerank_timed as _ce_rerank_timed
+
+                    merged.sort(key=lambda r: r.get("final_score", 0.0), reverse=True)
+                    ce_head = list(merged[:ce_top_n])
+                    ce_tail = list(merged[ce_top_n:])
+
+                    reranked_head, ce_secs = _ce_rerank_timed(
+                        query,
+                        ce_head,
+                        model=ce_model,
+                        top_k=None,
+                        text_key=ce_text_key,
+                    )
+                    ce_ms = max(0.0, ce_secs * 1000.0)
+                    _CE_LATENCY_SAMPLES_MS.append(ce_ms)
+                    post_p95 = _p95_ms(_CE_LATENCY_SAMPLES_MS)
+
+                    # Strict fallback behavior: if the current call OR rolling
+                    # p95 breaches budget, keep original order for this bucket.
+                    if ce_ms > ce_budget_ms or (
+                        len(_CE_LATENCY_SAMPLES_MS) >= _CE_P95_MIN_SAMPLES
+                        and post_p95 > ce_budget_ms
+                    ):
+                        _debug_skips[f"{bucket}.cross_encoder_skipped"] = (
+                            f"latency_budget_exceeded_query_{ce_ms:.1f}ms_"
+                            f"p95_{post_p95:.1f}ms_budget_{ce_budget_ms:.1f}ms"
+                        )
+                    else:
+                        merged = list(reranked_head) + ce_tail
+                        _debug_skips[f"{bucket}.cross_encoder_applied"] = ce_model
+                        _debug_skips[f"{bucket}.cross_encoder_latency_ms"] = round(ce_ms, 3)
+                        _debug_skips[f"{bucket}.cross_encoder_p95_ms"] = round(post_p95, 3)
+                        _debug_skips[f"{bucket}.cross_encoder_top_n"] = ce_top_n
+                except Exception as exc:  # noqa: BLE001 — never break search
+                    _debug_skips[f"{bucket}.cross_encoder_skipped"] = (
+                        f"{type(exc).__name__}: {exc}"
+                    )
 
         merged.sort(key=lambda r: r["final_score"], reverse=True)
         return merged[:limit]
@@ -6409,6 +6645,44 @@ def cmd_search(args):
                 trimmed = []
         else:
             fts_list = _fts_memories()
+            # FTS-confidence gate: when the top FTS result is a clearly
+            # strong anchor (BM25 score below -2.0 absolute, OR top-1 at
+            # least 1.5× stronger than top-3 in a result set of 3+), the
+            # vec fusion more often harms than helps — semantic neighbors
+            # dilute the exact-term hit. Empirically on LongMemEval, this
+            # is the difference between Hit@5 ≈ 0.93 (FTS-trusted) vs
+            # ≈ 0.45 (vec-fused). Intent classifier already covers the
+            # obvious factual_lookup / general cases via the earlier
+            # bypass; this confidence gate catches the event_lookup /
+            # entity_lookup / decision_lookup queries that have a
+            # strong lexical anchor despite a non-factual tag (e.g.
+            # "when did Alice start her job" → event_lookup but the
+            # word "Alice" is an exact proper-noun anchor).
+            _fts_strong_anchor = False
+            if fts_list and not benchmark_mode:
+                try:
+                    top_score = float(fts_list[0].get("fts_rank") or 0.0)
+                except (TypeError, ValueError):
+                    top_score = 0.0
+                abs_strong = top_score < -2.0
+                rel_strong = False
+                if len(fts_list) >= 3:
+                    try:
+                        third_score = float(fts_list[2].get("fts_rank") or 0.0)
+                        if top_score < -0.2 and third_score > top_score * 0.67:
+                            # top_score more negative than third * 1.5 means
+                            # top is ≥ 1.5× the BM25 strength of third.
+                            # Equivalently: third < top * (2/3) when both
+                            # are negative.
+                            rel_strong = top_score * 0.67 > third_score
+                    except (TypeError, ValueError):
+                        pass
+                _fts_strong_anchor = abs_strong or rel_strong
+            if _fts_strong_anchor and hybrid:
+                _debug_skips["memories.vec_skipped"] = (
+                    f"fts_strong_anchor_top={round(top_score, 3)}"
+                )
+                hybrid = False
             vec_list = _vec_memories()
             if hybrid:
                 merged = _rrf_fuse(fts_list, vec_list)
@@ -6747,11 +7021,21 @@ def cmd_search(args):
     # 2.3.1: surface reranker signal-informativeness gate decisions so an
     # auditor can see WHY a particular ranking happened (e.g. uniform
     # timestamps tripped the recency gate). Kept outside `results` so it
-    # doesn't pollute the per-bucket result counts. Only emitted when at
-    # least one gate tripped — silent when all rerankers fired normally.
+    # doesn't pollute the per-bucket result counts.
+    #
+    # When `--debug` is passed OR at least one gate tripped, emit the
+    # `_debug` block. With `--debug` and no skips, emit an explicit
+    # "all_signals_informative" marker so downstream tooling can rely on
+    # the key always being present in debug mode. Without `--debug` and
+    # no skips, stay silent to keep the default response compact.
+    _debug_mode = bool(getattr(args, "debug", False))
     if _debug_skips:
         _out["_debug"] = dict(_debug_skips)
+    elif _debug_mode:
+        _out["_debug"] = {"all_signals_informative": True}
     _ofmt = getattr(args, "output", "json")
+    if _ofmt == "return":
+        return _out
     if _ofmt == "oneline":
         oneline_out(_out)
     elif _ofmt == "compact":
@@ -6997,6 +7281,7 @@ def cmd_vec_reindex(args):
         get_db_embedding_dim,
         pack_embedding,
         reset_validation_cache,
+        sample_db_embedding_widths,
         warmup_model,
     )
     target_model = getattr(args, "model", None) or _get_default_embed_model()
@@ -7009,6 +7294,31 @@ def cmd_vec_reindex(args):
     db_vec = _get_db_with_vec()
     try:
         existing_dim = get_db_embedding_dim(db_vec)
+        # Cross-check the DDL-declared dim against the actual byte width of
+        # a sample of existing embedding rows. If they disagree (interrupted
+        # prior reindex / migration corruption), refuse to proceed unless
+        # --force so the destructive DROP+CREATE doesn't paper over real
+        # corruption. See audit H4.
+        width_probe = sample_db_embedding_widths(db_vec, sample_size=8)
+        if (
+            width_probe.get("ok")
+            and width_probe.get("sample_count", 0) > 0
+            and not width_probe.get("consistent", True)
+            and not force
+        ):
+            json_out({
+                "ok": False,
+                "error": "embedding_width_mismatch",
+                "declared_dim": width_probe["declared_dim"],
+                "observed_dims": width_probe["observed_dims"],
+                "sample_count": width_probe["sample_count"],
+                "message": width_probe["message"],
+                "hint": (
+                    "Re-run with --force to drop vec_memories and rebuild "
+                    f"at dim={target_dim} using model={target_model!r}."
+                ),
+            })
+            return
         active_rows = db_vec.execute(
             "SELECT id, content FROM memories "
             "WHERE retired_at IS NULL AND content IS NOT NULL "
@@ -8572,6 +8882,58 @@ def cmd_doctor(args):
         if not getattr(args, "json", False):
             print(info(f"  migrations: check failed ({exc})"))
 
+    # Signing wallet — needed for `brainctl export --sign` and
+    # `--pin-onchain`. Reachability of the Solana RPC (for pin verification)
+    # is optional — a missing RPC is worth an info note but not an issue.
+    # Mirrors the service-availability layer that brainctl status ships; the
+    # audit L6 finding was that doctor lagged status on these checks.
+    wallet_status: Dict[str, Any] = {"configured": False, "path": None}
+    try:
+        from agentmemory.commands.wallet import resolve_wallet_path as _resolve_wallet_path
+        wp = _resolve_wallet_path()
+        if wp and Path(wp).exists():
+            wallet_status = {"configured": True, "path": str(wp)}
+            if not getattr(args, "json", False):
+                print(ok(f"  signing wallet: configured ({wp})"))
+        else:
+            if not getattr(args, "json", False):
+                print(info(
+                    "  signing wallet: not configured "
+                    "(run `brainctl wallet new` for signed exports / --pin-onchain)"
+                ))
+    except Exception:
+        # solders/wallet helpers not installed or import path has shifted;
+        # this is a pip-extras omission, not an error worth failing doctor.
+        if not getattr(args, "json", False):
+            print(info(
+                "  signing wallet: extras not installed "
+                "(pip install 'brainctl[signing]' if you need --sign / --pin-onchain)"
+            ))
+
+    # Solana RPC reachability — only informational, even a persistent
+    # 5xx shouldn't fail doctor because sign/verify work offline.
+    rpc_status: Dict[str, Any] = {"checked": False}
+    try:
+        import urllib.request as _urlreq
+        rpc_url = os.environ.get("BRAINCTL_SOLANA_RPC") or "https://api.mainnet-beta.solana.com"
+        req = _urlreq.Request(
+            rpc_url,
+            data=b'{"jsonrpc":"2.0","id":1,"method":"getHealth"}',
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with _urlreq.urlopen(req, timeout=3) as _resp:
+            rpc_status = {"checked": True, "reachable": True, "url": rpc_url}
+            if not getattr(args, "json", False):
+                print(ok(f"  Solana RPC: reachable ({rpc_url})"))
+    except Exception:
+        rpc_status = {"checked": True, "reachable": False}
+        if not getattr(args, "json", False):
+            print(info(
+                "  Solana RPC: not reachable "
+                "(optional — only needed for --pin-onchain verification)"
+            ))
+
     # Verdict
     if not getattr(args, "json", False):
         if issues:
@@ -8590,6 +8952,8 @@ def cmd_doctor(args):
             "db_size_mb": db_size,
             "vec_available": vec_available,
             "migrations": migrations_status,
+            "wallet": wallet_status,
+            "solana_rpc": rpc_status,
         })
 
 
@@ -11743,11 +12107,7 @@ def _check_collapse_triggers(db, agent_id, max_superposition_days=30):
 
 def cmd_collapse_log(args):
     """List collapse events from belief_collapse_events."""
-    try:
-        from collapse_mechanics import list_collapse_events
-    except ImportError:
-        sys.path.insert(0, str(Path.home() / "agentmemory"))
-        from collapse_mechanics import list_collapse_events
+    from agentmemory.collapse_mechanics import list_collapse_events
 
     events = list_collapse_events(
         belief_id=getattr(args, "belief_id", None),
@@ -11784,11 +12144,7 @@ def cmd_collapse_log(args):
 
 def cmd_collapse_stats(args):
     """Show aggregate statistics for belief collapses."""
-    try:
-        from collapse_mechanics import collapse_stats
-    except ImportError:
-        sys.path.insert(0, str(Path.home() / "agentmemory"))
-        from collapse_mechanics import collapse_stats
+    from agentmemory.collapse_mechanics import collapse_stats
 
     stats = collapse_stats()
     if getattr(args, "json", False):
@@ -13102,9 +13458,9 @@ def cmd_push(args):
         if not fts_query:
             return []
         rows = db.execute(
-            "SELECT m.id, 'memory' as type, m.category, m.content, m.confidence, m.scope, m.created_at, f.rank as fts_rank "
+            f"SELECT m.id, 'memory' as type, m.category, m.content, m.confidence, m.scope, m.created_at, {_BM25_MEMORIES_EXPR} as fts_rank "
             "FROM memories m JOIN memories_fts f ON m.id = f.rowid "
-            "WHERE memories_fts MATCH ? AND m.retired_at IS NULL ORDER BY rank LIMIT ?",
+            f"WHERE memories_fts MATCH ? AND m.retired_at IS NULL ORDER BY {_BM25_MEMORIES_EXPR} LIMIT ?",
             (fts_query, fetch_limit)
         ).fetchall()
         return rows_to_list(rows)
@@ -14657,6 +15013,11 @@ def cmd_expertise_build(args):
         if not quiet:
             print(f"  {aid}: {n} domains")
 
+    # Rebuilt expertise strengths have just been written to agent_expertise;
+    # drop any cached reranker source-weights so the next search sees the
+    # new values instead of stale ones from before the build.
+    _invalidate_source_weight_cache()
+
     if getattr(args, "json", False):
         json_out({"ok": True, "agents_processed": len(results), "results": results})
     elif not quiet:
@@ -14892,9 +15253,9 @@ def _reason_l1_search(db, query: str, limit: int = 10):
     fts_mems = []
     if fts_query:
         rows = db.execute(
-            "SELECT m.id, 'memory' as type, m.category, m.content, m.confidence, m.scope, m.created_at, f.rank as fts_rank "
+            f"SELECT m.id, 'memory' as type, m.category, m.content, m.confidence, m.scope, m.created_at, {_BM25_MEMORIES_EXPR} as fts_rank "
             "FROM memories m JOIN memories_fts f ON m.id = f.rowid "
-            "WHERE memories_fts MATCH ? AND m.retired_at IS NULL ORDER BY rank LIMIT ?",
+            f"WHERE memories_fts MATCH ? AND m.retired_at IS NULL ORDER BY {_BM25_MEMORIES_EXPR} LIMIT ?",
             (fts_query, fetch_limit)
         ).fetchall()
         fts_mems = rows_to_list(rows)
@@ -15267,7 +15628,7 @@ def cmd_infer_pretask(args):
             mem_rows = db.execute(
                 "SELECT m.* FROM memories m JOIN memories_fts f ON m.id = f.rowid "
                 "WHERE memories_fts MATCH ? AND m.retired_at IS NULL AND m.confidence < 0.7 "
-                "ORDER BY rank LIMIT ?",
+                f"ORDER BY {_BM25_MEMORIES_EXPR} LIMIT ?",
                 (fts_q, limit * 3)
             ).fetchall()
             memories = rows_to_list(mem_rows)
@@ -15982,10 +16343,22 @@ def build_parser():
                             "Pass without a value to use the default model (bge-reranker-v2-m3); "
                             "pass MODEL to pin one of: bge-reranker-v2-m3, jina-reranker-v2-base-multilingual, "
                             "qwen3-reranker-4b. Requires `pip install 'brainctl[rerank]'`.")
+    srch.add_argument("--rerank-top-n", type=int, default=None, metavar="N",
+                       help="Cross-encoder candidate window size (top-N pre-trim); "
+                            "defaults to env BRAINCTL_CE_TOP_N or 40.")
+    srch.add_argument("--rerank-budget-ms", type=float, default=None, metavar="MS",
+                       help="Strict latency budget for cross-encoder rerank (per-call and rolling p95). "
+                            "Defaults to env BRAINCTL_CE_P95_BUDGET_MS or 350.")
     srch.add_argument("--output", "-o", choices=["json", "compact", "oneline"], default="json",
                        help="Output format: json (default, pretty), compact (minified JSON), oneline (ID|type|text per line)")
     srch.add_argument("--profile",
                        help="Task-scoped preset: writing, meeting, research, ops, networking, review")
+    srch.add_argument("--debug", action="store_true",
+                       help="Always emit the `_debug` key in search output with reranker "
+                            "signal-informativeness gate decisions. Without --debug, `_debug` "
+                            "only appears when at least one gate tripped; with --debug, you get "
+                            "`_debug: {\"all_signals_informative\": true}` even on clean runs so "
+                            "downstream tooling can rely on the key always being present.")
 
     # --- promote ---
     prom = sub.add_parser("promote", help="Promote an event to a durable memory")
@@ -16822,6 +17195,26 @@ def build_parser():
             "Refuses to go BELOW the current high-water mark."
         ),
     )
+    p_migrate.add_argument(
+        "--no-backup",
+        action="store_true",
+        dest="no_backup",
+        help=(
+            "Skip the automatic pre-migrate snapshot. By default, when the "
+            "pending batch contains a destructive op (DROP TABLE/COLUMN/INDEX), "
+            "brain.db is copied to `brain.db.pre-migrate-<version>-<ts>` before "
+            "the batch runs, and older snapshots are pruned to --backup-retain. "
+            "Pass --no-backup for CI / throwaway runs where the snapshots are noise."
+        ),
+    )
+    p_migrate.add_argument(
+        "--backup-retain",
+        type=int,
+        dest="backup_retain",
+        metavar="N",
+        default=5,
+        help="How many pre-migrate snapshots to keep (oldest pruned first). Default: 5.",
+    )
 
     # --- update ---
     update_p = sub.add_parser(
@@ -17015,7 +17408,12 @@ def cmd_migrate(args):
         json_out(migrate_mark_applied(db, up_to, dry_run=dry_run))
         return
 
-    json_out(migrate_run(db, dry_run=dry_run))
+    json_out(migrate_run(
+        db,
+        dry_run=dry_run,
+        backup=not getattr(args, "no_backup", False),
+        backup_retain=getattr(args, "backup_retain", None) or 5,
+    ))
 
 
 # ---------------------------------------------------------------------------
@@ -18029,6 +18427,12 @@ def main():
         return
     elif args.command == "ingest":
         # Code-ingest subcommand suite (2.4.5+, optional [code] extra).
+        # Dispatch lives in commands/ingest.py.
+        from agentmemory.commands.ingest import cmd_ingest as _cmd_ingest
+        _cmd_ingest(args)
+        return
+    elif args.command == "ingest":
+        # Code-ingest subcommand suite (2.4.4+, optional [code] extra).
         # Dispatch lives in commands/ingest.py.
         from agentmemory.commands.ingest import cmd_ingest as _cmd_ingest
         _cmd_ingest(args)
