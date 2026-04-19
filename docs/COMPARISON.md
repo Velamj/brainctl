@@ -74,6 +74,22 @@ The 2026-04-18 head-to-head against MemPalace `raw_*` baselines:
 | MemBench FirstAgent (n=200) | hit@5 | **0.930** | 0.885 | +0.045 |
 | ConvoMem | — | blocked | blocked | n/a |
 
+### LoCoMo operating points (brainctl internal, n=1,982)
+
+| metric | turn | session | hybrid | hybrid vs session |
+|---|---:|---:|---:|---:|
+| Hit@1 | 0.3734 | 0.6731 | 0.6983 | +0.0252 (+3.74%) |
+| Hit@5 | 0.6120 | 0.9117 | 0.9132 | +0.0015 (+0.16%) |
+| Hit@10 | 0.6892 | 0.9606 | 0.9601 | -0.0005 (-0.05%) |
+| MRR | 0.4731 | 0.7749 | 0.7920 | +0.0171 (+2.21%) |
+| single-hop Hit@5 | 0.4645 | 0.8688 | 0.8546 | -0.0142 (-1.63%) |
+| multi-hop Hit@5 | 0.3696 | 0.6522 | 0.6739 | +0.0217 (+3.33%) |
+| temporal Hit@5 | 0.6604 | 0.8972 | 0.8972 | +0.0000 (+0.00%) |
+
+Hybrid is the best overall LoCoMo operating point in this sweep:
+higher Hit@1 / Hit@5 / MRR than session, higher multi-hop Hit@5, equal
+temporal Hit@5, and a small single-hop Hit@5 giveback.
+
 The full LongMemEval breakdown (R@5 / R@10 / NDCG@5 / NDCG@10) for both `Brain.search` and `cmd_search` is on the `/benchmarks` page.
 
 Competitor harness for Mem0 / Letta / Zep / Cognee / OpenAI Memory remains unrun; gated on hosted-API budget for Mem0/Zep and on local-only sweep for Cognee.
@@ -87,8 +103,15 @@ Honest accounting of the gaps that follow from deliberate choices.
 **No managed cloud option.**
 brainctl is local-first by design. There is no hosted API, no managed tier, no SaaS dashboard. If your use case requires a shared remote store accessible from multiple machines without manual sync, you'll need to manage `brain.db` replication yourself or pick a different tool.
 
-**LOCOMO single-hop and multi-hop are weak.**
-hit@1 of 0.167 (single-hop) and 0.174 (multi-hop) are below what you'd expect from a well-tuned retrieval system. The root cause: recency and salience rerankers bias toward recent entries, but LOCOMO's gold evidence is concentrated in early sessions with uniform synthetic timestamps — the rerankers fight the right answer. A `--benchmark` preset is available. Operationally, with real agent data (non-uniform timestamps, natural recency signal), retrieval behaves better — but the benchmark number is the benchmark number.
+**LOCOMO baseline is weak on hop-heavy retrieval, though hybrid closes most of it.**
+The Brain.search baseline still shows weak single-hop / multi-hop hit@1
+(0.167 / 0.174). In the latest LoCoMo sweep, hybrid retrieval improves
+rank quality substantially (Hit@1 0.6983, Hit@5 0.9132, MRR 0.7920)
+and raises multi-hop Hit@5 to 0.6739, but it still gives back a small
+amount of single-hop Hit@5 vs session (-1.63%) and does not improve
+Hit@10. The root cause remains benchmark-shape sensitivity: recency and
+salience rerankers are less helpful when timestamps are synthetic and
+uniform. A `--benchmark` preset is available.
 
 **No real-time multi-machine sync.**
 `brain.db` is a single WAL-mode SQLite file. Multi-agent works fine when all agents share the same filesystem. Across machines, you sync the file manually. Zep and Letta's server-based architectures handle distributed access natively.
