@@ -487,6 +487,112 @@ def _p95_ms(samples) -> float:
     return float(ordered[idx])
 
 
+def _env_flag_true(value: Optional[str]) -> bool:
+    """Interpret common truthy env values."""
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_agent_csv(value: Optional[str]) -> set[str]:
+    """Parse comma-separated agent ids into a normalized set."""
+    if not value:
+        return set()
+    out = set()
+    for part in str(value).split(","):
+        tok = part.strip()
+        if tok:
+            out.add(tok)
+    return out
+
+
+def _resolve_topheavy_rollout(args, *, query: str, agent_id: str) -> Dict[str, Any]:
+    """Resolve staged rollout controls for top-heavy retrieval features (I6).
+
+    Returns:
+        {
+          "enabled": bool,
+          "mode": "on"|"off"|"canary",
+          "reason": str,
+          "canary_hit": bool,
+          "canary_percent": float,
+        }
+    """
+    if getattr(args, "rollback_top_heavy", False) or _env_flag_true(
+        os.environ.get("BRAINCTL_TOPHEAVY_ROLLBACK")
+    ):
+        return {
+            "enabled": False,
+            "mode": "off",
+            "reason": "rollback_forced",
+            "canary_hit": False,
+            "canary_percent": 0.0,
+        }
+
+    mode_raw = getattr(args, "rollout_mode", None) or os.environ.get(
+        "BRAINCTL_TOPHEAVY_ROLLOUT_MODE", "on"
+    )
+    mode = str(mode_raw).strip().lower()
+    if mode not in {"on", "off", "canary"}:
+        mode = "on"
+
+    if mode == "off":
+        return {
+            "enabled": False,
+            "mode": "off",
+            "reason": "rollout_mode_off",
+            "canary_hit": False,
+            "canary_percent": 0.0,
+        }
+    if mode == "on":
+        return {
+            "enabled": True,
+            "mode": "on",
+            "reason": "rollout_mode_on",
+            "canary_hit": False,
+            "canary_percent": 100.0,
+        }
+
+    # mode == "canary"
+    canary_agents = _parse_agent_csv(
+        getattr(args, "rollout_canary_agents", None)
+        or os.environ.get("BRAINCTL_TOPHEAVY_CANARY_AGENTS")
+    )
+    pct_raw = getattr(args, "rollout_canary_percent", None)
+    if pct_raw is None:
+        pct_raw = os.environ.get("BRAINCTL_TOPHEAVY_CANARY_PERCENT", "0")
+    try:
+        canary_percent = max(0.0, min(100.0, float(pct_raw)))
+    except (TypeError, ValueError):
+        canary_percent = 0.0
+
+    if agent_id in canary_agents:
+        return {
+            "enabled": True,
+            "mode": "canary",
+            "reason": "canary_agent_allowlist",
+            "canary_hit": True,
+            "canary_percent": canary_percent,
+        }
+
+    # Stable query+agent hashing for percent canary.
+    seed = f"{agent_id}|{query}".encode("utf-8", errors="replace")
+    bucket = int(_hashlib.sha1(seed).hexdigest()[:8], 16) % 10000
+    sample = bucket / 100.0
+    hit = sample < canary_percent
+    return {
+        "enabled": hit,
+        "mode": "canary",
+        "reason": (
+            f"canary_percent_hit_{sample:.2f}_lt_{canary_percent:.2f}"
+            if hit
+            else f"canary_percent_miss_{sample:.2f}_ge_{canary_percent:.2f}"
+        ),
+        "canary_hit": hit,
+        "canary_percent": canary_percent,
+    }
+
+
 def _reranker_signal_check(candidates):
     """Inspect a candidate set and decide which rerankers carry usable signal.
 
@@ -6046,6 +6152,18 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
     # boolean True for benchmark-mode hard skips. Surfaced under the top-level
     # "_debug" key so auditors can see WHY a particular ranking happened.
     _debug_skips: Dict[str, Any] = {}
+    _debug_mode = bool(getattr(args, "debug", False))
+
+    # I6 staged rollout controls for top-heavy retrieval features.
+    _rollout_agent = getattr(args, "agent", None) or "unknown"
+    _topheavy_rollout = _resolve_topheavy_rollout(
+        args, query=query, agent_id=_rollout_agent
+    )
+    _topheavy_enabled = bool(_topheavy_rollout["enabled"])
+    if _debug_mode or not _topheavy_enabled or _topheavy_rollout.get("mode") == "canary":
+        _debug_skips["topheavy.rollout_mode"] = _topheavy_rollout.get("mode")
+        _debug_skips["topheavy.rollout_reason"] = _topheavy_rollout.get("reason")
+        _debug_skips["topheavy.enabled"] = _topheavy_enabled
 
     # Read neuromod state to modulate retrieval parameters
     _nm = _neuro_get_state(db)
@@ -6107,7 +6225,7 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
     if _intent_result is not None:
         _intent_tag_cs = getattr(_intent_result, "intent", None)
         _intent_factual_fallback = _intent_tag_cs in ("factual_lookup", "general")
-    if _intent_factual_fallback and not benchmark_mode:
+    if _topheavy_enabled and _intent_factual_fallback and not benchmark_mode:
         hybrid = False
         q_blob = None
     mode = "hybrid-rrf" if hybrid else "fts"
@@ -6333,7 +6451,7 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
         # harness) uses `general`. Both mean "no specific intent detected —
         # this is a keyword-match query." Bypass reranker chain on either.
         _factual_fallback = _intent_tag in ("factual_lookup", "general")
-        if _factual_fallback and not benchmark_mode:
+        if _topheavy_enabled and _factual_fallback and not benchmark_mode:
             if use_recency:
                 _debug_skips[f"{bucket}.recency_skipped"]  = f"factual_fallback_intent_{_intent_tag}"
             if use_salience:
@@ -6361,7 +6479,7 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
         # Trust is preserved because it's provenance, not a workload-specific
         # signal. This is a honest perf+quality win on any workload — we're
         # not ranking a wider pool than we have signal for.
-        if not (use_recency or use_salience or use_qvalue) and len(merged) > limit:
+        if _topheavy_enabled and not (use_recency or use_salience or use_qvalue) and len(merged) > limit:
             merged = sorted(
                 merged,
                 key=lambda r: r.get("rrf_score", 0.0),
@@ -6530,71 +6648,87 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
                 pass  # PageRank boost is optional; never break search
 
         # ------------------------------------------------------------------
-        # Cross-encoder reranker (2.4.0+, opt-in, latency-guarded)
+        # Cross-encoder reranker (2.4.0+, opt-in)
         # ------------------------------------------------------------------
-        # I4: only rerank top-N candidates and enforce a strict p95 budget
-        # with fallback-to-original ordering when the budget is breached.
         ce_model = getattr(args, "rerank", None)
         if ce_model and merged and not benchmark_mode:
             ce_text_key = "summary" if bucket == "events" else "content"
-            ce_top_n = getattr(args, "rerank_top_n", None)
-            ce_budget_ms = getattr(args, "rerank_budget_ms", None)
+            if _topheavy_enabled:
+                # I4 path: latency-guarded top-N rerank with strict fallback.
+                ce_top_n = getattr(args, "rerank_top_n", None)
+                ce_budget_ms = getattr(args, "rerank_budget_ms", None)
 
-            if ce_top_n is None:
-                ce_top_n = _CE_TOP_N_DEFAULT
-            if ce_budget_ms is None:
-                ce_budget_ms = _CE_P95_BUDGET_MS
+                if ce_top_n is None:
+                    ce_top_n = _CE_TOP_N_DEFAULT
+                if ce_budget_ms is None:
+                    ce_budget_ms = _CE_P95_BUDGET_MS
 
-            try:
-                ce_top_n = max(limit, int(ce_top_n))
-            except (TypeError, ValueError):
-                ce_top_n = max(limit, _CE_TOP_N_DEFAULT)
-            try:
-                ce_budget_ms = float(ce_budget_ms)
-            except (TypeError, ValueError):
-                ce_budget_ms = _CE_P95_BUDGET_MS
-
-            # Pre-call guard: if rolling p95 is already out-of-budget, skip CE.
-            pre_p95 = _p95_ms(_CE_LATENCY_SAMPLES_MS)
-            if len(_CE_LATENCY_SAMPLES_MS) >= _CE_P95_MIN_SAMPLES and pre_p95 > ce_budget_ms:
-                _debug_skips[f"{bucket}.cross_encoder_skipped"] = (
-                    f"p95_budget_exceeded_{pre_p95:.1f}ms_gt_{ce_budget_ms:.1f}ms"
-                )
-            else:
                 try:
-                    from agentmemory.rerank import rerank_timed as _ce_rerank_timed
+                    ce_top_n = max(limit, int(ce_top_n))
+                except (TypeError, ValueError):
+                    ce_top_n = max(limit, _CE_TOP_N_DEFAULT)
+                try:
+                    ce_budget_ms = float(ce_budget_ms)
+                except (TypeError, ValueError):
+                    ce_budget_ms = _CE_P95_BUDGET_MS
 
-                    merged.sort(key=lambda r: r.get("final_score", 0.0), reverse=True)
-                    ce_head = list(merged[:ce_top_n])
-                    ce_tail = list(merged[ce_top_n:])
+                # Pre-call guard: if rolling p95 is already out-of-budget, skip CE.
+                pre_p95 = _p95_ms(_CE_LATENCY_SAMPLES_MS)
+                if len(_CE_LATENCY_SAMPLES_MS) >= _CE_P95_MIN_SAMPLES and pre_p95 > ce_budget_ms:
+                    _debug_skips[f"{bucket}.cross_encoder_skipped"] = (
+                        f"p95_budget_exceeded_{pre_p95:.1f}ms_gt_{ce_budget_ms:.1f}ms"
+                    )
+                else:
+                    try:
+                        from agentmemory.rerank import rerank_timed as _ce_rerank_timed
 
-                    reranked_head, ce_secs = _ce_rerank_timed(
+                        merged.sort(key=lambda r: r.get("final_score", 0.0), reverse=True)
+                        ce_head = list(merged[:ce_top_n])
+                        ce_tail = list(merged[ce_top_n:])
+
+                        reranked_head, ce_secs = _ce_rerank_timed(
+                            query,
+                            ce_head,
+                            model=ce_model,
+                            top_k=None,
+                            text_key=ce_text_key,
+                        )
+                        ce_ms = max(0.0, ce_secs * 1000.0)
+                        _CE_LATENCY_SAMPLES_MS.append(ce_ms)
+                        post_p95 = _p95_ms(_CE_LATENCY_SAMPLES_MS)
+
+                        # Strict fallback behavior: if the current call OR rolling
+                        # p95 breaches budget, keep original order for this bucket.
+                        if ce_ms > ce_budget_ms or (
+                            len(_CE_LATENCY_SAMPLES_MS) >= _CE_P95_MIN_SAMPLES
+                            and post_p95 > ce_budget_ms
+                        ):
+                            _debug_skips[f"{bucket}.cross_encoder_skipped"] = (
+                                f"latency_budget_exceeded_query_{ce_ms:.1f}ms_"
+                                f"p95_{post_p95:.1f}ms_budget_{ce_budget_ms:.1f}ms"
+                            )
+                        else:
+                            merged = list(reranked_head) + ce_tail
+                            _debug_skips[f"{bucket}.cross_encoder_applied"] = ce_model
+                            _debug_skips[f"{bucket}.cross_encoder_latency_ms"] = round(ce_ms, 3)
+                            _debug_skips[f"{bucket}.cross_encoder_p95_ms"] = round(post_p95, 3)
+                            _debug_skips[f"{bucket}.cross_encoder_top_n"] = ce_top_n
+                    except Exception as exc:  # noqa: BLE001 — never break search
+                        _debug_skips[f"{bucket}.cross_encoder_skipped"] = (
+                            f"{type(exc).__name__}: {exc}"
+                        )
+            else:
+                # Rollback path: retain pre-I4 CE behavior (full-set rerank).
+                try:
+                    from agentmemory.rerank import rerank as _ce_rerank
+                    merged = _ce_rerank(
                         query,
-                        ce_head,
+                        merged,
                         model=ce_model,
                         top_k=None,
                         text_key=ce_text_key,
                     )
-                    ce_ms = max(0.0, ce_secs * 1000.0)
-                    _CE_LATENCY_SAMPLES_MS.append(ce_ms)
-                    post_p95 = _p95_ms(_CE_LATENCY_SAMPLES_MS)
-
-                    # Strict fallback behavior: if the current call OR rolling
-                    # p95 breaches budget, keep original order for this bucket.
-                    if ce_ms > ce_budget_ms or (
-                        len(_CE_LATENCY_SAMPLES_MS) >= _CE_P95_MIN_SAMPLES
-                        and post_p95 > ce_budget_ms
-                    ):
-                        _debug_skips[f"{bucket}.cross_encoder_skipped"] = (
-                            f"latency_budget_exceeded_query_{ce_ms:.1f}ms_"
-                            f"p95_{post_p95:.1f}ms_budget_{ce_budget_ms:.1f}ms"
-                        )
-                    else:
-                        merged = list(reranked_head) + ce_tail
-                        _debug_skips[f"{bucket}.cross_encoder_applied"] = ce_model
-                        _debug_skips[f"{bucket}.cross_encoder_latency_ms"] = round(ce_ms, 3)
-                        _debug_skips[f"{bucket}.cross_encoder_p95_ms"] = round(post_p95, 3)
-                        _debug_skips[f"{bucket}.cross_encoder_top_n"] = ce_top_n
+                    _debug_skips[f"{bucket}.cross_encoder_applied"] = f"{ce_model}:rollback_legacy"
                 except Exception as exc:  # noqa: BLE001 — never break search
                     _debug_skips[f"{bucket}.cross_encoder_skipped"] = (
                         f"{type(exc).__name__}: {exc}"
@@ -6659,7 +6793,7 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
             # "when did Alice start her job" → event_lookup but the
             # word "Alice" is an exact proper-noun anchor).
             _fts_strong_anchor = False
-            if fts_list and not benchmark_mode:
+            if _topheavy_enabled and fts_list and not benchmark_mode:
                 try:
                     top_score = float(fts_list[0].get("fts_rank") or 0.0)
                 except (TypeError, ValueError):
@@ -7006,6 +7140,15 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
             )
         except NameError:
             pass
+    _rollout_meta = {
+        "topheavy_rollout_mode": _topheavy_rollout.get("mode"),
+        "topheavy_rollout_enabled": _topheavy_enabled,
+    }
+    if _topheavy_rollout.get("mode") == "canary":
+        _rollout_meta["topheavy_canary_hit"] = bool(_topheavy_rollout.get("canary_hit"))
+        _rollout_meta["topheavy_canary_percent"] = float(
+            _topheavy_rollout.get("canary_percent", 0.0)
+        )
     # Prospective memory trigger check — surface any matching triggers
     _triggered = []
     try:
@@ -7015,7 +7158,17 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
     except Exception:
         pass  # trigger check is optional; never break search
 
-    _out = {"mode": mode, "metacognition": {"tier": tier, "label": tier_label, "note": tier_note, **_intent_meta}, **results}
+    _out = {
+        "mode": mode,
+        "metacognition": {
+            "tier": tier,
+            "label": tier_label,
+            "note": tier_note,
+            **_intent_meta,
+            **_rollout_meta,
+        },
+        **results,
+    }
     if _triggered:
         _out["triggered_memories"] = _triggered
     # 2.3.1: surface reranker signal-informativeness gate decisions so an
@@ -7028,7 +7181,6 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
     # "all_signals_informative" marker so downstream tooling can rely on
     # the key always being present in debug mode. Without `--debug` and
     # no skips, stay silent to keep the default response compact.
-    _debug_mode = bool(getattr(args, "debug", False))
     if _debug_skips:
         _out["_debug"] = dict(_debug_skips)
     elif _debug_mode:
@@ -16349,6 +16501,18 @@ def build_parser():
     srch.add_argument("--rerank-budget-ms", type=float, default=None, metavar="MS",
                        help="Strict latency budget for cross-encoder rerank (per-call and rolling p95). "
                             "Defaults to env BRAINCTL_CE_P95_BUDGET_MS or 350.")
+    srch.add_argument("--rollout-mode", choices=["on", "off", "canary"], default=None,
+                       help="Top-heavy retrieval rollout mode override. "
+                            "Defaults to env BRAINCTL_TOPHEAVY_ROLLOUT_MODE or on.")
+    srch.add_argument("--rollout-canary-agents", default=None, metavar="CSV",
+                       help="Comma-separated agent allowlist for canary rollout. "
+                            "Defaults to env BRAINCTL_TOPHEAVY_CANARY_AGENTS.")
+    srch.add_argument("--rollout-canary-percent", type=float, default=None, metavar="PCT",
+                       help="Percent-based canary threshold (0-100) for non-allowlisted agents. "
+                            "Defaults to env BRAINCTL_TOPHEAVY_CANARY_PERCENT.")
+    srch.add_argument("--rollback-top-heavy", action="store_true", default=False,
+                       help="Emergency rollback switch for I2/I3/I4 top-heavy retrieval behavior. "
+                            "Equivalent to env BRAINCTL_TOPHEAVY_ROLLBACK=1.")
     srch.add_argument("--output", "-o", choices=["json", "compact", "oneline"], default="json",
                        help="Output format: json (default, pretty), compact (minified JSON), oneline (ID|type|text per line)")
     srch.add_argument("--profile",

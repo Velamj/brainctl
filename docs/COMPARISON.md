@@ -92,6 +92,16 @@ temporal Hit@5, and a small single-hop Hit@5 giveback.
 
 The full LongMemEval breakdown (R@5 / R@10 / NDCG@5 / NDCG@10) for both `Brain.search` and `cmd_search` is on the `/benchmarks` page.
 
+Rollout posture for top-heavy retrieval is staged/canary-first (I6),
+with an explicit rollback switch. Operator controls are
+`--rollout-mode`, `--rollout-canary-agents`, `--rollout-canary-percent`,
+and `--rollback-top-heavy` (or env equivalents
+`BRAINCTL_TOPHEAVY_ROLLOUT_MODE`, `BRAINCTL_TOPHEAVY_CANARY_AGENTS`,
+`BRAINCTL_TOPHEAVY_CANARY_PERCENT`, `BRAINCTL_TOPHEAVY_ROLLBACK`).
+For provenance, run `brainctl search ... --debug` and inspect `_debug`
+keys like `topheavy.rollout_mode`, `topheavy.rollout_reason`,
+`topheavy.enabled`, and `<bucket>.cross_encoder_*` / `<bucket>.*_skipped`.
+
 Competitor harness for Mem0 / Letta / Zep / Cognee / OpenAI Memory remains unrun; gated on hosted-API budget for Mem0/Zep and on local-only sweep for Cognee.
 
 ---

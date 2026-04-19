@@ -59,6 +59,9 @@ brain.relate("OpenAI", "provides", "GPT-4o")
 - Intent classifier (regex, 10 labels → 6 profiles) routes queries at `cmd_search`
 - Post-FTS reranking by recency, salience, Q-value utility, and Bayesian recall confidence
 - Cold-start: auto-detects available reranker backends (cross-encoder > sentence-transformers > fallback)
+- Cross-encoder controls: `--rerank-top-n` and `--rerank-budget-ms` tune candidate window + strict latency budget
+- Top-heavy staged rollout controls (I6): `--rollout-mode`, `--rollout-canary-agents`, `--rollout-canary-percent`, `--rollback-top-heavy`
+- Env mirrors for rollout controls: `BRAINCTL_TOPHEAVY_ROLLOUT_MODE`, `BRAINCTL_TOPHEAVY_CANARY_AGENTS`, `BRAINCTL_TOPHEAVY_CANARY_PERCENT`, `BRAINCTL_TOPHEAVY_ROLLBACK`
 - Retrieval regression-gated in CI: >2% drop on P@1/P@5/MRR/nDCG@5 fails the build
 
 **Knowledge graph**
@@ -245,6 +248,14 @@ salience rerankers bias toward recent memories; LOCOMO uses uniform
 synthetic timestamps with gold evidence concentrated in early sessions,
 so reranking can fight lexical evidence. A `--benchmark` preset that
 flattens recency/salience is available for evaluation runs.
+
+### Top-heavy rollout and provenance (I2/I3/I4/I6)
+
+- Rollout policy is staged and canary-first: start with `--rollout-mode canary`, then move to `on` after guardrails hold.
+- Emergency rollback is explicit: `--rollback-top-heavy` or `BRAINCTL_TOPHEAVY_ROLLBACK=1`.
+- Cross-encoder top-heaviness knobs are explicit: `--rerank-top-n N`, `--rerank-budget-ms MS`.
+- Canary targeting supports both allowlist and percent sampling: `--rollout-canary-agents` / `BRAINCTL_TOPHEAVY_CANARY_AGENTS`, `--rollout-canary-percent` / `BRAINCTL_TOPHEAVY_CANARY_PERCENT`.
+- Provenance is emitted in search output via `_debug` (always with `--debug`; opportunistically otherwise). Inspect: `topheavy.rollout_mode`, `topheavy.rollout_reason`, `topheavy.enabled`, `<bucket>.cross_encoder_applied`, `<bucket>.cross_encoder_skipped`, `<bucket>.cross_encoder_latency_ms`, `<bucket>.cross_encoder_p95_ms`, `<bucket>.cross_encoder_top_n`, and gate keys such as `<bucket>.recency_skipped`, `<bucket>.salience_skipped`, `<bucket>.qvalue_skipped`, `<bucket>.trust_skipped`, `<bucket>.fetch_narrowed`.
 
 ### Head-to-head vs MemPalace (measured 2026-04-18)
 

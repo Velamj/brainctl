@@ -3,7 +3,8 @@
 > **Status: opt-in, off by default in 2.4.0.** This document describes
 > a new optional stage in brainctl's hybrid retrieval pipeline. Pass
 > `--rerank` to your search command (or set `rerank=true` on the
-> `memory_search` MCP tool) to activate it.
+> `memory_search` MCP tool) to activate it. Top-heavy controls include
+> `--rerank-top-n` and `--rerank-budget-ms` for bounded rerank scope.
 
 ## What it is
 
@@ -60,10 +61,35 @@ brainctl search "what does Alice prefer?" --rerank
 # Pin a faster model when latency matters.
 brainctl search "what does Alice prefer?" --rerank jina-reranker-v2-base-multilingual
 
+# Bound rerank scope and strict latency budget.
+brainctl search "what does Alice prefer?" --rerank --rerank-top-n 40 --rerank-budget-ms 350
+
 # From an MCP client (Claude Code / Hermes / etc.):
 memory_search(query="what does Alice prefer?", rerank=True)
 memory_search(query="what does Alice prefer?", rerank="jina-reranker-v2-base-multilingual")
 ```
+
+## Top-heavy rollout controls (I6)
+
+Top-heavy retrieval changes (I2/I3/I4 + I6) are intended for staged,
+canary-first rollout:
+
+- `--rollout-mode {on,off,canary}`
+- `--rollout-canary-agents agentA,agentB`
+- `--rollout-canary-percent 10`
+- `--rollback-top-heavy` (immediate off switch)
+
+Environment equivalents:
+
+- `BRAINCTL_TOPHEAVY_ROLLOUT_MODE`
+- `BRAINCTL_TOPHEAVY_CANARY_AGENTS`
+- `BRAINCTL_TOPHEAVY_CANARY_PERCENT`
+- `BRAINCTL_TOPHEAVY_ROLLBACK`
+
+For provenance, run search with `--debug` and inspect `_debug` keys:
+`topheavy.rollout_mode`, `topheavy.rollout_reason`,
+`topheavy.enabled`, and `<bucket>.cross_encoder_*` /
+`<bucket>.*_skipped`.
 
 ## Supported models
 
@@ -224,11 +250,13 @@ cache_clear()    # drop all entries (used by bench harness between runs)
 ### CLI
 
 ```
-brainctl search QUERY [--rerank [MODEL]]
+brainctl search QUERY [--rerank [MODEL]] [--rerank-top-n N] [--rerank-budget-ms MS]
 ```
 
 - `--rerank` alone uses the default model (`bge-reranker-v2-m3`).
 - `--rerank MODEL` pins one of the supported names.
+- `--rerank-top-n` limits the CE pass to the top-N pre-trim candidates.
+- `--rerank-budget-ms` enforces strict per-call + rolling p95 latency budget.
 
 ### MCP tool
 

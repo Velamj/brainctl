@@ -9,10 +9,12 @@ Scope: LongMemEval (289-q table provided), LoCoMo turn/session/hybrid retrieval 
 - LongMemEval is mixed: top-5 coverage improved, deep-recall ceilings held, but rank-quality metrics regressed.
 - LoCoMo is strong for hybrid retrieval: hybrid beats session on Hit@1, Hit@5, MRR, and multi-hop Hit@5; ties temporal Hit@5.
 - Head-to-head positioning remains strong: `cmd_session` LoCoMo avg recall is 0.9217 vs MemPalace 0.6028 (+0.3189 absolute, +52.90% relative).
+- Rollout posture is staged/canary-first for top-heavy retrieval controls, with an explicit rollback switch.
 
 Recommended public framing:
 - "Hybrid retrieval improves LoCoMo rank quality while preserving near-ceiling LongMemEval coverage."
 - "brainctl cmd_session reaches 0.9217 LoCoMo avg recall in same-machine head-to-head."
+- "Top-heavy retrieval changes are deployed canary-first and can be rolled back instantly."
 
 ## 2) Inputs and provenance
 
@@ -83,6 +85,23 @@ Published same-machine row (n=1,986):
 
 This remains your strongest competitive headline metric.
 
+## 5.1) Rollout controls and provenance checks (I2/I3/I4/I6)
+
+Operational posture:
+- Default deployment policy is staged and canary-first (`--rollout-mode canary`).
+- Explicit rollback exists for incident response (`--rollback-top-heavy` or `BRAINCTL_TOPHEAVY_ROLLBACK=1`).
+- Cross-encoder top-heaviness is bounded by `--rerank-top-n` and `--rerank-budget-ms`.
+
+Rollout/env controls to document:
+- CLI: `--rollout-mode`, `--rollout-canary-agents`, `--rollout-canary-percent`, `--rollback-top-heavy`.
+- ENV: `BRAINCTL_TOPHEAVY_ROLLOUT_MODE`, `BRAINCTL_TOPHEAVY_CANARY_AGENTS`, `BRAINCTL_TOPHEAVY_CANARY_PERCENT`, `BRAINCTL_TOPHEAVY_ROLLBACK`.
+
+Where to inspect provenance:
+- Run retrieval with `--debug` and inspect `_debug` keys in output.
+- Rollout decision keys: `topheavy.rollout_mode`, `topheavy.rollout_reason`, `topheavy.enabled`.
+- Cross-encoder keys: `<bucket>.cross_encoder_applied`, `<bucket>.cross_encoder_skipped`, `<bucket>.cross_encoder_latency_ms`, `<bucket>.cross_encoder_p95_ms`, `<bucket>.cross_encoder_top_n`.
+- Gate keys: `<bucket>.recency_skipped`, `<bucket>.salience_skipped`, `<bucket>.qvalue_skipped`, `<bucket>.trust_skipped`, `<bucket>.fetch_narrowed`.
+
 ## 6) What to say in docs (recommended copy)
 
 ### Headline copy
@@ -96,6 +115,7 @@ This remains your strongest competitive headline metric.
 - "LongMemEval gains are concentrated in top-5 coverage, not first-rank precision."
 - "Hybrid slightly trails session on single-hop Hit@5 and is effectively tied on Hit@10."
 - "Do not frame this table as a pure vector-on/off claim unless the run persists vector flag provenance."
+- "Top-heavy retrieval rollout is staged; publish canary results first and keep rollback enabled."
 
 ## 7) Suggested edit targets
 
