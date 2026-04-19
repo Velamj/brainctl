@@ -5,6 +5,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.4.5] — 2026-04-19
+
+### Added — `brainctl[code]` extra: tree-sitter code ingestion into the knowledge graph
+
+New optional extra `pip install 'brainctl[code]'` and a new CLI group
+`brainctl ingest code <path>`. Walks a source tree, parses supported
+files with tree-sitter, and writes file / function / class entities
+plus `contains` / `imports` relations into the existing entity graph.
+
+**Zero LLM, zero GPU, CPU-only.** SHA256-cached via migration 051 so
+re-runs on unchanged trees are metadata-only. Self-ingest of
+`src/agentmemory/` (90 files): 0.36s cold, 0.11s warm.
+
+Ships three grammars on purpose — `tree-sitter-python`,
+`tree-sitter-typescript`, `tree-sitter-go` — keeping the wheel
+footprint around 4 MB. Adding a language means updating
+`EXT_TO_LANG` + `EXTRACTORS` in `src/agentmemory/code_ingest.py`.
+
+Entity naming is prefixed so searches stay unambiguous:
+`file:<relpath>`, `fn:<relpath>:<qualname>`,
+`class:<relpath>:<qualname>`, `module:<import_spec>`. Provenance is
+encoded on `knowledge_edges.weight` (1.0 for direct-source, 0.7 for
+unresolved external imports). Re-ingest deliberately does **not**
+touch `last_reinforced_at` / `co_activation_count` — those are
+synaptic signals owned by hippocampus, and re-parsing a file is
+idempotent state-sync, not an activation event. One `access_log`
+row per file (not per entity) to keep the audit trail honest.
+
+New files: `src/agentmemory/code_ingest.py`,
+`src/agentmemory/commands/ingest.py`,
+`db/migrations/051_code_ingest_cache.sql`,
+`tests/test_code_ingest.py` (12 cases).
+
+Known follow-ups (not blocking):
+- No `mcp__brainctl__ingest_code` tool yet — agents must shell out via CLI.
+- `init_schema.sql` won't include `code_ingest_cache` until regenerated in
+  a release commit; fresh installs need `brainctl migrate` before
+  `brainctl ingest code`.
+
+Inspired by [safishamsi/graphify](https://github.com/safishamsi/graphify)
+(the `{nodes, edges}` extractor protocol + SHA256 skip-when-unchanged
+pattern). Not a code port — brainctl's entity graph + migration
+discipline are reused as-is.
+
 ## [2.4.3] — 2026-04-18
 
 ### Added — three new agent-framework plugins (16 → 19)

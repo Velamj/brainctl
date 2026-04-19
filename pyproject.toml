@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "brainctl"
-version = "2.4.3"
+version = "2.4.5"
 description = "Context engineering for AI agents — persistent memory, knowledge graph, affect tracking, and MCP server. Single SQLite file, zero LLM cost."
 readme = "README.md"
 license = {text = "MIT"}
@@ -64,6 +64,24 @@ signing = ["solders>=0.21"]
 # rerank module emits a single stderr warning and falls through to
 # the input ordering when the extras are missing.
 rerank = ["sentence-transformers>=3.0", "torch>=2.0"]
+# Code-aware knowledge-graph ingestion (2.4.5+). Walks a source tree,
+# parses supported files with tree-sitter (no LLM, no GPU), writes
+# file / function / class entities plus `contains` / `imports`
+# knowledge_edges into brain.db. SHA256-cached in migration 051 so
+# re-runs skip unchanged files. Ships only three grammars on purpose:
+# python, typescript, and go cover the bulk of brainctl-adjacent
+# repos and keep the wheel footprint small (~4 MB). Adding a grammar
+# means also updating `EXT_TO_LANG` and `EXTRACTORS` in
+# `src/agentmemory/code_ingest.py`. Inspired by
+# github.com/safishamsi/graphify (the {nodes, edges} extractor
+# protocol + SHA256 skip-when-unchanged pattern); brainctl's entity
+# graph + migration discipline are reused as-is.
+code = [
+    "tree-sitter>=0.23.0",
+    "tree-sitter-python>=0.23",
+    "tree-sitter-typescript>=0.23",
+    "tree-sitter-go>=0.23",
+]
 # Competitor benchmark harness (tests/bench/competitor_runs/). Pulls
 # every external memory SDK we score against — kept out of the default
 # install because mem0ai/cognee/letta-client/zep-cloud each transitively
@@ -84,6 +102,10 @@ all = [
     "solders>=0.21",
     "sentence-transformers>=3.0",
     "torch>=2.0",
+    "tree-sitter>=0.23.0",
+    "tree-sitter-python>=0.23",
+    "tree-sitter-typescript>=0.23",
+    "tree-sitter-go>=0.23",
 ]
 
 [project.scripts]

@@ -103,3 +103,50 @@ user explicitly consents). Or use `brainctl export --sign
 shot. `--pin-onchain` with 0 SOL skips cleanly with `exit 0` and
 `pin_skipped_reason="zero_balance"` — the offline signature is still
 valid; pinning is opportunistic.
+
+## Code-aware ingestion (2.4.5+, optional `[code]` extra)
+
+`brainctl ingest code <path>` walks a source tree and writes file /
+function / class entities plus `contains` and `imports` relations into
+the existing entity graph. CPU-only via tree-sitter — no LLM, no GPU,
+no network at ingest time. SHA256-cached in migration 051 so re-runs
+on unchanged trees are metadata-only and finish in well under a
+second for a ~100-file package.
+
+Ships three grammars on purpose (python, typescript, go) to keep the
+wheel footprint around 4 MB. Adding a language means:
+
+ 1. Add grammar to `[code]` extra in `pyproject.toml`.
+ 2. Add suffix(es) to `EXT_TO_LANG` in `src/agentmemory/code_ingest.py`.
+ 3. Write `extract_<lang>(path, src, relpath)` and register in `EXTRACTORS`.
+
+CLI surface:
+
+    pip install 'brainctl[code]'
+    brainctl ingest code <path> [--scope project:<name>]
+        [--languages python,typescript,go] [--no-cache]
+        [--max-files N] [--verbose] [--json]
+
+Entity naming is prefixed so searches stay unambiguous: `file:<relpath>`,
+`fn:<relpath>:<qualname>`, `class:<relpath>:<qualname>`,
+`module:<import_spec>`. The fine-grained kind lives in
+`properties.kind` alongside `language`, `path`, `line`, `signature`,
+`parent`. Provenance is encoded on `knowledge_edges.weight` — 1.0 for
+direct-source (`contains`, local resolvable imports), 0.7 for
+unresolved external imports. Re-ingest does **not** touch
+`last_reinforced_at` / `co_activation_count`: those are synaptic
+reinforcement signals owned by hippocampus, and re-parsing a file is
+an idempotent state-sync, not an activation event.
+
+Inspired by `github.com/safishamsi/graphify` (the `{nodes, edges}`
+extractor protocol + SHA256 skip-when-unchanged pattern).
+
+Known follow-ups (not blocking the extra):
+
+ * No `mcp__brainctl__ingest_code` tool yet — agents that want to
+   trigger ingest must shell out via the CLI. MCP wrapper is a
+   separate PR.
+ * `init_schema.sql` won't include `code_ingest_cache` until it's
+   regenerated in a release commit. Until then, fresh installs that
+   want code-ingest need `brainctl migrate` applied after
+   `brainctl init`.

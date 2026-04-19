@@ -16895,6 +16895,10 @@ def build_parser():
     from agentmemory.commands.wallet import register_parser as _wallet_register
     _wallet_register(sub)
 
+    # --- ingest (code-aware knowledge-graph population, 2.4.5+, optional [code] extra) ---
+    from agentmemory.commands.ingest import register_parser as _ingest_register
+    _ingest_register(sub)
+
     return p
 
 # ---------------------------------------------------------------------------
@@ -18022,6 +18026,12 @@ def main():
         # import + call.
         from agentmemory.commands.wallet import cmd_wallet as _cmd_wallet
         _cmd_wallet(args)
+        return
+    elif args.command == "ingest":
+        # Code-ingest subcommand suite (2.4.5+, optional [code] extra).
+        # Dispatch lives in commands/ingest.py.
+        from agentmemory.commands.ingest import cmd_ingest as _cmd_ingest
+        _cmd_ingest(args)
         return
     else:
         fn = dispatch.get(args.command)
