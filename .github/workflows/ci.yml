@@ -52,21 +52,19 @@ jobs:
   # --------------------------------------------------------------------------
   # Tier 2.5: raw-op latency regression gate.
   #
-  # Advisory (continue-on-error). The committed latency.json is calibrated
-  # on macOS (darwin / M-class); ubuntu-latest GitHub runners measure
-  # 1.5-2x higher on the same sub-100ms ops due to different sqlite build,
-  # page-cache behaviour, and shared-tenant CPU noise. The 50% regression
-  # threshold is right for within-machine drift but wrong for
-  # cross-platform comparison — see tests/test_latency_regression.py for
-  # the full calibration story.
+  # Library-level ops (brain_search_*, brain_remember_*, vec_*) DO gate
+  # cross-platform — the +50% ratio threshold holds up because sqlite3
+  # + FTS5 are deterministic enough to compare macOS baseline vs
+  # ubuntu-latest fresh.
   #
-  # For real latency gating, run this on a self-hosted Linux runner with
-  # a Linux-measured baseline. Until then, the job still runs so the
-  # numbers are visible in CI (useful signal), but failures don't block
-  # merge.
+  # CLI-subprocess ops (cli_search_*, cli_remember_*, cli_stats) are
+  # automatically excluded when baseline.platform != fresh.platform,
+  # because per-op cost is dominated by Python interpreter cold-start
+  # + import graph, which differs 50-100% between platforms. The skip
+  # is implemented in tests/test_latency_regression.py —
+  # see SUBPROCESS_BOUND_OPS + the cross_platform branch.
   latency-gate:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -77,7 +75,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e '.[all]'
           pip install pytest
-      - name: Latency regression gate (advisory — cross-platform baseline)
+      - name: Latency regression gate
         env:
           BRAINCTL_RUN_BENCH: "1"
         run: pytest tests/test_latency_regression.py -v
