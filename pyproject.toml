@@ -42,7 +42,7 @@ mcp = ["mcp>=1.27.0"]
 # When changing models on an existing brain.db, run
 # `brainctl vec reindex --model <name>` to migrate the vector index.
 # The dim-mismatch validator will refuse to silently mix dims.
-vec = ["sqlite-vec>=0.1.0"]
+vec = ["sqlite-vec>=0.1.3"]  # 0.1.3 fixes CVE-2024-46488 / GHSA-vrcx-gx3g-j3h8 (heap buffer overflow)
 obsidian = ["watchdog>=3.0.0"]
 ner = ["gliner>=0.2"]
 langchain = ["langchain-core>=0.3.0"]
@@ -105,7 +105,7 @@ bench = [
 ]
 all = [
     "mcp>=1.27.0",
-    "sqlite-vec>=0.1.0",
+    "sqlite-vec>=0.1.3",
     "watchdog>=3.0.0",
     "solders>=0.21",
     "sentence-transformers>=3.0",
