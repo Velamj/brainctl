@@ -4,7 +4,10 @@
 
 If you find a security issue in brainctl, **do not open a public issue.**
 
-Email the maintainer directly or use GitHub's private vulnerability reporting.
+Report it through one of these channels:
+
+- **Email:** security@brainctl.org (aligned with the domain's CAA iodef record)
+- **GitHub private advisories:** https://github.com/TSchonleber/brainctl/security/advisories/new
 
 We'll acknowledge within 48 hours and aim to patch within 7 days for critical issues.
 
