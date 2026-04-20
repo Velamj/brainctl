@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+# Default to read-only. Individual jobs that need more (e.g. the
+# retrieval-gate job posting a PR comment) declare per-job
+# `permissions:` overrides that still apply on top of this default.
+permissions:
+  contents: read
+
 jobs:
   # --------------------------------------------------------------------------
   # Tier 1: unit + integration. Runs on every PR + every push to main.
