@@ -1,0 +1,5 @@
+# Require maintainer review for supply-chain-sensitive paths
+.github/workflows/*   @TSchonleber
+.github/dependabot.yml @TSchonleber
+pyproject.toml         @TSchonleber
+SECURITY.md            @TSchonleber
