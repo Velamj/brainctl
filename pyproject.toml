@@ -63,7 +63,8 @@ signing = ["solders>=0.21"]
 # than the base install. brainctl imports cleanly without these; the
 # rerank module emits a single stderr warning and falls through to
 # the input ordering when the extras are missing.
-rerank = ["sentence-transformers>=3.0", "torch>=2.0"]
+# torch>=2.4 for weights_only=True default; see docs about HuggingFace model trust
+rerank = ["sentence-transformers>=3.0", "torch>=2.4"]
 # Code-aware knowledge-graph ingestion (2.4.5+). Walks a source tree,
 # parses supported files with tree-sitter (no LLM, no GPU), writes
 # file / function / class entities plus `contains` / `imports`
@@ -109,7 +110,7 @@ all = [
     "watchdog>=3.0.0",
     "solders>=0.21",
     "sentence-transformers>=3.0",
-    "torch>=2.0",
+    "torch>=2.4",
     "tree-sitter>=0.23.0",
     "tree-sitter-python>=0.23",
     "tree-sitter-typescript>=0.23",
