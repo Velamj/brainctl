@@ -5,6 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.4.7] — 2026-04-19 — *Security hygiene pass*
+
+Post-release supply-chain hardening. No functional change; upgrade is
+recommended for anyone installing brainctl in CI or multi-tenant
+contexts.
+
+### Changed
+
+- **Dependency floors tightened.** `sqlite-vec>=0.1.3` (up from 0.1.0)
+  to clear CVE-2024-46488 / GHSA-vrcx-gx3g-j3h8 (heap buffer overflow).
+  `torch>=2.4` in the `[rerank]` extra (up from 2.0) so the default
+  `torch.load(weights_only=True)` protection is always in effect for
+  HuggingFace cross-encoder checkpoints.
+
+### Changed — CI/release supply-chain
+
+- PyPI publish now gated behind a GitHub Environment (`pypi`) with
+  required-reviewer approval. Maintainer must create the environment
+  and re-bind the PyPI trusted publisher before the next tag push.
+- All GitHub Actions SHA-pinned (`actions/*`, `dorny/paths-filter`,
+  `pypa/gh-action-pypi-publish`). Tags preserved as trailing comments.
+- `ci.yml` now declares a workflow-level default `permissions: contents: read`.
+- Added `.github/dependabot.yml` (pip + github-actions, weekly).
+- Added `.github/CODEOWNERS` for supply-chain-sensitive paths.
+- `SECURITY.md` now names `security@brainctl.org` and the GitHub
+  private-advisory URL explicitly.
+- Removed empty `brain.db` placeholder from the repo root.
+
 ## [2.4.6] — 2026-04-19 — *DEFCON Special*
 
 Plan `plan-20260419-085511` (top-heavy retrieval lift) shipped end-to-end
