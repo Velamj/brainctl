@@ -8,6 +8,13 @@ on:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    # Protected environment — requires a manual approval gate before the
+    # OIDC-based PyPI publish runs. Configure in repo Settings →
+    # Environments → `pypi` with at least one required reviewer, and
+    # re-bind the PyPI trusted-publisher binding (pypi.org/manage/account/
+    # publishing/) so the trusted publisher for this repo is scoped to
+    # environment `pypi`.
+    environment: pypi
     permissions:
       id-token: write
     steps:
