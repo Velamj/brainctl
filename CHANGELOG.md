@@ -5,6 +5,65 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.5.0] — 2026-04-21 — *Streamable HTTP transport (brainctl-mcp-http)*
+
+**Remote MCP shipped.** brainctl now speaks HTTP in addition to stdio —
+xAI Grok remote-MCP, Strand, and any network-boundary agent can drive
+the same tool surface via a bearer-token + allowlisted Streamable HTTP
+endpoint.
+
+### Added
+
+- **`brainctl-mcp-http` console script** — sibling of `brainctl-mcp`.
+  Exposes the existing `app: Server` (single source of truth; no tool
+  re-registration) over `POST /mcp` per the MCP 2025-06-18 Streamable
+  HTTP spec.
+- **Auth.** Static bearer token (`BRAINCTL_HTTP_TOKEN`, ≥32 chars,
+  constant-time compare via `hmac.compare_digest`). 401 on missing or
+  wrong token.
+- **Allowlist.** `BRAINCTL_HTTP_ALLOWED_TOOLS` (comma-separated)
+  filters `tools/list` and short-circuits `tools/call` on
+  non-allowlisted names with JSON-RPC `-32601` — the check wraps the
+  existing dispatch, no tool behavior duplicated.
+- **`GET /health`** — public liveness probe.
+- **Transport hardening.** 1 MiB body cap · 100/min per-IP sliding
+  rate limit · 10s graceful `SIGTERM` drain · structured JSON logs
+  (request id / method / tool name / duration / status — **never
+  tool args or results**).
+- **Dockerfile note.** Stdio remains the default `CMD`; run with
+  `--entrypoint brainctl-mcp-http` + publish port 8080 for the HTTP
+  image. See `docs/MCP_HTTP.md`.
+
+### Packaging
+
+- `brainctl-mcp-http = "agentmemory.mcp_http:main"` registered as a
+  console script.
+- The `mcp` extra (and the `all` extra) now pull `starlette>=0.37`,
+  `uvicorn[standard]>=0.30`, and `python-json-logger>=2.0` alongside
+  the MCP SDK. Stdio-only users don't pay extra — the imports are
+  only loaded on `brainctl-mcp-http` boot.
+
+### Stdio is unchanged
+
+`brainctl-mcp` boots the original stdio server with identical tool
+registration and dispatch. Existing Claude Desktop / local-subprocess
+users do nothing.
+
+### Testing
+
+11 new tests in `tests/test_mcp_http.py` (Starlette `TestClient` —
+no extra test-deps required) cover config validation, auth, allowlist
+filtering, allowlisted tool dispatch, malformed JSON, and the 1 MiB
+body cap. Pyright-strict clean; ruff `check` + `format --check`
+clean. `1900 passed, 28 skipped, 2 xfailed` locally; CI matrix
+(3.11 / 3.12 / 3.13) green.
+
+### Docs
+
+`docs/MCP_HTTP.md` — env reference, local run, `curl` probes,
+Fly.io-style deploy note, security caveats (bearer-only auth; run
+behind TLS).
+
 ## [2.4.12] — 2026-04-21 — *Audit follow-up: CE warmup burn-in (kills recurring latency-gate flake)*
 
 Fifth slice of the 2026-04-19 audit fix wave. Single-focus release
