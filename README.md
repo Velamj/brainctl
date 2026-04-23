@@ -69,7 +69,7 @@ brain.relate("OpenAI", "provides", "GPT-4o")
 - Cross-encoder controls: `--rerank-top-n` and `--rerank-budget-ms` tune candidate window + strict latency budget
 - Top-heavy staged rollout controls (I6): `--rollout-mode`, `--rollout-canary-agents`, `--rollout-canary-percent`, `--rollback-top-heavy`
 - Env mirrors for rollout controls: `BRAINCTL_TOPHEAVY_ROLLOUT_MODE`, `BRAINCTL_TOPHEAVY_CANARY_AGENTS`, `BRAINCTL_TOPHEAVY_CANARY_PERCENT`, `BRAINCTL_TOPHEAVY_ROLLBACK`
-- Retrieval regression-gated in CI: >2% drop on P@1/P@5/MRR/nDCG@5 fails the build
+- Retrieval regression-gated in CI: >2% drop on P@1/P@5/MRR/nDCG@5 fails the build. Search-quality output also reports the fixture-specific P@5 ceiling and ratio-to-ceiling so sparse graded queries do not make raw P@5 look worse than it is.
 
 **Knowledge graph**
 - Typed entity nodes: `agent`, `concept`, `document`, `event`, `location`, `organization`, `person`, `project`, `service`, `tool`

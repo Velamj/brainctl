@@ -158,7 +158,8 @@ Multi-hop neighbor queries across the knowledge graph via `brainctl graph`.
 memories + procedures + events + entities with graded queries (3=primary,
 2=related, 1=tangential) across entity / procedural / decision / temporal /
 troubleshooting / negative / ambiguous classes. The runner reports
-P@1, P@5, Recall@5, MRR, nDCG@5 against a committed baseline at
+P@1, P@5, Recall@5, MRR, nDCG@5 plus P@5 ceiling diagnostics
+(`p_at_5_ceiling`, `p_at_5_ratio_to_ceiling`) against a committed baseline at
 `tests/bench/baselines/search_quality.json`. Any >2% drop on a headline
 metric fails the `test_search_quality_bench.py` pytest regression test.
 The harness also records failure modes (`retrieval_failure`,
