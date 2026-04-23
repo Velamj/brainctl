@@ -291,6 +291,13 @@ def _program_signature(chunk: ProbeChunk | None) -> set[str]:
     return _informative_tokens(chunk.text)
 
 
+def _is_focused_program(program: ProbeProgramResult, *, candidate_chars: int) -> bool:
+    if program.name == "whole_doc" or program.top_chunk is None or candidate_chars <= 0:
+        return False
+    span_ratio = len(program.top_chunk.text) / float(candidate_chars)
+    return span_ratio < 0.85
+
+
 def analyze_long_context(
     query: str,
     plan: Any,
@@ -300,7 +307,7 @@ def analyze_long_context(
 ) -> dict[str, Any]:
     """Return depth-1 context-program evidence for a long candidate row."""
 
-    if os.environ.get("BRAINCTL_LONG_CONTEXT_PROBES", "0") in {"0", "false", "False"}:
+    if os.environ.get("BRAINCTL_LONG_CONTEXT_PROBES", "1") in {"0", "false", "False"}:
         return {"applicable": False, "reason": "disabled"}
 
     min_chars = int(os.environ.get("BRAINCTL_LONG_CONTEXT_MIN_CHARS", "900") or "900")
@@ -372,8 +379,25 @@ def analyze_long_context(
             )
         )
 
-    max_score = max(program.score for program in evaluated)
-    consistent = [program for program in evaluated if program.score >= max_score - 0.08]
+    focused = [program for program in evaluated if _is_focused_program(program, candidate_chars=len(candidate_text))]
+    if not focused:
+        return {
+            "applicable": False,
+            "reason": "no_focused_program",
+            "program_scores": {
+                program.name: {
+                    "score": program.score,
+                    "confidence": program.confidence,
+                    "agreement": program.agreement,
+                    "uncertainty": program.uncertainty,
+                    "chunk_count": program.chunk_count,
+                }
+                for program in evaluated
+            },
+        }
+
+    max_score = max(program.score for program in focused)
+    consistent = [program for program in focused if program.score >= max_score - 0.08]
     for program in evaluated:
         sig = _program_signature(program.top_chunk)
         peers = []

@@ -26,11 +26,26 @@ _ENTITY_QUERY_RE = re.compile(
     re.IGNORECASE,
 )
 _TEMPORAL_RE = re.compile(
-    r"\b(yesterday|today|tomorrow|last week|last month|when|timeline|history|recent|overnight)\b",
+    r"\b("
+    r"yesterday|today|tomorrow|when|timeline|history|recent|overnight|"
+    r"last\s+(?:week|month|year|tuesday|wednesday|thursday|friday|saturday|sunday)|"
+    r"this\s+(?:week|month|year)|"
+    r"past\s+(?:week|month|year|two weeks|three months)|"
+    r"most recent|latest|earliest|previous(?:ly)?|current(?:ly)?|"
+    r"before|after|between|during|in the past|order of|"
+    r"(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+"
+    r"(?:day|week|month|year)s?\s+ago"
+    r")\b",
     re.IGNORECASE,
 )
 _MULTIHOP_RE = re.compile(
-    r"\b(why|because|rationale|support|evidence|rollback|troubleshoot|debug|fix)\b",
+    r"\b("
+    r"why|because|rationale|support|evidence|rollback|troubleshoot|debug|fix|"
+    r"how many|how much|order|earliest|latest|most recent|"
+    r"before|after|between|difference|older|newer|"
+    r"compare|combined|total|sum|"
+    r"based on|underlying|future|might|would"
+    r")\b",
     re.IGNORECASE,
 )
 _NEGATIVE_RE = re.compile(
@@ -99,6 +114,8 @@ _TABLE_ROUTES = {
 
 def _builtin_classify(query: str) -> tuple[str, float, str]:
     q = query.lower()
+    temporalish = bool(_TEMPORAL_RE.search(query))
+    multihopish = bool(_MULTIHOP_RE.search(query))
     if _ENTITY_QUERY_RE.search(query):
         return ("factual", 0.72, "builtin:entity_fact")
     if any(token in q for token in ("how to", "how do", "procedure", "rollback", "runbook", "playbook")):
@@ -107,8 +124,9 @@ def _builtin_classify(query: str) -> tuple[str, float, str]:
         return ("troubleshooting", 0.8, "builtin:troubleshooting")
     if any(token in q for token in ("why", "decision", "rationale", "choose", "chose")):
         return ("decision", 0.78, "builtin:decision")
-    if any(token in q for token in ("when", "history", "timeline", "what happened", "yesterday")):
-        return ("temporal", 0.78, "builtin:temporal")
+    if temporalish or "what happened" in q:
+        reason = "builtin:temporal_multihop" if multihopish else "builtin:temporal"
+        return ("temporal", 0.8 if multihopish else 0.78, reason)
     if any(token in q for token in ("who", "what", "where", "which", "entity")):
         return ("factual", 0.6, "builtin:factual")
     return ("factual", 0.45, "builtin:default")
@@ -191,6 +209,10 @@ def plan_query(
     abstain_allowed = bool(_NEGATIVE_RE.search(query)) or normalized_intent in {"factual", "troubleshooting", "procedural"}
     if _ENTITY_QUERY_RE.search(query) and normalized_intent == "factual":
         reasons.append("entity_or_role_lookup")
+    if requires_temporal:
+        reasons.append("temporal_reasoning")
+    if requires_multi_hop:
+        reasons.append("multi_hop_or_inference")
     if "summary of yesterday" in query_lower:
         abstain_allowed = True
         reasons.append("negative_or_out_of_domain_summary")

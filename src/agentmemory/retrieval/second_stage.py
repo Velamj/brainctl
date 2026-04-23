@@ -141,6 +141,7 @@ def rerank_top_candidates(
         candidate.setdefault("bucket", candidate.get("type") or "memories")
 
     feature_rows: list[dict[str, float]] = []
+    leader_score = head[0].get("final_score") if head else None
     for idx, candidate in enumerate(head):
         prev_score = head[idx - 1].get("final_score") if idx > 0 else None
         next_score = head[idx + 1].get("final_score") if idx + 1 < len(head) else None
@@ -148,7 +149,7 @@ def rerank_top_candidates(
             query,
             plan,
             candidate,
-            neighbors={"prev_score": prev_score, "next_score": next_score},
+            neighbors={"prev_score": prev_score, "next_score": next_score, "leader_score": leader_score},
         )
         feature_rows.append(features)
 

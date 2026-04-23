@@ -34,6 +34,17 @@ _TEMPORAL_RE = re.compile(
     r"\b(yesterday|today|tomorrow|when|before|after|during|timeline|history|recent|latest|first|last)\b",
     re.IGNORECASE,
 )
+_LONG_CONTEXT_HINT_RE = re.compile(
+    r"\b("
+    r"how many|how much|order|earliest|latest|most recent|"
+    r"before|after|between|this month|last month|past month|past week|"
+    r"current(?:ly)?|previous(?:ly)?|"
+    r"(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+"
+    r"(?:day|week|month|year)s?\s+ago|"
+    r"based on|underlying|future|might|would"
+    r")\b",
+    re.IGNORECASE,
+)
 _SESSION_RE = re.compile(r"\bsession[_ :#-]*(\d+)\b", re.IGNORECASE)
 _DIALOG_RE = re.compile(r"\bD(\d+):", re.IGNORECASE)
 _ENTITY_RE = re.compile(r"\b[A-Z][A-Za-z0-9_.:-]+\b")
@@ -278,6 +289,52 @@ def _tfidf_cosine(query: str, text: str) -> float:
     return dot / (q_norm * c_norm)
 
 
+def _should_probe_long_context(
+    *,
+    query: str,
+    plan: Any,
+    bucket: str,
+    text: str,
+    position: int,
+    current_score: float,
+    prev_raw: Any,
+    next_raw: Any,
+    leader_raw: Any,
+) -> bool:
+    if bucket != "memories":
+        return False
+
+    lowered_query = query or ""
+    structured_long_text = (
+        len(text) >= 1500
+        or "session id:" in text.lower()
+        or "session date:" in text.lower()
+        or text.count("\n") >= 8
+    )
+    if not structured_long_text:
+        return False
+
+    if position > 4:
+        return False
+
+    query_needs_probe = (
+        bool(getattr(plan, "requires_temporal_reasoning", False))
+        or bool(getattr(plan, "requires_multi_hop", False))
+        or bool(_LONG_CONTEXT_HINT_RE.search(lowered_query))
+    )
+    if not query_needs_probe:
+        return False
+
+    closest_gap_values: list[float] = []
+    if prev_raw is not None:
+        closest_gap_values.append(abs(current_score - _safe_float(prev_raw)))
+    if next_raw is not None:
+        closest_gap_values.append(abs(current_score - _safe_float(next_raw)))
+    closest_neighbor_gap = min(closest_gap_values) if closest_gap_values else 0.0
+    leader_gap = abs(_safe_float(leader_raw, current_score) - current_score)
+    return closest_neighbor_gap <= 0.035 and leader_gap <= 0.08
+
+
 def build_features(
     query: str,
     plan: Any,
@@ -304,7 +361,7 @@ def build_features(
     entity_overlap = len(query_entities & cand_entities) / max(len(query_entities), 1) if query_entities else 0.0
     aliases = {alias.lower() for alias in _alias_values(candidate) if len(alias) > 2}
     alias_overlap = len(query_entities & aliases) / max(len(query_entities), 1) if query_entities and aliases else 0.0
-    query_temporal = 1.0 if _TEMPORAL_RE.search(query or "") else 0.0
+    query_temporal = 1.0 if (bool(getattr(plan, "requires_temporal_reasoning", False)) or _TEMPORAL_RE.search(query or "")) else 0.0
     candidate_temporal = 1.0 if _TEMPORAL_RE.search(text or "") or _DATE_RE.search(text or "") else 0.0
     temporal_anchor_overlap = _temporal_anchor_overlap(query, text)
     session_gap_score, query_session_hint, candidate_session_hint = _session_gap_score(query, text)
@@ -312,26 +369,27 @@ def build_features(
     bucket_memories, bucket_events, bucket_entities, bucket_procedures, bucket_decisions = _bucket_flags(bucket)
     status = str(candidate.get("status") or "").lower()
     position = max(int(candidate.get("_stage_position") or 0), 0)
-    prev_score = _safe_float((neighbors or {}).get("prev_score"))
-    next_score = _safe_float((neighbors or {}).get("next_score"))
+    prev_raw = (neighbors or {}).get("prev_score")
+    next_raw = (neighbors or {}).get("next_score")
+    leader_raw = (neighbors or {}).get("leader_score")
+    prev_score = _safe_float(prev_raw)
+    next_score = _safe_float(next_raw)
     current_score = _safe_float(candidate.get("final_score") or candidate.get("retrieval_score"))
     neighbor_margin = max(current_score - prev_score, current_score - next_score, 0.0)
     confidence = _safe_float(candidate.get("confidence"), 0.5)
     support_evidence_score = min(len(candidate.get("supporting_evidence") or []) / 3.0, 1.0)
     long_context_debug: dict[str, Any] = {"applicable": False}
-    _query_lower = (query or "").lower()
-    _structured_long_text = (
-        len(text) >= 1500
-        or "session id:" in _query_lower
-        or "session id:" in text.lower()
-        or "session date:" in text.lower()
-        or text.count("\n") >= 8
-    )
-    _query_needs_probe = bool(getattr(plan, "requires_temporal_reasoning", False)) or bool(
-        getattr(plan, "requires_multi_hop", False)
-    ) or any(token in _query_lower for token in ("when ", " which session", "what happened", "before ", "after ", "date"))
-    _score_uncertain = position <= 2 or neighbor_margin < 0.12
-    if bucket == "memories" and _structured_long_text and _query_needs_probe and _score_uncertain:
+    if _should_probe_long_context(
+        query=query,
+        plan=plan,
+        bucket=bucket,
+        text=text,
+        position=position,
+        current_score=current_score,
+        prev_raw=prev_raw,
+        next_raw=next_raw,
+        leader_raw=leader_raw,
+    ):
         try:
             from agentmemory.retrieval.long_context import analyze_long_context as _analyze_long_context
 
