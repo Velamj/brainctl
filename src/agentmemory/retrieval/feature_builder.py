@@ -318,6 +318,28 @@ def build_features(
     neighbor_margin = max(current_score - prev_score, current_score - next_score, 0.0)
     confidence = _safe_float(candidate.get("confidence"), 0.5)
     support_evidence_score = min(len(candidate.get("supporting_evidence") or []) / 3.0, 1.0)
+    long_context_debug: dict[str, Any] = {"applicable": False}
+    _query_lower = (query or "").lower()
+    _structured_long_text = (
+        len(text) >= 1500
+        or "session id:" in _query_lower
+        or "session id:" in text.lower()
+        or "session date:" in text.lower()
+        or text.count("\n") >= 8
+    )
+    _query_needs_probe = bool(getattr(plan, "requires_temporal_reasoning", False)) or bool(
+        getattr(plan, "requires_multi_hop", False)
+    ) or any(token in _query_lower for token in ("when ", " which session", "what happened", "before ", "after ", "date"))
+    _score_uncertain = position <= 2 or neighbor_margin < 0.12
+    if bucket == "memories" and _structured_long_text and _query_needs_probe and _score_uncertain:
+        try:
+            from agentmemory.retrieval.long_context import analyze_long_context as _analyze_long_context
+
+            long_context_debug = _analyze_long_context(query, plan, candidate, text=text)
+        except Exception:
+            long_context_debug = {"applicable": False}
+    if long_context_debug.get("applicable"):
+        candidate["_long_context_debug"] = long_context_debug
     features = {
         "base_score": current_score,
         "retrieval_score": _safe_float(candidate.get("retrieval_score"), current_score),
@@ -355,8 +377,16 @@ def build_features(
         "query_length_score": min(len(query_informative) / 8.0, 1.0),
         "candidate_length_score": min(len(cand_informative) / 64.0, 1.0),
         "procedural_candidate": 1.0 if bucket == "procedures" else 0.0,
+        "long_context_applicable": 1.0 if long_context_debug.get("applicable") else 0.0,
+        "long_context_score": _safe_float(long_context_debug.get("score")),
+        "long_context_confidence": _safe_float(long_context_debug.get("confidence")),
+        "long_context_agreement": _safe_float(long_context_debug.get("agreement")),
+        "long_context_uncertainty": _safe_float(long_context_debug.get("uncertainty")),
+        "long_context_coverage": _safe_float(long_context_debug.get("coverage")),
+        "long_context_precision": _safe_float(long_context_debug.get("precision")),
+        "long_context_focused_program": 1.0 if long_context_debug.get("program") not in {None, "", "whole_doc"} else 0.0,
     }
-    return {name: round(float(features.get(name, 0.0)), 6) for name in FEATURE_ORDER_V1}
+    return {name: round(float(value), 6) for name, value in features.items()}
 
 
 def vectorize_features(
@@ -372,4 +402,3 @@ def vectorize_features(
     if _np is not None:
         return _np.asarray(values, dtype=float)
     return values
-

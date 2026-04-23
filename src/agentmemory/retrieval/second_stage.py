@@ -80,19 +80,39 @@ def _heuristic_score(plan: Any, features: dict[str, float]) -> float:
         + features["exact_phrase"] * 0.05
         + features["support_evidence_score"] * 0.03
     )
+    long_context_reliable = (
+        features.get("long_context_applicable", 0.0) > 0.0
+        and features.get("long_context_focused_program", 0.0) > 0.0
+        and features.get("long_context_confidence", 0.0) >= 0.62
+        and features.get("long_context_uncertainty", 0.0) <= 0.38
+    )
+    if long_context_reliable:
+        score += (
+            features.get("long_context_score", 0.0) * 0.09
+            + features.get("long_context_confidence", 0.0) * 0.03
+            + features.get("long_context_agreement", 0.0) * 0.02
+            + features.get("long_context_coverage", 0.0) * 0.03
+            + features.get("long_context_precision", 0.0) * 0.02
+        )
     if features["query_temporal"] > 0:
         score += (
             features["candidate_temporal"] * 0.04
             + features["temporal_anchor_overlap"] * 0.08
             + features["session_gap_score"] * 0.06
         )
+        if long_context_reliable:
+            score += features.get("long_context_score", 0.0) * 0.05
     if intent in {"temporal", "decision"}:
         score += features["bucket_events"] * 0.04 + features["bucket_decisions"] * 0.03
     if intent in {"procedural", "troubleshooting"}:
         score += features["bucket_procedures"] * 0.06 + features["procedural_candidate"] * 0.04
+        if long_context_reliable:
+            score += features.get("long_context_confidence", 0.0) * 0.04
     if intent == "factual":
         score += features["bucket_memories"] * 0.05 + features["bucket_entities"] * 0.04
         score -= features["bucket_procedures"] * 0.04
+        if long_context_reliable:
+            score += features.get("long_context_precision", 0.0) * 0.04
     if features["source_graph"] > 0:
         score -= 0.08
     if features["status_stale"] > 0:
@@ -175,8 +195,17 @@ def rerank_top_candidates(
                 "temporal_anchor_overlap",
                 "intent_bucket_fit",
                 "session_gap_score",
+                "long_context_score",
+                "long_context_confidence",
+                "long_context_agreement",
+                "long_context_uncertainty",
+                "long_context_focused_program",
             )
         }
+        long_context_debug = candidate.pop("_long_context_debug", None) or {}
+        if long_context_debug.get("applicable"):
+            candidate["second_stage_features"]["long_context_program"] = long_context_debug.get("program")
+            candidate["second_stage_features"]["long_context_excerpt"] = long_context_debug.get("top_chunk_excerpt")
         candidate["final_score"] = round(final_score, 8)
         debug_candidates.append(
             {
@@ -200,6 +229,9 @@ def rerank_top_candidates(
         "model_path": str(cfg.model_path or DEFAULT_MODEL_PATH),
         "model_loaded": model is not None,
         "judge_enabled": cfg.judge.enabled,
+        "base_weight": round(max(0.0, 1.0 - cfg.heuristic_weight - cfg.mlp_weight - cfg.judge_weight), 4),
+        "mlp_weight": round(cfg.mlp_weight, 4),
+        "judge_weight": round(cfg.judge_weight, 4),
         "candidates": debug_candidates,
     }
     return reranked, debug

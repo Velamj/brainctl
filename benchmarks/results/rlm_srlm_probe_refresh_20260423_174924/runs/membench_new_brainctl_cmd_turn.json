@@ -1,0 +1,3369 @@
+{
+  "artifacts": {
+    "aggregate_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\rlm_srlm_probe_refresh_20260423_174924\\charts\\aggregate_primary_metrics.png",
+    "benchmark_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\rlm_srlm_probe_refresh_20260423_174924\\charts\\membench_comparison.png",
+    "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\rlm_srlm_probe_refresh_20260423_174924\\runs\\membench_new_brainctl_cmd_turn.json",
+    "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\rlm_srlm_probe_refresh_20260423_174924\\charts\\coverage_status.png"
+  },
+  "benchmark": "membench",
+  "caveats": [
+    "MemBench comparison is partial because ThirdAgent and noise-extended slices are not included."
+  ],
+  "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\Membench\\MemData\\FirstAgent",
+  "example_count": 200,
+  "measured": true,
+  "metadata": {},
+  "metrics": {
+    "hit_at_5": 0.895,
+    "simple_hit_at_5": 0.895,
+    "top_k": 5
+  },
+  "mode": "cmd_turn",
+  "notes": [
+    "FirstAgent slice only",
+    "turn-level retrieval",
+    "topic=all"
+  ],
+  "primary_metric": "hit_at_5",
+  "primary_metric_value": 0.895,
+  "reference_kind": "measured",
+  "rows": [
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What is the name of my niece's company?",
+      "retrieved_ids": [],
+      "target_ids": [
+        "119"
+      ],
+      "tid": 0,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the email address of my cousin, who is male?",
+      "retrieved_ids": [
+        "simple_roles_1|sid=59|g=59|s=2|t=17",
+        "simple_roles_1|sid=143|g=143|s=6|t=18",
+        "simple_roles_1|sid=101|g=101|s=4|t=18",
+        "simple_roles_1|sid=33|g=33|s=1|t=12",
+        "simple_roles_1|sid=42|g=42|s=2|t=0"
+      ],
+      "target_ids": [
+        "59"
+      ],
+      "tid": 1,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the position of my brother?",
+      "retrieved_ids": [
+        "simple_roles_2|sid=85|g=85|s=4|t=1",
+        "simple_roles_2|sid=84|g=84|s=4|t=0",
+        "simple_roles_2|sid=28|g=28|s=1|t=7",
+        "simple_roles_2|sid=41|g=41|s=1|t=20",
+        "simple_roles_2|sid=123|g=123|s=5|t=18"
+      ],
+      "target_ids": [
+        "84"
+      ],
+      "tid": 2,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the height of my aunt?",
+      "retrieved_ids": [
+        "simple_roles_3|sid=13|g=13|s=0|t=13",
+        "simple_roles_3|sid=0|g=0|s=0|t=0",
+        "simple_roles_3|sid=125|g=125|s=6|t=1",
+        "simple_roles_3|sid=19|g=19|s=0|t=19",
+        "simple_roles_3|sid=98|g=98|s=4|t=16"
+      ],
+      "target_ids": [
+        "13"
+      ],
+      "tid": 3,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the contact number for my subordinate?",
+      "retrieved_ids": [
+        "simple_roles_4|sid=40|g=40|s=1|t=19",
+        "simple_roles_4|sid=135|g=135|s=6|t=9",
+        "simple_roles_4|sid=59|g=59|s=2|t=17",
+        "simple_roles_4|sid=98|g=98|s=4|t=14",
+        "simple_roles_4|sid=9|g=9|s=0|t=9"
+      ],
+      "target_ids": [
+        "40"
+      ],
+      "tid": 4,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my brother have?",
+      "retrieved_ids": [
+        "simple_roles_5|sid=63|g=63|s=3|t=0",
+        "simple_roles_5|sid=81|g=81|s=3|t=18",
+        "simple_roles_5|sid=11|g=11|s=0|t=11",
+        "simple_roles_5|sid=77|g=77|s=3|t=14",
+        "simple_roles_5|sid=159|g=159|s=7|t=16"
+      ],
+      "target_ids": [
+        "81"
+      ],
+      "tid": 5,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my nephew have?",
+      "retrieved_ids": [
+        "simple_roles_6|sid=103|g=103|s=5|t=0",
+        "simple_roles_6|sid=98|g=98|s=4|t=15",
+        "simple_roles_6|sid=52|g=52|s=2|t=10",
+        "simple_roles_6|sid=154|g=154|s=7|t=10",
+        "simple_roles_6|sid=105|g=105|s=5|t=2"
+      ],
+      "target_ids": [
+        "105"
+      ],
+      "tid": 6,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the work location of my sister?",
+      "retrieved_ids": [
+        "simple_roles_7|sid=144|g=144|s=7|t=0",
+        "simple_roles_7|sid=68|g=68|s=3|t=7",
+        "simple_roles_7|sid=145|g=145|s=7|t=1",
+        "simple_roles_7|sid=39|g=39|s=1|t=19",
+        "simple_roles_7|sid=127|g=127|s=6|t=3"
+      ],
+      "target_ids": [
+        "144"
+      ],
+      "tid": 7,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the height of my male cousin?",
+      "retrieved_ids": [
+        "simple_roles_8|sid=64|g=64|s=3|t=4",
+        "simple_roles_8|sid=82|g=82|s=4|t=1",
+        "simple_roles_8|sid=102|g=102|s=5|t=0",
+        "simple_roles_8|sid=60|g=60|s=3|t=0",
+        "simple_roles_8|sid=80|g=80|s=3|t=20"
+      ],
+      "target_ids": [
+        "64"
+      ],
+      "tid": 8,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What is the educational background of that coworker?",
+      "retrieved_ids": [
+        "simple_roles_9|sid=104|g=104|s=5|t=2",
+        "simple_roles_9|sid=48|g=48|s=2|t=7",
+        "simple_roles_9|sid=112|g=112|s=5|t=10",
+        "simple_roles_9|sid=138|g=138|s=6|t=16",
+        "simple_roles_9|sid=50|g=50|s=2|t=9"
+      ],
+      "target_ids": [
+        "113"
+      ],
+      "tid": 9,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What does the coworker do for a living?",
+      "retrieved_ids": [
+        "simple_roles_10|sid=123|g=123|s=6|t=0",
+        "simple_roles_10|sid=124|g=124|s=6|t=1",
+        "simple_roles_10|sid=140|g=140|s=6|t=17",
+        "simple_roles_10|sid=86|g=86|s=4|t=4",
+        "simple_roles_10|sid=134|g=134|s=6|t=11"
+      ],
+      "target_ids": [
+        "124"
+      ],
+      "tid": 10,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What is the location of my father's workplace?",
+      "retrieved_ids": [
+        "simple_roles_11|sid=81|g=81|s=4|t=0",
+        "simple_roles_11|sid=157|g=157|s=7|t=14",
+        "simple_roles_11|sid=94|g=94|s=4|t=13",
+        "simple_roles_11|sid=136|g=136|s=6|t=13",
+        "simple_roles_11|sid=153|g=153|s=7|t=10"
+      ],
+      "target_ids": [
+        "92"
+      ],
+      "tid": 11,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the work location of the subordinate?",
+      "retrieved_ids": [
+        "simple_roles_12|sid=32|g=32|s=1|t=11",
+        "simple_roles_12|sid=21|g=21|s=1|t=0",
+        "simple_roles_12|sid=46|g=46|s=2|t=4",
+        "simple_roles_12|sid=131|g=131|s=6|t=7",
+        "simple_roles_12|sid=47|g=47|s=2|t=5"
+      ],
+      "target_ids": [
+        "32"
+      ],
+      "tid": 12,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does the coworker have?",
+      "retrieved_ids": [
+        "simple_roles_13|sid=109|g=109|s=5|t=6",
+        "simple_roles_13|sid=158|g=158|s=7|t=15",
+        "simple_roles_13|sid=70|g=70|s=3|t=8",
+        "simple_roles_13|sid=148|g=148|s=7|t=5",
+        "simple_roles_13|sid=143|g=143|s=7|t=0"
+      ],
+      "target_ids": [
+        "148"
+      ],
+      "tid": 13,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the position of the boss?",
+      "retrieved_ids": [
+        "simple_roles_14|sid=42|g=42|s=2|t=0",
+        "simple_roles_14|sid=61|g=61|s=2|t=19",
+        "simple_roles_14|sid=56|g=56|s=2|t=14",
+        "simple_roles_14|sid=62|g=62|s=2|t=20",
+        "simple_roles_14|sid=11|g=11|s=0|t=11"
+      ],
+      "target_ids": [
+        "56"
+      ],
+      "tid": 14,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the email address of the subordinate?",
+      "retrieved_ids": [
+        "simple_roles_15|sid=13|g=13|s=0|t=13",
+        "simple_roles_15|sid=96|g=96|s=4|t=13",
+        "simple_roles_15|sid=35|g=35|s=1|t=13",
+        "simple_roles_15|sid=160|g=160|s=7|t=16",
+        "simple_roles_15|sid=73|g=73|s=3|t=11"
+      ],
+      "target_ids": [
+        "13"
+      ],
+      "tid": 15,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the hometown of my aunt?",
+      "retrieved_ids": [
+        "simple_roles_16|sid=123|g=123|s=6|t=0",
+        "simple_roles_16|sid=143|g=143|s=6|t=20",
+        "simple_roles_16|sid=85|g=85|s=4|t=3",
+        "simple_roles_16|sid=142|g=142|s=6|t=19",
+        "simple_roles_16|sid=32|g=32|s=1|t=11"
+      ],
+      "target_ids": [
+        "143"
+      ],
+      "tid": 16,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the hometown of my sister?",
+      "retrieved_ids": [
+        "simple_roles_17|sid=20|g=20|s=1|t=0",
+        "simple_roles_17|sid=24|g=24|s=1|t=4",
+        "simple_roles_17|sid=32|g=32|s=1|t=12",
+        "simple_roles_17|sid=5|g=5|s=0|t=5",
+        "simple_roles_17|sid=128|g=128|s=6|t=5"
+      ],
+      "target_ids": [
+        "24"
+      ],
+      "tid": 17,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the education background of that coworker?",
+      "retrieved_ids": [
+        "simple_roles_18|sid=145|g=145|s=7|t=1",
+        "simple_roles_18|sid=21|g=21|s=1|t=0",
+        "simple_roles_18|sid=24|g=24|s=1|t=3",
+        "simple_roles_18|sid=144|g=144|s=7|t=0",
+        "simple_roles_18|sid=165|g=165|s=7|t=21"
+      ],
+      "target_ids": [
+        "144"
+      ],
+      "tid": 18,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the occupation of that subordinate?",
+      "retrieved_ids": [
+        "simple_roles_19|sid=97|g=97|s=4|t=14"
+      ],
+      "target_ids": [
+        "97"
+      ],
+      "tid": 19,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my nephew have?",
+      "retrieved_ids": [
+        "simple_roles_20|sid=0|g=0|s=0|t=0",
+        "simple_roles_20|sid=6|g=6|s=0|t=6",
+        "simple_roles_20|sid=115|g=115|s=5|t=9",
+        "simple_roles_20|sid=34|g=34|s=1|t=13",
+        "simple_roles_20|sid=72|g=72|s=3|t=8"
+      ],
+      "target_ids": [
+        "6"
+      ],
+      "tid": 20,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my coworker have?",
+      "retrieved_ids": [
+        "simple_roles_21|sid=61|g=61|s=3|t=0",
+        "simple_roles_21|sid=72|g=72|s=3|t=11",
+        "simple_roles_21|sid=105|g=105|s=5|t=3",
+        "simple_roles_21|sid=70|g=70|s=3|t=9",
+        "simple_roles_21|sid=139|g=139|s=6|t=17"
+      ],
+      "target_ids": [
+        "70"
+      ],
+      "tid": 21,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What is the position of my mother?",
+      "retrieved_ids": [
+        "simple_roles_22|sid=21|g=21|s=1|t=0",
+        "simple_roles_22|sid=37|g=37|s=1|t=16",
+        "simple_roles_22|sid=36|g=36|s=1|t=15",
+        "simple_roles_22|sid=158|g=158|s=7|t=16",
+        "simple_roles_22|sid=115|g=115|s=5|t=13"
+      ],
+      "target_ids": [
+        "38"
+      ],
+      "tid": 22,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of my sister?",
+      "retrieved_ids": [
+        "simple_roles_23|sid=19|g=19|s=0|t=19",
+        "simple_roles_23|sid=0|g=0|s=0|t=0",
+        "simple_roles_23|sid=13|g=13|s=0|t=13",
+        "simple_roles_23|sid=40|g=40|s=2|t=0",
+        "simple_roles_23|sid=38|g=38|s=1|t=17"
+      ],
+      "target_ids": [
+        "19"
+      ],
+      "tid": 23,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of my subordinate's company?",
+      "retrieved_ids": [
+        "simple_roles_24|sid=61|g=61|s=2|t=19",
+        "simple_roles_24|sid=9|g=9|s=0|t=9",
+        "simple_roles_24|sid=42|g=42|s=2|t=0",
+        "simple_roles_24|sid=41|g=41|s=1|t=20",
+        "simple_roles_24|sid=114|g=114|s=5|t=10"
+      ],
+      "target_ids": [
+        "61"
+      ],
+      "tid": 24,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the age of the subordinate?",
+      "retrieved_ids": [
+        "simple_roles_25|sid=75|g=75|s=3|t=16"
+      ],
+      "target_ids": [
+        "75"
+      ],
+      "tid": 25,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does the subordinate enjoy?",
+      "retrieved_ids": [
+        "simple_roles_26|sid=135|g=135|s=6|t=12",
+        "simple_roles_26|sid=88|g=88|s=4|t=5",
+        "simple_roles_26|sid=32|g=32|s=1|t=11",
+        "simple_roles_26|sid=29|g=29|s=1|t=8",
+        "simple_roles_26|sid=11|g=11|s=0|t=11"
+      ],
+      "target_ids": [
+        "135"
+      ],
+      "tid": 26,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What level of education has my mother completed?",
+      "retrieved_ids": [
+        "simple_roles_27|sid=27|g=27|s=1|t=7",
+        "simple_roles_27|sid=6|g=6|s=0|t=6",
+        "simple_roles_27|sid=129|g=129|s=6|t=7",
+        "simple_roles_27|sid=139|g=139|s=6|t=17",
+        "simple_roles_27|sid=44|g=44|s=2|t=3"
+      ],
+      "target_ids": [
+        "118"
+      ],
+      "tid": 27,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "When is my subordinate's birthday?",
+      "retrieved_ids": [
+        "simple_roles_28|sid=15|g=15|s=0|t=15",
+        "simple_roles_28|sid=109|g=109|s=5|t=6",
+        "simple_roles_28|sid=44|g=44|s=2|t=2",
+        "simple_roles_28|sid=127|g=127|s=6|t=3",
+        "simple_roles_28|sid=0|g=0|s=0|t=0"
+      ],
+      "target_ids": [
+        "15"
+      ],
+      "tid": 28,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the position of my sister?",
+      "retrieved_ids": [
+        "simple_roles_29|sid=163|g=163|s=7|t=18",
+        "simple_roles_29|sid=93|g=93|s=4|t=10",
+        "simple_roles_29|sid=145|g=145|s=7|t=0",
+        "simple_roles_29|sid=17|g=17|s=0|t=17",
+        "simple_roles_29|sid=100|g=100|s=4|t=17"
+      ],
+      "target_ids": [
+        "163"
+      ],
+      "tid": 29,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What is the hometown of my female cousin?",
+      "retrieved_ids": [],
+      "target_ids": [
+        "24"
+      ],
+      "tid": 30,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the height of my uncle?",
+      "retrieved_ids": [
+        "simple_roles_31|sid=67|g=67|s=3|t=7",
+        "simple_roles_31|sid=141|g=141|s=7|t=1",
+        "simple_roles_31|sid=121|g=121|s=6|t=1",
+        "simple_roles_31|sid=21|g=21|s=1|t=1",
+        "simple_roles_31|sid=60|g=60|s=3|t=0"
+      ],
+      "target_ids": [
+        "67"
+      ],
+      "tid": 31,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the contact number for my male cousin?",
+      "retrieved_ids": [
+        "simple_roles_32|sid=141|g=141|s=6|t=19",
+        "simple_roles_32|sid=109|g=109|s=5|t=8",
+        "simple_roles_32|sid=52|g=52|s=2|t=11",
+        "simple_roles_32|sid=74|g=74|s=3|t=13",
+        "simple_roles_32|sid=91|g=91|s=4|t=10"
+      ],
+      "target_ids": [
+        "141"
+      ],
+      "tid": 32,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "How old is the coworker?",
+      "retrieved_ids": [
+        "simple_roles_33|sid=151|g=151|s=7|t=7",
+        "simple_roles_33|sid=62|g=62|s=3|t=0",
+        "simple_roles_33|sid=162|g=162|s=7|t=18",
+        "simple_roles_33|sid=161|g=161|s=7|t=17",
+        "simple_roles_33|sid=144|g=144|s=7|t=0"
+      ],
+      "target_ids": [
+        "151"
+      ],
+      "tid": 33,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the email address of that coworker?",
+      "retrieved_ids": [
+        "simple_roles_34|sid=26|g=26|s=1|t=6",
+        "simple_roles_34|sid=139|g=139|s=6|t=15",
+        "simple_roles_34|sid=113|g=113|s=5|t=10",
+        "simple_roles_34|sid=96|g=96|s=4|t=13",
+        "simple_roles_34|sid=72|g=72|s=3|t=10"
+      ],
+      "target_ids": [
+        "26"
+      ],
+      "tid": 34,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "Could anyone provide the contact number for my subordinate?",
+      "retrieved_ids": [
+        "simple_roles_35|sid=16|g=16|s=0|t=16",
+        "simple_roles_35|sid=109|g=109|s=5|t=6",
+        "simple_roles_35|sid=77|g=77|s=3|t=17",
+        "simple_roles_35|sid=148|g=148|s=7|t=3",
+        "simple_roles_35|sid=55|g=55|s=2|t=15"
+      ],
+      "target_ids": [
+        "109"
+      ],
+      "tid": 35,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the education background of the coworker?",
+      "retrieved_ids": [
+        "simple_roles_36|sid=104|g=104|s=5|t=0",
+        "simple_roles_36|sid=61|g=61|s=2|t=19",
+        "simple_roles_36|sid=122|g=122|s=5|t=18",
+        "simple_roles_36|sid=112|g=112|s=5|t=8",
+        "simple_roles_36|sid=127|g=127|s=6|t=3"
+      ],
+      "target_ids": [
+        "112"
+      ],
+      "tid": 36,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "When is my sister's birthday?",
+      "retrieved_ids": [
+        "simple_roles_37|sid=139|g=139|s=6|t=18",
+        "simple_roles_37|sid=44|g=44|s=2|t=3",
+        "simple_roles_37|sid=118|g=118|s=5|t=17",
+        "simple_roles_37|sid=121|g=121|s=6|t=0",
+        "simple_roles_37|sid=20|g=20|s=1|t=0"
+      ],
+      "target_ids": [
+        "139"
+      ],
+      "tid": 37,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my nephew have?",
+      "retrieved_ids": [
+        "simple_roles_38|sid=42|g=42|s=2|t=0",
+        "simple_roles_38|sid=48|g=48|s=2|t=6",
+        "simple_roles_38|sid=14|g=14|s=0|t=14",
+        "simple_roles_38|sid=10|g=10|s=0|t=10",
+        "simple_roles_38|sid=72|g=72|s=3|t=9"
+      ],
+      "target_ids": [
+        "48"
+      ],
+      "tid": 38,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the height of my uncle?",
+      "retrieved_ids": [
+        "simple_roles_39|sid=118|g=118|s=5|t=16",
+        "simple_roles_39|sid=102|g=102|s=5|t=0",
+        "simple_roles_39|sid=108|g=108|s=5|t=6",
+        "simple_roles_39|sid=82|g=82|s=4|t=1",
+        "simple_roles_39|sid=70|g=70|s=3|t=10"
+      ],
+      "target_ids": [
+        "118"
+      ],
+      "tid": 39,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "When is my father's birthday?",
+      "retrieved_ids": [
+        "simple_roles_40|sid=41|g=41|s=2|t=0",
+        "simple_roles_40|sid=84|g=84|s=4|t=3",
+        "simple_roles_40|sid=50|g=50|s=2|t=9",
+        "simple_roles_40|sid=59|g=59|s=2|t=18",
+        "simple_roles_40|sid=3|g=3|s=0|t=3"
+      ],
+      "target_ids": [
+        "50"
+      ],
+      "tid": 40,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the hometown of my father?",
+      "retrieved_ids": [
+        "simple_roles_41|sid=129|g=129|s=6|t=5",
+        "simple_roles_41|sid=46|g=46|s=2|t=4",
+        "simple_roles_41|sid=99|g=99|s=4|t=16",
+        "simple_roles_41|sid=21|g=21|s=1|t=0",
+        "simple_roles_41|sid=56|g=56|s=2|t=14"
+      ],
+      "target_ids": [
+        "99"
+      ],
+      "tid": 41,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What position does the coworker hold?",
+      "retrieved_ids": [],
+      "target_ids": [
+        "38"
+      ],
+      "tid": 42,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What position does that coworker hold?",
+      "retrieved_ids": [
+        "simple_roles_43|sid=105|g=105|s=5|t=4",
+        "simple_roles_43|sid=110|g=110|s=5|t=9",
+        "simple_roles_43|sid=22|g=22|s=1|t=2",
+        "simple_roles_43|sid=34|g=34|s=1|t=14",
+        "simple_roles_43|sid=14|g=14|s=0|t=14"
+      ],
+      "target_ids": [
+        "34"
+      ],
+      "tid": 43,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is my male cousin's email address?",
+      "retrieved_ids": [
+        "simple_roles_44|sid=100|g=100|s=4|t=17",
+        "simple_roles_44|sid=51|g=51|s=2|t=10",
+        "simple_roles_44|sid=138|g=138|s=6|t=14",
+        "simple_roles_44|sid=156|g=156|s=7|t=12",
+        "simple_roles_44|sid=29|g=29|s=1|t=9"
+      ],
+      "target_ids": [
+        "100"
+      ],
+      "tid": 44,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the highest level of education attained by my aunt?",
+      "retrieved_ids": [
+        "simple_roles_45|sid=90|g=90|s=4|t=9",
+        "simple_roles_45|sid=42|g=42|s=2|t=0",
+        "simple_roles_45|sid=130|g=130|s=6|t=9",
+        "simple_roles_45|sid=51|g=51|s=2|t=9",
+        "simple_roles_45|sid=60|g=60|s=2|t=18"
+      ],
+      "target_ids": [
+        "51"
+      ],
+      "tid": 45,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my boss have?",
+      "retrieved_ids": [
+        "simple_roles_46|sid=89|g=89|s=4|t=6",
+        "simple_roles_46|sid=9|g=9|s=0|t=9",
+        "simple_roles_46|sid=83|g=83|s=4|t=0",
+        "simple_roles_46|sid=112|g=112|s=5|t=8",
+        "simple_roles_46|sid=103|g=103|s=4|t=20"
+      ],
+      "target_ids": [
+        "89"
+      ],
+      "tid": 46,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the age of my father?",
+      "retrieved_ids": [
+        "simple_roles_47|sid=41|g=41|s=2|t=0",
+        "simple_roles_47|sid=101|g=101|s=5|t=0",
+        "simple_roles_47|sid=1|g=1|s=0|t=1",
+        "simple_roles_47|sid=108|g=108|s=5|t=7",
+        "simple_roles_47|sid=61|g=61|s=3|t=0"
+      ],
+      "target_ids": [
+        "108"
+      ],
+      "tid": 47,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the hometown of my father?",
+      "retrieved_ids": [
+        "simple_roles_48|sid=101|g=101|s=5|t=0",
+        "simple_roles_48|sid=64|g=64|s=3|t=3",
+        "simple_roles_48|sid=109|g=109|s=5|t=8",
+        "simple_roles_48|sid=54|g=54|s=2|t=12",
+        "simple_roles_48|sid=27|g=27|s=1|t=6"
+      ],
+      "target_ids": [
+        "109"
+      ],
+      "tid": 48,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the email address of my father?",
+      "retrieved_ids": [
+        "simple_roles_49|sid=6|g=6|s=0|t=6",
+        "simple_roles_49|sid=117|g=117|s=5|t=17",
+        "simple_roles_49|sid=91|g=91|s=4|t=12",
+        "simple_roles_49|sid=52|g=52|s=2|t=12",
+        "simple_roles_49|sid=31|g=31|s=1|t=11"
+      ],
+      "target_ids": [
+        "52"
+      ],
+      "tid": 49,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What is the hobby of my mother?",
+      "retrieved_ids": [
+        "simple_roles_50|sid=0|g=0|s=0|t=0",
+        "simple_roles_50|sid=71|g=71|s=3|t=8",
+        "simple_roles_50|sid=112|g=112|s=5|t=8",
+        "simple_roles_50|sid=30|g=30|s=1|t=9",
+        "simple_roles_50|sid=153|g=153|s=7|t=8"
+      ],
+      "target_ids": [
+        "18"
+      ],
+      "tid": 50,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "When is my boss's birthday?",
+      "retrieved_ids": [
+        "simple_roles_51|sid=79|g=79|s=3|t=18",
+        "simple_roles_51|sid=22|g=22|s=1|t=1",
+        "simple_roles_51|sid=49|g=49|s=2|t=8",
+        "simple_roles_51|sid=61|g=61|s=3|t=0",
+        "simple_roles_51|sid=81|g=81|s=3|t=20"
+      ],
+      "target_ids": [
+        "79"
+      ],
+      "tid": 51,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the occupation of that subordinate?",
+      "retrieved_ids": [
+        "simple_roles_52|sid=79|g=79|s=4|t=0",
+        "simple_roles_52|sid=7|g=7|s=0|t=7",
+        "simple_roles_52|sid=80|g=80|s=4|t=1"
+      ],
+      "target_ids": [
+        "80"
+      ],
+      "tid": 52,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the level of education that my mother has completed?",
+      "retrieved_ids": [
+        "simple_roles_53|sid=0|g=0|s=0|t=0",
+        "simple_roles_53|sid=93|g=93|s=4|t=11",
+        "simple_roles_53|sid=12|g=12|s=0|t=12",
+        "simple_roles_53|sid=111|g=111|s=5|t=8",
+        "simple_roles_53|sid=74|g=74|s=3|t=13"
+      ],
+      "target_ids": [
+        "12"
+      ],
+      "tid": 53,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the work location of the coworker?",
+      "retrieved_ids": [
+        "simple_roles_54|sid=117|g=117|s=5|t=16",
+        "simple_roles_54|sid=112|g=112|s=5|t=11",
+        "simple_roles_54|sid=46|g=46|s=2|t=6",
+        "simple_roles_54|sid=113|g=113|s=5|t=12",
+        "simple_roles_54|sid=118|g=118|s=5|t=17"
+      ],
+      "target_ids": [
+        "118"
+      ],
+      "tid": 54,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "How old is my brother?",
+      "retrieved_ids": [
+        "simple_roles_55|sid=70|g=70|s=3|t=7",
+        "simple_roles_55|sid=42|g=42|s=2|t=0",
+        "simple_roles_55|sid=1|g=1|s=0|t=1",
+        "simple_roles_55|sid=123|g=123|s=6|t=0",
+        "simple_roles_55|sid=63|g=63|s=3|t=0"
+      ],
+      "target_ids": [
+        "70"
+      ],
+      "tid": 55,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What does my boss do for a living?",
+      "retrieved_ids": [
+        "simple_roles_56|sid=59|g=59|s=2|t=18",
+        "simple_roles_56|sid=41|g=41|s=2|t=0",
+        "simple_roles_56|sid=61|g=61|s=2|t=20",
+        "simple_roles_56|sid=60|g=60|s=2|t=19",
+        "simple_roles_56|sid=162|g=162|s=7|t=18"
+      ],
+      "target_ids": [
+        "59"
+      ],
+      "tid": 56,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the birthday of my subordinate?",
+      "retrieved_ids": [
+        "simple_roles_57|sid=93|g=93|s=4|t=11",
+        "simple_roles_57|sid=145|g=145|s=7|t=2",
+        "simple_roles_57|sid=125|g=125|s=6|t=2",
+        "simple_roles_57|sid=23|g=23|s=1|t=2",
+        "simple_roles_57|sid=82|g=82|s=4|t=0"
+      ],
+      "target_ids": [
+        "93"
+      ],
+      "tid": 57,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the hometown of my female cousin?",
+      "retrieved_ids": [
+        "simple_roles_58|sid=124|g=124|s=6|t=0",
+        "simple_roles_58|sid=68|g=68|s=3|t=5",
+        "simple_roles_58|sid=116|g=116|s=5|t=13",
+        "simple_roles_58|sid=142|g=142|s=6|t=18",
+        "simple_roles_58|sid=139|g=139|s=6|t=15"
+      ],
+      "target_ids": [
+        "139"
+      ],
+      "tid": 58,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What position does my aunt hold?",
+      "retrieved_ids": [
+        "simple_roles_59|sid=124|g=124|s=6|t=0",
+        "simple_roles_59|sid=131|g=131|s=6|t=7",
+        "simple_roles_59|sid=22|g=22|s=1|t=2",
+        "simple_roles_59|sid=143|g=143|s=6|t=19",
+        "simple_roles_59|sid=47|g=47|s=2|t=6"
+      ],
+      "target_ids": [
+        "131"
+      ],
+      "tid": 59,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the date of my niece's birthday?",
+      "retrieved_ids": [
+        "simple_roles_60|sid=59|g=59|s=2|t=18",
+        "simple_roles_60|sid=64|g=64|s=3|t=3",
+        "simple_roles_60|sid=151|g=151|s=7|t=8",
+        "simple_roles_60|sid=60|g=60|s=2|t=19",
+        "simple_roles_60|sid=41|g=41|s=2|t=0"
+      ],
+      "target_ids": [
+        "59"
+      ],
+      "tid": 60,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What hobby does my father enjoy?",
+      "retrieved_ids": [
+        "simple_roles_61|sid=54|g=54|s=2|t=12",
+        "simple_roles_61|sid=157|g=157|s=7|t=12",
+        "simple_roles_61|sid=111|g=111|s=5|t=7",
+        "simple_roles_61|sid=0|g=0|s=0|t=0",
+        "simple_roles_61|sid=28|g=28|s=1|t=7"
+      ],
+      "target_ids": [
+        "7"
+      ],
+      "tid": 61,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the contact number for my brother?",
+      "retrieved_ids": [
+        "simple_roles_62|sid=61|g=61|s=2|t=19",
+        "simple_roles_62|sid=139|g=139|s=6|t=15",
+        "simple_roles_62|sid=84|g=84|s=4|t=2",
+        "simple_roles_62|sid=118|g=118|s=5|t=15",
+        "simple_roles_62|sid=162|g=162|s=7|t=18"
+      ],
+      "target_ids": [
+        "61"
+      ],
+      "tid": 62,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "How old is the coworker?",
+      "retrieved_ids": [
+        "simple_roles_63|sid=64|g=64|s=3|t=3",
+        "simple_roles_63|sid=103|g=103|s=5|t=0",
+        "simple_roles_63|sid=145|g=145|s=7|t=1",
+        "simple_roles_63|sid=61|g=61|s=3|t=0",
+        "simple_roles_63|sid=41|g=41|s=2|t=0"
+      ],
+      "target_ids": [
+        "64"
+      ],
+      "tid": 63,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the height of my niece?",
+      "retrieved_ids": [
+        "simple_roles_64|sid=115|g=115|s=5|t=14",
+        "simple_roles_64|sid=123|g=123|s=6|t=1",
+        "simple_roles_64|sid=101|g=101|s=5|t=0",
+        "simple_roles_64|sid=1|g=1|s=0|t=1",
+        "simple_roles_64|sid=146|g=146|s=7|t=4"
+      ],
+      "target_ids": [
+        "115"
+      ],
+      "tid": 64,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "When is my subordinate's birthday?",
+      "retrieved_ids": [
+        "simple_roles_65|sid=13|g=13|s=0|t=13",
+        "simple_roles_65|sid=102|g=102|s=5|t=2",
+        "simple_roles_65|sid=23|g=23|s=1|t=3",
+        "simple_roles_65|sid=64|g=64|s=3|t=3",
+        "simple_roles_65|sid=133|g=133|s=6|t=12"
+      ],
+      "target_ids": [
+        "13"
+      ],
+      "tid": 65,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of my female cousin?",
+      "retrieved_ids": [
+        "simple_roles_66|sid=65|g=65|s=3|t=4",
+        "simple_roles_66|sid=144|g=144|s=7|t=0",
+        "simple_roles_66|sid=155|g=155|s=7|t=11",
+        "simple_roles_66|sid=163|g=163|s=7|t=19",
+        "simple_roles_66|sid=99|g=99|s=4|t=18"
+      ],
+      "target_ids": [
+        "65"
+      ],
+      "tid": 66,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What does my brother do for a living?",
+      "retrieved_ids": [
+        "simple_roles_67|sid=61|g=61|s=3|t=0",
+        "simple_roles_67|sid=67|g=67|s=3|t=6",
+        "simple_roles_67|sid=72|g=72|s=3|t=11",
+        "simple_roles_67|sid=47|g=47|s=2|t=6",
+        "simple_roles_67|sid=98|g=98|s=4|t=16"
+      ],
+      "target_ids": [
+        "67"
+      ],
+      "tid": 67,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the location where my sister works?",
+      "retrieved_ids": [
+        "simple_roles_68|sid=73|g=73|s=3|t=13",
+        "simple_roles_68|sid=69|g=69|s=3|t=9",
+        "simple_roles_68|sid=149|g=149|s=7|t=8",
+        "simple_roles_68|sid=60|g=60|s=3|t=0",
+        "simple_roles_68|sid=66|g=66|s=3|t=6"
+      ],
+      "target_ids": [
+        "69"
+      ],
+      "tid": 68,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the occupation of that coworker?",
+      "retrieved_ids": [
+        "simple_roles_69|sid=0|g=0|s=0|t=0",
+        "simple_roles_69|sid=8|g=8|s=0|t=8",
+        "simple_roles_69|sid=15|g=15|s=0|t=15",
+        "simple_roles_69|sid=58|g=58|s=2|t=18"
+      ],
+      "target_ids": [
+        "8"
+      ],
+      "tid": 69,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the position of my niece?",
+      "retrieved_ids": [
+        "simple_roles_70|sid=115|g=115|s=5|t=16",
+        "simple_roles_70|sid=99|g=99|s=5|t=0",
+        "simple_roles_70|sid=117|g=117|s=5|t=18",
+        "simple_roles_70|sid=138|g=138|s=6|t=19",
+        "simple_roles_70|sid=19|g=19|s=0|t=19"
+      ],
+      "target_ids": [
+        "115"
+      ],
+      "tid": 70,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the date of my coworker's birthday?",
+      "retrieved_ids": [
+        "simple_roles_71|sid=159|g=159|s=7|t=17",
+        "simple_roles_71|sid=142|g=142|s=7|t=0",
+        "simple_roles_71|sid=151|g=151|s=7|t=9",
+        "simple_roles_71|sid=155|g=155|s=7|t=13",
+        "simple_roles_71|sid=81|g=81|s=4|t=0"
+      ],
+      "target_ids": [
+        "159"
+      ],
+      "tid": 71,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the date of my brother's birthday?",
+      "retrieved_ids": [
+        "simple_roles_72|sid=28|g=28|s=1|t=7",
+        "simple_roles_72|sid=21|g=21|s=1|t=0",
+        "simple_roles_72|sid=64|g=64|s=3|t=3",
+        "simple_roles_72|sid=44|g=44|s=2|t=3",
+        "simple_roles_72|sid=40|g=40|s=1|t=19"
+      ],
+      "target_ids": [
+        "28"
+      ],
+      "tid": 72,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of the company where the coworker works?",
+      "retrieved_ids": [
+        "simple_roles_73|sid=67|g=67|s=3|t=7",
+        "simple_roles_73|sid=153|g=153|s=7|t=11",
+        "simple_roles_73|sid=126|g=126|s=6|t=4",
+        "simple_roles_73|sid=77|g=77|s=3|t=17",
+        "simple_roles_73|sid=9|g=9|s=0|t=9"
+      ],
+      "target_ids": [
+        "67"
+      ],
+      "tid": 73,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is my male cousin's email address?",
+      "retrieved_ids": [
+        "simple_roles_74|sid=12|g=12|s=0|t=12",
+        "simple_roles_74|sid=57|g=57|s=2|t=15",
+        "simple_roles_74|sid=77|g=77|s=3|t=14",
+        "simple_roles_74|sid=146|g=146|s=6|t=20",
+        "simple_roles_74|sid=0|g=0|s=0|t=0"
+      ],
+      "target_ids": [
+        "12"
+      ],
+      "tid": 74,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What position does my uncle hold?",
+      "retrieved_ids": [
+        "simple_roles_75|sid=83|g=83|s=4|t=0",
+        "simple_roles_75|sid=41|g=41|s=2|t=0",
+        "simple_roles_75|sid=61|g=61|s=2|t=20",
+        "simple_roles_75|sid=52|g=52|s=2|t=11",
+        "simple_roles_75|sid=57|g=57|s=2|t=16"
+      ],
+      "target_ids": [
+        "52"
+      ],
+      "tid": 75,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my niece enjoy?",
+      "retrieved_ids": [
+        "simple_roles_76|sid=112|g=112|s=5|t=7",
+        "simple_roles_76|sid=134|g=134|s=6|t=9",
+        "simple_roles_76|sid=105|g=105|s=5|t=0",
+        "simple_roles_76|sid=50|g=50|s=2|t=8",
+        "simple_roles_76|sid=124|g=124|s=5|t=19"
+      ],
+      "target_ids": [
+        "112"
+      ],
+      "tid": 76,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What is the occupation of my mother?",
+      "retrieved_ids": [
+        "simple_roles_77|sid=21|g=21|s=1|t=0",
+        "simple_roles_77|sid=147|g=147|s=7|t=4",
+        "simple_roles_77|sid=133|g=133|s=6|t=10",
+        "simple_roles_77|sid=161|g=161|s=7|t=18",
+        "simple_roles_77|sid=89|g=89|s=4|t=7"
+      ],
+      "target_ids": [
+        "40"
+      ],
+      "tid": 77,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "How old is my sister?",
+      "retrieved_ids": [
+        "simple_roles_78|sid=47|g=47|s=2|t=7",
+        "simple_roles_78|sid=80|g=80|s=4|t=0",
+        "simple_roles_78|sid=101|g=101|s=5|t=0",
+        "simple_roles_78|sid=0|g=0|s=0|t=0",
+        "simple_roles_78|sid=40|g=40|s=2|t=0"
+      ],
+      "target_ids": [
+        "47"
+      ],
+      "tid": 78,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of the boss?",
+      "retrieved_ids": [
+        "simple_roles_79|sid=119|g=119|s=5|t=19",
+        "simple_roles_79|sid=111|g=111|s=5|t=11",
+        "simple_roles_79|sid=125|g=125|s=6|t=4",
+        "simple_roles_79|sid=100|g=100|s=5|t=0"
+      ],
+      "target_ids": [
+        "119"
+      ],
+      "tid": 79,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the work location of my niece?",
+      "retrieved_ids": [
+        "simple_roles_80|sid=49|g=49|s=2|t=8",
+        "simple_roles_80|sid=41|g=41|s=2|t=0",
+        "simple_roles_80|sid=110|g=110|s=5|t=8",
+        "simple_roles_80|sid=58|g=58|s=2|t=17",
+        "simple_roles_80|sid=122|g=122|s=5|t=20"
+      ],
+      "target_ids": [
+        "49"
+      ],
+      "tid": 80,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the date of my niece's birthday?",
+      "retrieved_ids": [
+        "simple_roles_81|sid=101|g=101|s=4|t=19",
+        "simple_roles_81|sid=144|g=144|s=7|t=1",
+        "simple_roles_81|sid=30|g=30|s=1|t=9",
+        "simple_roles_81|sid=134|g=134|s=6|t=12",
+        "simple_roles_81|sid=82|g=82|s=4|t=0"
+      ],
+      "target_ids": [
+        "101"
+      ],
+      "tid": 81,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "Where does my aunt work?",
+      "retrieved_ids": [
+        "simple_roles_82|sid=2|g=2|s=0|t=2",
+        "simple_roles_82|sid=138|g=138|s=6|t=12",
+        "simple_roles_82|sid=0|g=0|s=0|t=0",
+        "simple_roles_82|sid=70|g=70|s=3|t=6",
+        "simple_roles_82|sid=19|g=19|s=0|t=19"
+      ],
+      "target_ids": [
+        "2"
+      ],
+      "tid": 82,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the hometown of my niece?",
+      "retrieved_ids": [
+        "simple_roles_83|sid=44|g=44|s=2|t=2",
+        "simple_roles_83|sid=107|g=107|s=5|t=3",
+        "simple_roles_83|sid=42|g=42|s=2|t=0",
+        "simple_roles_83|sid=89|g=89|s=4|t=6",
+        "simple_roles_83|sid=121|g=121|s=5|t=17"
+      ],
+      "target_ids": [
+        "44"
+      ],
+      "tid": 83,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the contact number for my subordinate?",
+      "retrieved_ids": [
+        "simple_roles_84|sid=98|g=98|s=4|t=17",
+        "simple_roles_84|sid=37|g=37|s=1|t=16",
+        "simple_roles_84|sid=12|g=12|s=0|t=12",
+        "simple_roles_84|sid=139|g=139|s=6|t=17",
+        "simple_roles_84|sid=73|g=73|s=3|t=12"
+      ],
+      "target_ids": [
+        "98"
+      ],
+      "tid": 84,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the date of my sister's birthday?",
+      "retrieved_ids": [
+        "simple_roles_85|sid=59|g=59|s=2|t=18",
+        "simple_roles_85|sid=41|g=41|s=2|t=0",
+        "simple_roles_85|sid=139|g=139|s=6|t=16",
+        "simple_roles_85|sid=156|g=156|s=7|t=13",
+        "simple_roles_85|sid=52|g=52|s=2|t=11"
+      ],
+      "target_ids": [
+        "59"
+      ],
+      "tid": 85,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the hometown of my aunt?",
+      "retrieved_ids": [
+        "simple_roles_86|sid=60|g=60|s=3|t=0",
+        "simple_roles_86|sid=30|g=30|s=1|t=12",
+        "simple_roles_86|sid=75|g=75|s=3|t=15",
+        "simple_roles_86|sid=72|g=72|s=3|t=12",
+        "simple_roles_86|sid=64|g=64|s=3|t=4"
+      ],
+      "target_ids": [
+        "75"
+      ],
+      "tid": 86,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What does my female cousin do for a living?",
+      "retrieved_ids": [],
+      "target_ids": [
+        "58"
+      ],
+      "tid": 87,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of my mother's company?",
+      "retrieved_ids": [
+        "simple_roles_88|sid=164|g=164|s=7|t=18",
+        "simple_roles_88|sid=23|g=23|s=1|t=3",
+        "simple_roles_88|sid=146|g=146|s=7|t=0",
+        "simple_roles_88|sid=108|g=108|s=5|t=5",
+        "simple_roles_88|sid=124|g=124|s=5|t=21"
+      ],
+      "target_ids": [
+        "164"
+      ],
+      "tid": 88,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of my subordinate?",
+      "retrieved_ids": [
+        "simple_roles_89|sid=143|g=143|s=7|t=0",
+        "simple_roles_89|sid=149|g=149|s=7|t=6",
+        "simple_roles_89|sid=15|g=15|s=0|t=15",
+        "simple_roles_89|sid=144|g=144|s=7|t=1",
+        "simple_roles_89|sid=67|g=67|s=3|t=6"
+      ],
+      "target_ids": [
+        "149"
+      ],
+      "tid": 89,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "How old is my female cousin?",
+      "retrieved_ids": [
+        "simple_roles_90|sid=16|g=16|s=0|t=16",
+        "simple_roles_90|sid=40|g=40|s=2|t=0",
+        "simple_roles_90|sid=20|g=20|s=1|t=0",
+        "simple_roles_90|sid=44|g=44|s=2|t=4",
+        "simple_roles_90|sid=81|g=81|s=4|t=0"
+      ],
+      "target_ids": [
+        "16"
+      ],
+      "tid": 90,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of my father?",
+      "retrieved_ids": [
+        "simple_roles_91|sid=26|g=26|s=1|t=5",
+        "simple_roles_91|sid=117|g=117|s=5|t=13",
+        "simple_roles_91|sid=15|g=15|s=0|t=15",
+        "simple_roles_91|sid=148|g=148|s=7|t=4",
+        "simple_roles_91|sid=66|g=66|s=3|t=3"
+      ],
+      "target_ids": [
+        "26"
+      ],
+      "tid": 91,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "When is the boss's birthday?",
+      "retrieved_ids": [
+        "simple_roles_92|sid=69|g=69|s=3|t=8",
+        "simple_roles_92|sid=3|g=3|s=0|t=3",
+        "simple_roles_92|sid=124|g=124|s=6|t=3",
+        "simple_roles_92|sid=80|g=80|s=3|t=19",
+        "simple_roles_92|sid=61|g=61|s=3|t=0"
+      ],
+      "target_ids": [
+        "69"
+      ],
+      "tid": 92,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the occupation of that subordinate?",
+      "retrieved_ids": [
+        "simple_roles_93|sid=81|g=81|s=4|t=0",
+        "simple_roles_93|sid=98|g=98|s=4|t=17"
+      ],
+      "target_ids": [
+        "98"
+      ],
+      "tid": 93,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the email address of my niece?",
+      "retrieved_ids": [
+        "simple_roles_94|sid=138|g=138|s=6|t=15",
+        "simple_roles_94|sid=82|g=82|s=3|t=20",
+        "simple_roles_94|sid=155|g=155|s=7|t=12",
+        "simple_roles_94|sid=123|g=123|s=6|t=0",
+        "simple_roles_94|sid=58|g=58|s=2|t=17"
+      ],
+      "target_ids": [
+        "138"
+      ],
+      "tid": 94,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What does my sister do for a living?",
+      "retrieved_ids": [
+        "simple_roles_95|sid=148|g=148|s=7|t=4",
+        "simple_roles_95|sid=45|g=45|s=2|t=4",
+        "simple_roles_95|sid=4|g=4|s=0|t=4",
+        "simple_roles_95|sid=144|g=144|s=7|t=0",
+        "simple_roles_95|sid=89|g=89|s=4|t=6"
+      ],
+      "target_ids": [
+        "148"
+      ],
+      "tid": 95,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of that uncle?",
+      "retrieved_ids": [
+        "simple_roles_96|sid=152|g=152|s=7|t=11",
+        "simple_roles_96|sid=141|g=141|s=7|t=0"
+      ],
+      "target_ids": [
+        "152"
+      ],
+      "tid": 96,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What does my father do for a living?",
+      "retrieved_ids": [
+        "simple_roles_97|sid=102|g=102|s=5|t=0",
+        "simple_roles_97|sid=87|g=87|s=4|t=5",
+        "simple_roles_97|sid=48|g=48|s=2|t=7",
+        "simple_roles_97|sid=66|g=66|s=3|t=4",
+        "simple_roles_97|sid=74|g=74|s=3|t=12"
+      ],
+      "target_ids": [
+        "114"
+      ],
+      "tid": 97,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the position of the boss?",
+      "retrieved_ids": [
+        "simple_roles_98|sid=70|g=70|s=3|t=8",
+        "simple_roles_98|sid=79|g=79|s=3|t=17",
+        "simple_roles_98|sid=62|g=62|s=3|t=0",
+        "simple_roles_98|sid=89|g=89|s=4|t=6",
+        "simple_roles_98|sid=81|g=81|s=3|t=19"
+      ],
+      "target_ids": [
+        "70"
+      ],
+      "tid": 98,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What is the occupation of my mother?",
+      "retrieved_ids": [
+        "simple_roles_99|sid=21|g=21|s=1|t=0",
+        "simple_roles_99|sid=7|g=7|s=0|t=7",
+        "simple_roles_99|sid=52|g=52|s=2|t=10",
+        "simple_roles_99|sid=84|g=84|s=4|t=1",
+        "simple_roles_99|sid=60|g=60|s=2|t=18"
+      ],
+      "target_ids": [
+        "33"
+      ],
+      "tid": 99,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of the company where the boss works?",
+      "retrieved_ids": [
+        "simple_roles_100|sid=57|g=57|s=2|t=18",
+        "simple_roles_100|sid=12|g=12|s=0|t=12",
+        "simple_roles_100|sid=39|g=39|s=2|t=0",
+        "simple_roles_100|sid=56|g=56|s=2|t=17",
+        "simple_roles_100|sid=54|g=54|s=2|t=15"
+      ],
+      "target_ids": [
+        "57"
+      ],
+      "tid": 100,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the location where Father works?",
+      "retrieved_ids": [
+        "simple_roles_101|sid=59|g=59|s=3|t=0",
+        "simple_roles_101|sid=13|g=13|s=0|t=13",
+        "simple_roles_101|sid=109|g=109|s=5|t=10",
+        "simple_roles_101|sid=69|g=69|s=3|t=10",
+        "simple_roles_101|sid=76|g=76|s=3|t=17"
+      ],
+      "target_ids": [
+        "69"
+      ],
+      "tid": 101,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my niece enjoy?",
+      "retrieved_ids": [
+        "simple_roles_102|sid=104|g=104|s=5|t=1",
+        "simple_roles_102|sid=91|g=91|s=4|t=9",
+        "simple_roles_102|sid=131|g=131|s=6|t=7",
+        "simple_roles_102|sid=96|g=96|s=4|t=14",
+        "simple_roles_102|sid=103|g=103|s=5|t=0"
+      ],
+      "target_ids": [
+        "104"
+      ],
+      "tid": 102,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the work location of my mother?",
+      "retrieved_ids": [
+        "simple_roles_103|sid=44|g=44|s=2|t=1",
+        "simple_roles_103|sid=43|g=43|s=2|t=0",
+        "simple_roles_103|sid=104|g=104|s=4|t=20",
+        "simple_roles_103|sid=69|g=69|s=3|t=5",
+        "simple_roles_103|sid=116|g=116|s=5|t=11"
+      ],
+      "target_ids": [
+        "43"
+      ],
+      "tid": 103,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What does my nephew do for a living?",
+      "retrieved_ids": [
+        "simple_roles_104|sid=83|g=83|s=4|t=0",
+        "simple_roles_104|sid=90|g=90|s=4|t=7",
+        "simple_roles_104|sid=89|g=89|s=4|t=6",
+        "simple_roles_104|sid=129|g=129|s=6|t=5",
+        "simple_roles_104|sid=27|g=27|s=1|t=6"
+      ],
+      "target_ids": [
+        "89"
+      ],
+      "tid": 104,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the position of my brother?",
+      "retrieved_ids": [
+        "simple_roles_105|sid=0|g=0|s=0|t=0",
+        "simple_roles_105|sid=17|g=17|s=0|t=17",
+        "simple_roles_105|sid=137|g=137|s=6|t=17",
+        "simple_roles_105|sid=78|g=78|s=3|t=18",
+        "simple_roles_105|sid=118|g=118|s=5|t=18"
+      ],
+      "target_ids": [
+        "17"
+      ],
+      "tid": 105,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the hometown of that coworker?",
+      "retrieved_ids": [
+        "simple_roles_106|sid=21|g=21|s=1|t=0",
+        "simple_roles_106|sid=63|g=63|s=3|t=5",
+        "simple_roles_106|sid=37|g=37|s=1|t=16",
+        "simple_roles_106|sid=31|g=31|s=1|t=10",
+        "simple_roles_106|sid=30|g=30|s=1|t=9"
+      ],
+      "target_ids": [
+        "30"
+      ],
+      "tid": 106,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does the boss have?",
+      "retrieved_ids": [
+        "simple_roles_107|sid=13|g=13|s=0|t=13",
+        "simple_roles_107|sid=0|g=0|s=0|t=0",
+        "simple_roles_107|sid=31|g=31|s=1|t=11",
+        "simple_roles_107|sid=93|g=93|s=4|t=11",
+        "simple_roles_107|sid=18|g=18|s=0|t=18"
+      ],
+      "target_ids": [
+        "13"
+      ],
+      "tid": 107,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is my male cousin's email address?",
+      "retrieved_ids": [
+        "simple_roles_108|sid=122|g=122|s=6|t=0",
+        "simple_roles_108|sid=35|g=35|s=1|t=15",
+        "simple_roles_108|sid=112|g=112|s=5|t=11",
+        "simple_roles_108|sid=154|g=154|s=7|t=12",
+        "simple_roles_108|sid=123|g=123|s=6|t=1"
+      ],
+      "target_ids": [
+        "122"
+      ],
+      "tid": 108,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the work location of my sister?",
+      "retrieved_ids": [
+        "simple_roles_109|sid=76|g=76|s=3|t=14",
+        "simple_roles_109|sid=62|g=62|s=3|t=0",
+        "simple_roles_109|sid=67|g=67|s=3|t=5",
+        "simple_roles_109|sid=143|g=143|s=7|t=0",
+        "simple_roles_109|sid=15|g=15|s=0|t=15"
+      ],
+      "target_ids": [
+        "76"
+      ],
+      "tid": 109,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the position of my nephew?",
+      "retrieved_ids": [
+        "simple_roles_110|sid=82|g=82|s=4|t=0",
+        "simple_roles_110|sid=83|g=83|s=4|t=1",
+        "simple_roles_110|sid=46|g=46|s=2|t=5",
+        "simple_roles_110|sid=75|g=75|s=3|t=14",
+        "simple_roles_110|sid=119|g=119|s=5|t=17"
+      ],
+      "target_ids": [
+        "83"
+      ],
+      "tid": 110,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What hobby does my father have?",
+      "retrieved_ids": [
+        "simple_roles_111|sid=79|g=79|s=4|t=0",
+        "simple_roles_111|sid=111|g=111|s=5|t=11",
+        "simple_roles_111|sid=26|g=26|s=1|t=7",
+        "simple_roles_111|sid=68|g=68|s=3|t=9",
+        "simple_roles_111|sid=9|g=9|s=0|t=9"
+      ],
+      "target_ids": [
+        "90"
+      ],
+      "tid": 111,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the contact number for my father?",
+      "retrieved_ids": [
+        "simple_roles_112|sid=80|g=80|s=3|t=18",
+        "simple_roles_112|sid=40|g=40|s=1|t=19",
+        "simple_roles_112|sid=157|g=157|s=7|t=13",
+        "simple_roles_112|sid=121|g=121|s=5|t=18",
+        "simple_roles_112|sid=62|g=62|s=3|t=0"
+      ],
+      "target_ids": [
+        "80"
+      ],
+      "tid": 112,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of the coworker?",
+      "retrieved_ids": [
+        "simple_roles_113|sid=39|g=39|s=1|t=20",
+        "simple_roles_113|sid=131|g=131|s=6|t=8",
+        "simple_roles_113|sid=19|g=19|s=1|t=0",
+        "simple_roles_113|sid=28|g=28|s=1|t=9",
+        "simple_roles_113|sid=132|g=132|s=6|t=9"
+      ],
+      "target_ids": [
+        "39"
+      ],
+      "tid": 113,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What is the name of Uncle's company?",
+      "retrieved_ids": [],
+      "target_ids": [
+        "42"
+      ],
+      "tid": 114,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the height of the boss?",
+      "retrieved_ids": [
+        "simple_roles_115|sid=36|g=36|s=1|t=15",
+        "simple_roles_115|sid=21|g=21|s=1|t=0",
+        "simple_roles_115|sid=31|g=31|s=1|t=10",
+        "simple_roles_115|sid=125|g=125|s=6|t=1",
+        "simple_roles_115|sid=84|g=84|s=4|t=1"
+      ],
+      "target_ids": [
+        "36"
+      ],
+      "tid": 115,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of my uncle?",
+      "retrieved_ids": [
+        "simple_roles_116|sid=30|g=30|s=1|t=10",
+        "simple_roles_116|sid=20|g=20|s=1|t=0",
+        "simple_roles_116|sid=54|g=54|s=2|t=12",
+        "simple_roles_116|sid=22|g=22|s=1|t=2",
+        "simple_roles_116|sid=9|g=9|s=0|t=9"
+      ],
+      "target_ids": [
+        "30"
+      ],
+      "tid": 116,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What is the location of my father's workplace?",
+      "retrieved_ids": [
+        "simple_roles_117|sid=144|g=144|s=7|t=0",
+        "simple_roles_117|sid=72|g=72|s=3|t=10",
+        "simple_roles_117|sid=163|g=163|s=7|t=19",
+        "simple_roles_117|sid=164|g=164|s=7|t=20",
+        "simple_roles_117|sid=47|g=47|s=2|t=6"
+      ],
+      "target_ids": [
+        "162"
+      ],
+      "tid": 117,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "How old is my mother?",
+      "retrieved_ids": [
+        "simple_roles_118|sid=20|g=20|s=1|t=0",
+        "simple_roles_118|sid=102|g=102|s=5|t=1",
+        "simple_roles_118|sid=0|g=0|s=0|t=0",
+        "simple_roles_118|sid=40|g=40|s=2|t=0",
+        "simple_roles_118|sid=122|g=122|s=6|t=0"
+      ],
+      "target_ids": [
+        "102"
+      ],
+      "tid": 118,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What does my father do for a living?",
+      "retrieved_ids": [
+        "simple_roles_119|sid=0|g=0|s=0|t=0",
+        "simple_roles_119|sid=25|g=25|s=1|t=5",
+        "simple_roles_119|sid=94|g=94|s=4|t=12",
+        "simple_roles_119|sid=87|g=87|s=4|t=5",
+        "simple_roles_119|sid=56|g=56|s=2|t=15"
+      ],
+      "target_ids": [
+        "13"
+      ],
+      "tid": 119,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of that coworker?",
+      "retrieved_ids": [
+        "simple_roles_120|sid=115|g=115|s=5|t=11",
+        "simple_roles_120|sid=104|g=104|s=5|t=0",
+        "simple_roles_120|sid=152|g=152|s=7|t=7",
+        "simple_roles_120|sid=116|g=116|s=5|t=12"
+      ],
+      "target_ids": [
+        "115"
+      ],
+      "tid": 120,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the work location of my niece?",
+      "retrieved_ids": [
+        "simple_roles_121|sid=5|g=5|s=0|t=5",
+        "simple_roles_121|sid=0|g=0|s=0|t=0",
+        "simple_roles_121|sid=140|g=140|s=6|t=15",
+        "simple_roles_121|sid=30|g=30|s=1|t=10",
+        "simple_roles_121|sid=125|g=125|s=6|t=0"
+      ],
+      "target_ids": [
+        "5"
+      ],
+      "tid": 121,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "How old is my nephew?",
+      "retrieved_ids": [
+        "simple_roles_122|sid=95|g=95|s=4|t=13",
+        "simple_roles_122|sid=82|g=82|s=4|t=0",
+        "simple_roles_122|sid=65|g=65|s=3|t=4",
+        "simple_roles_122|sid=101|g=101|s=4|t=19",
+        "simple_roles_122|sid=41|g=41|s=2|t=0"
+      ],
+      "target_ids": [
+        "95"
+      ],
+      "tid": 122,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the work location of the boss?",
+      "retrieved_ids": [
+        "simple_roles_123|sid=130|g=130|s=6|t=7",
+        "simple_roles_123|sid=63|g=63|s=3|t=1",
+        "simple_roles_123|sid=62|g=62|s=3|t=0",
+        "simple_roles_123|sid=142|g=142|s=6|t=19",
+        "simple_roles_123|sid=78|g=78|s=3|t=16"
+      ],
+      "target_ids": [
+        "63"
+      ],
+      "tid": 123,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of the niece?",
+      "retrieved_ids": [
+        "simple_roles_124|sid=123|g=123|s=6|t=0",
+        "simple_roles_124|sid=140|g=140|s=6|t=17",
+        "simple_roles_124|sid=84|g=84|s=4|t=2",
+        "simple_roles_124|sid=6|g=6|s=0|t=6"
+      ],
+      "target_ids": [
+        "140"
+      ],
+      "tid": 124,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the height of my father?",
+      "retrieved_ids": [
+        "simple_roles_125|sid=102|g=102|s=5|t=0",
+        "simple_roles_125|sid=63|g=63|s=3|t=2",
+        "simple_roles_125|sid=109|g=109|s=5|t=7",
+        "simple_roles_125|sid=22|g=22|s=1|t=1",
+        "simple_roles_125|sid=42|g=42|s=2|t=1"
+      ],
+      "target_ids": [
+        "109"
+      ],
+      "tid": 125,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of the company where the boss works?",
+      "retrieved_ids": [
+        "simple_roles_126|sid=1|g=1|s=0|t=1",
+        "simple_roles_126|sid=6|g=6|s=0|t=6",
+        "simple_roles_126|sid=148|g=148|s=7|t=7",
+        "simple_roles_126|sid=129|g=129|s=6|t=8",
+        "simple_roles_126|sid=18|g=18|s=0|t=18"
+      ],
+      "target_ids": [
+        "1"
+      ],
+      "tid": 126,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the educational background of the boss?",
+      "retrieved_ids": [
+        "simple_roles_127|sid=46|g=46|s=2|t=4",
+        "simple_roles_127|sid=56|g=56|s=2|t=14",
+        "simple_roles_127|sid=95|g=95|s=4|t=12",
+        "simple_roles_127|sid=92|g=92|s=4|t=9",
+        "simple_roles_127|sid=26|g=26|s=1|t=5"
+      ],
+      "target_ids": [
+        "95"
+      ],
+      "tid": 127,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the contact number of my male cousin?",
+      "retrieved_ids": [
+        "simple_roles_128|sid=120|g=120|s=5|t=16",
+        "simple_roles_128|sid=158|g=158|s=7|t=12",
+        "simple_roles_128|sid=13|g=13|s=0|t=13",
+        "simple_roles_128|sid=92|g=92|s=4|t=9",
+        "simple_roles_128|sid=90|g=90|s=4|t=7"
+      ],
+      "target_ids": [
+        "120"
+      ],
+      "tid": 128,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the level of education that my sister has achieved?",
+      "retrieved_ids": [
+        "simple_roles_129|sid=130|g=130|s=6|t=8",
+        "simple_roles_129|sid=132|g=132|s=6|t=10",
+        "simple_roles_129|sid=122|g=122|s=6|t=0",
+        "simple_roles_129|sid=114|g=114|s=5|t=12",
+        "simple_roles_129|sid=64|g=64|s=3|t=3"
+      ],
+      "target_ids": [
+        "130"
+      ],
+      "tid": 129,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the position of my subordinate?",
+      "retrieved_ids": [
+        "simple_roles_130|sid=0|g=0|s=0|t=0",
+        "simple_roles_130|sid=10|g=10|s=0|t=10",
+        "simple_roles_130|sid=57|g=57|s=2|t=18",
+        "simple_roles_130|sid=150|g=150|s=7|t=11",
+        "simple_roles_130|sid=42|g=42|s=2|t=3"
+      ],
+      "target_ids": [
+        "10"
+      ],
+      "tid": 130,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the work location of the boss?",
+      "retrieved_ids": [
+        "simple_roles_131|sid=76|g=76|s=3|t=16",
+        "simple_roles_131|sid=3|g=3|s=0|t=3",
+        "simple_roles_131|sid=104|g=104|s=5|t=4",
+        "simple_roles_131|sid=60|g=60|s=3|t=0",
+        "simple_roles_131|sid=69|g=69|s=3|t=9"
+      ],
+      "target_ids": [
+        "76"
+      ],
+      "tid": 131,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the email address of the boss?",
+      "retrieved_ids": [
+        "simple_roles_132|sid=10|g=10|s=0|t=10",
+        "simple_roles_132|sid=74|g=74|s=3|t=13",
+        "simple_roles_132|sid=92|g=92|s=4|t=11",
+        "simple_roles_132|sid=155|g=155|s=7|t=13",
+        "simple_roles_132|sid=117|g=117|s=5|t=15"
+      ],
+      "target_ids": [
+        "10"
+      ],
+      "tid": 132,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "When is my coworker's birthday?",
+      "retrieved_ids": [
+        "simple_roles_133|sid=160|g=160|s=7|t=16",
+        "simple_roles_133|sid=25|g=25|s=1|t=4",
+        "simple_roles_133|sid=144|g=144|s=7|t=0",
+        "simple_roles_133|sid=112|g=112|s=5|t=10",
+        "simple_roles_133|sid=152|g=152|s=7|t=8"
+      ],
+      "target_ids": [
+        "160"
+      ],
+      "tid": 133,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What kind of education does my female cousin have?",
+      "retrieved_ids": [
+        "simple_roles_134|sid=104|g=104|s=5|t=0",
+        "simple_roles_134|sid=160|g=160|s=7|t=16",
+        "simple_roles_134|sid=8|g=8|s=0|t=8",
+        "simple_roles_134|sid=112|g=112|s=5|t=8",
+        "simple_roles_134|sid=20|g=20|s=0|t=20"
+      ],
+      "target_ids": [
+        "112"
+      ],
+      "tid": 134,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "When is my sister's birthday?",
+      "retrieved_ids": [
+        "simple_roles_135|sid=42|g=42|s=2|t=2",
+        "simple_roles_135|sid=63|g=63|s=3|t=3",
+        "simple_roles_135|sid=87|g=87|s=4|t=7",
+        "simple_roles_135|sid=58|g=58|s=2|t=18",
+        "simple_roles_135|sid=40|g=40|s=2|t=0"
+      ],
+      "target_ids": [
+        "42"
+      ],
+      "tid": 135,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What does my brother do for a living?",
+      "retrieved_ids": [
+        "simple_roles_136|sid=93|g=93|s=4|t=11",
+        "simple_roles_136|sid=38|g=38|s=1|t=17",
+        "simple_roles_136|sid=102|g=102|s=5|t=0",
+        "simple_roles_136|sid=108|g=108|s=5|t=6",
+        "simple_roles_136|sid=83|g=83|s=4|t=1"
+      ],
+      "target_ids": [
+        "108"
+      ],
+      "tid": 136,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the educational background of my sister?",
+      "retrieved_ids": [
+        "simple_roles_137|sid=70|g=70|s=3|t=11",
+        "simple_roles_137|sid=20|g=20|s=1|t=0",
+        "simple_roles_137|sid=31|g=31|s=1|t=11",
+        "simple_roles_137|sid=112|g=112|s=5|t=11",
+        "simple_roles_137|sid=128|g=128|s=6|t=7"
+      ],
+      "target_ids": [
+        "31"
+      ],
+      "tid": 137,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the email address of my aunt?",
+      "retrieved_ids": [
+        "simple_roles_138|sid=104|g=104|s=5|t=2",
+        "simple_roles_138|sid=159|g=159|s=7|t=17",
+        "simple_roles_138|sid=39|g=39|s=1|t=19",
+        "simple_roles_138|sid=54|g=54|s=2|t=14",
+        "simple_roles_138|sid=77|g=77|s=3|t=16"
+      ],
+      "target_ids": [
+        "77"
+      ],
+      "tid": 138,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "Could the contact number for the boss be provided?",
+      "retrieved_ids": [
+        "simple_roles_139|sid=16|g=16|s=0|t=16",
+        "simple_roles_139|sid=100|g=100|s=4|t=17",
+        "simple_roles_139|sid=76|g=76|s=3|t=13",
+        "simple_roles_139|sid=139|g=139|s=6|t=15",
+        "simple_roles_139|sid=145|g=145|s=7|t=1"
+      ],
+      "target_ids": [
+        "145"
+      ],
+      "tid": 139,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the age of the nephew?",
+      "retrieved_ids": [
+        "simple_roles_140|sid=81|g=81|s=4|t=0",
+        "simple_roles_140|sid=91|g=91|s=4|t=10",
+        "simple_roles_140|sid=107|g=107|s=5|t=5",
+        "simple_roles_140|sid=0|g=0|s=0|t=0"
+      ],
+      "target_ids": [
+        "91"
+      ],
+      "tid": 140,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the position of my aunt?",
+      "retrieved_ids": [
+        "simple_roles_141|sid=7|g=7|s=0|t=7",
+        "simple_roles_141|sid=0|g=0|s=0|t=0",
+        "simple_roles_141|sid=150|g=150|s=7|t=3",
+        "simple_roles_141|sid=56|g=56|s=2|t=15",
+        "simple_roles_141|sid=23|g=23|s=1|t=3"
+      ],
+      "target_ids": [
+        "7"
+      ],
+      "tid": 141,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the height of my uncle?",
+      "retrieved_ids": [
+        "simple_roles_142|sid=128|g=128|s=6|t=5",
+        "simple_roles_142|sid=123|g=123|s=6|t=0",
+        "simple_roles_142|sid=76|g=76|s=3|t=14",
+        "simple_roles_142|sid=31|g=31|s=1|t=10",
+        "simple_roles_142|sid=75|g=75|s=3|t=13"
+      ],
+      "target_ids": [
+        "128"
+      ],
+      "tid": 142,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of my nephew's company?",
+      "retrieved_ids": [
+        "simple_roles_143|sid=111|g=111|s=5|t=9",
+        "simple_roles_143|sid=102|g=102|s=5|t=0",
+        "simple_roles_143|sid=8|g=8|s=0|t=8",
+        "simple_roles_143|sid=36|g=36|s=1|t=15",
+        "simple_roles_143|sid=0|g=0|s=0|t=0"
+      ],
+      "target_ids": [
+        "111"
+      ],
+      "tid": 143,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the contact number for the boss?",
+      "retrieved_ids": [
+        "simple_roles_144|sid=89|g=89|s=4|t=7",
+        "simple_roles_144|sid=30|g=30|s=1|t=10",
+        "simple_roles_144|sid=54|g=54|s=2|t=13",
+        "simple_roles_144|sid=113|g=113|s=5|t=10",
+        "simple_roles_144|sid=74|g=74|s=3|t=13"
+      ],
+      "target_ids": [
+        "89"
+      ],
+      "tid": 144,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the email address of the subordinate?",
+      "retrieved_ids": [
+        "simple_roles_145|sid=74|g=74|s=3|t=13",
+        "simple_roles_145|sid=118|g=118|s=5|t=17",
+        "simple_roles_145|sid=161|g=161|s=7|t=18",
+        "simple_roles_145|sid=31|g=31|s=1|t=11",
+        "simple_roles_145|sid=55|g=55|s=2|t=14"
+      ],
+      "target_ids": [
+        "118"
+      ],
+      "tid": 145,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the educational background of my subordinate?",
+      "retrieved_ids": [
+        "simple_roles_146|sid=61|g=61|s=3|t=0",
+        "simple_roles_146|sid=43|g=43|s=2|t=3",
+        "simple_roles_146|sid=50|g=50|s=2|t=10",
+        "simple_roles_146|sid=80|g=80|s=3|t=19",
+        "simple_roles_146|sid=4|g=4|s=0|t=4"
+      ],
+      "target_ids": [
+        "80"
+      ],
+      "tid": 146,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is my mother's hobby?",
+      "retrieved_ids": [
+        "simple_roles_147|sid=14|g=14|s=0|t=14",
+        "simple_roles_147|sid=130|g=130|s=6|t=10",
+        "simple_roles_147|sid=107|g=107|s=5|t=7",
+        "simple_roles_147|sid=50|g=50|s=2|t=10",
+        "simple_roles_147|sid=68|g=68|s=3|t=8"
+      ],
+      "target_ids": [
+        "14"
+      ],
+      "tid": 147,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the work location of the subordinate?",
+      "retrieved_ids": [
+        "simple_roles_148|sid=157|g=157|s=7|t=11",
+        "simple_roles_148|sid=121|g=121|s=5|t=17",
+        "simple_roles_148|sid=166|g=166|s=7|t=20",
+        "simple_roles_148|sid=45|g=45|s=2|t=4",
+        "simple_roles_148|sid=16|g=16|s=0|t=16"
+      ],
+      "target_ids": [
+        "157"
+      ],
+      "tid": 148,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of the company where the boss works?",
+      "retrieved_ids": [
+        "simple_roles_149|sid=131|g=131|s=6|t=8",
+        "simple_roles_149|sid=109|g=109|s=5|t=7",
+        "simple_roles_149|sid=152|g=152|s=7|t=9",
+        "simple_roles_149|sid=163|g=163|s=7|t=20",
+        "simple_roles_149|sid=68|g=68|s=3|t=6"
+      ],
+      "target_ids": [
+        "152"
+      ],
+      "tid": 149,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the hometown of my uncle?",
+      "retrieved_ids": [
+        "simple_roles_150|sid=38|g=38|s=2|t=0",
+        "simple_roles_150|sid=142|g=142|s=7|t=3",
+        "simple_roles_150|sid=102|g=102|s=5|t=4",
+        "simple_roles_150|sid=57|g=57|s=2|t=19",
+        "simple_roles_150|sid=50|g=50|s=2|t=12"
+      ],
+      "target_ids": [
+        "50"
+      ],
+      "tid": 150,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my father enjoy?",
+      "retrieved_ids": [
+        "simple_roles_151|sid=23|g=23|s=1|t=3",
+        "simple_roles_151|sid=7|g=7|s=0|t=7",
+        "simple_roles_151|sid=61|g=61|s=3|t=0",
+        "simple_roles_151|sid=156|g=156|s=7|t=12",
+        "simple_roles_151|sid=66|g=66|s=3|t=5"
+      ],
+      "target_ids": [
+        "66"
+      ],
+      "tid": 151,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my uncle enjoy?",
+      "retrieved_ids": [
+        "simple_roles_152|sid=139|g=139|s=6|t=18",
+        "simple_roles_152|sid=33|g=33|s=1|t=13",
+        "simple_roles_152|sid=9|g=9|s=0|t=9",
+        "simple_roles_152|sid=121|g=121|s=6|t=0",
+        "simple_roles_152|sid=141|g=141|s=6|t=20"
+      ],
+      "target_ids": [
+        "139"
+      ],
+      "tid": 152,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What is the name of my cousin's company?",
+      "retrieved_ids": [],
+      "target_ids": [
+        "112"
+      ],
+      "tid": 153,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of my uncle?",
+      "retrieved_ids": [
+        "simple_roles_154|sid=115|g=115|s=5|t=12",
+        "simple_roles_154|sid=103|g=103|s=5|t=0",
+        "simple_roles_154|sid=120|g=120|s=5|t=17",
+        "simple_roles_154|sid=97|g=97|s=4|t=14",
+        "simple_roles_154|sid=68|g=68|s=3|t=5"
+      ],
+      "target_ids": [
+        "115"
+      ],
+      "tid": 154,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What is the name of my mother's hometown?",
+      "retrieved_ids": [],
+      "target_ids": [
+        "84"
+      ],
+      "tid": 155,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of my subordinate's company?",
+      "retrieved_ids": [
+        "simple_roles_156|sid=10|g=10|s=0|t=10",
+        "simple_roles_156|sid=72|g=72|s=3|t=12",
+        "simple_roles_156|sid=0|g=0|s=0|t=0",
+        "simple_roles_156|sid=142|g=142|s=7|t=1",
+        "simple_roles_156|sid=37|g=37|s=1|t=17"
+      ],
+      "target_ids": [
+        "10"
+      ],
+      "tid": 156,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the work location of the boss?",
+      "retrieved_ids": [
+        "simple_roles_157|sid=156|g=156|s=7|t=13",
+        "simple_roles_157|sid=27|g=27|s=1|t=6",
+        "simple_roles_157|sid=89|g=89|s=4|t=7",
+        "simple_roles_157|sid=74|g=74|s=3|t=12",
+        "simple_roles_157|sid=143|g=143|s=7|t=0"
+      ],
+      "target_ids": [
+        "156"
+      ],
+      "tid": 157,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What is the position of my mother?",
+      "retrieved_ids": [
+        "simple_roles_158|sid=123|g=123|s=6|t=0",
+        "simple_roles_158|sid=93|g=93|s=4|t=12",
+        "simple_roles_158|sid=141|g=141|s=6|t=18",
+        "simple_roles_158|sid=160|g=160|s=7|t=16",
+        "simple_roles_158|sid=79|g=79|s=3|t=19"
+      ],
+      "target_ids": [
+        "124"
+      ],
+      "tid": 158,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "When is my niece's birthday?",
+      "retrieved_ids": [
+        "simple_roles_159|sid=73|g=73|s=3|t=11",
+        "simple_roles_159|sid=1|g=1|s=0|t=1",
+        "simple_roles_159|sid=100|g=100|s=4|t=18",
+        "simple_roles_159|sid=128|g=128|s=6|t=4",
+        "simple_roles_159|sid=62|g=62|s=3|t=0"
+      ],
+      "target_ids": [
+        "73"
+      ],
+      "tid": 159,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my father have?",
+      "retrieved_ids": [
+        "simple_roles_160|sid=123|g=123|s=6|t=0",
+        "simple_roles_160|sid=45|g=45|s=2|t=3",
+        "simple_roles_160|sid=126|g=126|s=6|t=3",
+        "simple_roles_160|sid=153|g=153|s=7|t=8",
+        "simple_roles_160|sid=32|g=32|s=1|t=11"
+      ],
+      "target_ids": [
+        "126"
+      ],
+      "tid": 160,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the email address of my mother?",
+      "retrieved_ids": [
+        "simple_roles_161|sid=29|g=29|s=1|t=9",
+        "simple_roles_161|sid=54|g=54|s=2|t=13",
+        "simple_roles_161|sid=118|g=118|s=5|t=17",
+        "simple_roles_161|sid=98|g=98|s=4|t=16",
+        "simple_roles_161|sid=20|g=20|s=1|t=0"
+      ],
+      "target_ids": [
+        "29"
+      ],
+      "tid": 161,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the age of my aunt?",
+      "retrieved_ids": [
+        "simple_roles_162|sid=41|g=41|s=2|t=0",
+        "simple_roles_162|sid=42|g=42|s=2|t=1",
+        "simple_roles_162|sid=0|g=0|s=0|t=0",
+        "simple_roles_162|sid=121|g=121|s=5|t=18",
+        "simple_roles_162|sid=40|g=40|s=1|t=20"
+      ],
+      "target_ids": [
+        "42"
+      ],
+      "tid": 162,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the work location of my aunt?",
+      "retrieved_ids": [
+        "simple_roles_163|sid=3|g=3|s=0|t=3",
+        "simple_roles_163|sid=0|g=0|s=0|t=0",
+        "simple_roles_163|sid=123|g=123|s=6|t=2",
+        "simple_roles_163|sid=75|g=75|s=3|t=14",
+        "simple_roles_163|sid=82|g=82|s=4|t=1"
+      ],
+      "target_ids": [
+        "3"
+      ],
+      "tid": 163,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the height of the boss?",
+      "retrieved_ids": [
+        "simple_roles_164|sid=37|g=37|s=1|t=18",
+        "simple_roles_164|sid=19|g=19|s=1|t=0",
+        "simple_roles_164|sid=1|g=1|s=0|t=1",
+        "simple_roles_164|sid=51|g=51|s=2|t=13",
+        "simple_roles_164|sid=105|g=105|s=5|t=7"
+      ],
+      "target_ids": [
+        "37"
+      ],
+      "tid": 164,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the educational background of the subordinate?",
+      "retrieved_ids": [
+        "simple_roles_165|sid=107|g=107|s=5|t=3",
+        "simple_roles_165|sid=104|g=104|s=5|t=0",
+        "simple_roles_165|sid=114|g=114|s=5|t=10",
+        "simple_roles_165|sid=126|g=126|s=6|t=1",
+        "simple_roles_165|sid=15|g=15|s=0|t=15"
+      ],
+      "target_ids": [
+        "114"
+      ],
+      "tid": 165,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the work location of the coworker?",
+      "retrieved_ids": [
+        "simple_roles_166|sid=109|g=109|s=5|t=6",
+        "simple_roles_166|sid=122|g=122|s=5|t=19",
+        "simple_roles_166|sid=103|g=103|s=5|t=0",
+        "simple_roles_166|sid=87|g=87|s=4|t=5",
+        "simple_roles_166|sid=121|g=121|s=5|t=18"
+      ],
+      "target_ids": [
+        "109"
+      ],
+      "tid": 166,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the occupation of my subordinate?",
+      "retrieved_ids": [
+        "simple_roles_167|sid=49|g=49|s=2|t=7",
+        "simple_roles_167|sid=75|g=75|s=3|t=12",
+        "simple_roles_167|sid=136|g=136|s=6|t=12",
+        "simple_roles_167|sid=16|g=16|s=0|t=16",
+        "simple_roles_167|sid=32|g=32|s=1|t=11"
+      ],
+      "target_ids": [
+        "49"
+      ],
+      "tid": 167,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of my brother's company?",
+      "retrieved_ids": [
+        "simple_roles_168|sid=110|g=110|s=5|t=8",
+        "simple_roles_168|sid=86|g=86|s=4|t=5",
+        "simple_roles_168|sid=99|g=99|s=4|t=18",
+        "simple_roles_168|sid=22|g=22|s=1|t=2",
+        "simple_roles_168|sid=81|g=81|s=4|t=0"
+      ],
+      "target_ids": [
+        "86"
+      ],
+      "tid": 168,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the date of my brother's birthday?",
+      "retrieved_ids": [
+        "simple_roles_169|sid=61|g=61|s=3|t=1",
+        "simple_roles_169|sid=103|g=103|s=5|t=1",
+        "simple_roles_169|sid=81|g=81|s=4|t=0",
+        "simple_roles_169|sid=60|g=60|s=3|t=0",
+        "simple_roles_169|sid=20|g=20|s=1|t=2"
+      ],
+      "target_ids": [
+        "61"
+      ],
+      "tid": 169,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of my brother?",
+      "retrieved_ids": [
+        "simple_roles_170|sid=42|g=42|s=2|t=1",
+        "simple_roles_170|sid=41|g=41|s=2|t=0",
+        "simple_roles_170|sid=24|g=24|s=1|t=4",
+        "simple_roles_170|sid=62|g=62|s=3|t=0",
+        "simple_roles_170|sid=123|g=123|s=5|t=19"
+      ],
+      "target_ids": [
+        "42"
+      ],
+      "tid": 170,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the hobby of that uncle?",
+      "retrieved_ids": [
+        "simple_roles_171|sid=145|g=145|s=7|t=1",
+        "simple_roles_171|sid=111|g=111|s=5|t=9",
+        "simple_roles_171|sid=162|g=162|s=7|t=18",
+        "simple_roles_171|sid=159|g=159|s=7|t=15",
+        "simple_roles_171|sid=144|g=144|s=7|t=0"
+      ],
+      "target_ids": [
+        "145"
+      ],
+      "tid": 171,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the email address of my father?",
+      "retrieved_ids": [
+        "simple_roles_172|sid=128|g=128|s=6|t=6",
+        "simple_roles_172|sid=10|g=10|s=0|t=10",
+        "simple_roles_172|sid=75|g=75|s=3|t=14",
+        "simple_roles_172|sid=45|g=45|s=2|t=5",
+        "simple_roles_172|sid=122|g=122|s=6|t=0"
+      ],
+      "target_ids": [
+        "128"
+      ],
+      "tid": 172,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of the hometown of that aunt?",
+      "retrieved_ids": [
+        "simple_roles_173|sid=41|g=41|s=2|t=0",
+        "simple_roles_173|sid=88|g=88|s=4|t=6",
+        "simple_roles_173|sid=58|g=58|s=2|t=17",
+        "simple_roles_173|sid=45|g=45|s=2|t=4"
+      ],
+      "target_ids": [
+        "58"
+      ],
+      "tid": 173,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the hometown of the boss?",
+      "retrieved_ids": [
+        "simple_roles_174|sid=21|g=21|s=0|t=21",
+        "simple_roles_174|sid=0|g=0|s=0|t=0",
+        "simple_roles_174|sid=126|g=126|s=6|t=3"
+      ],
+      "target_ids": [
+        "21"
+      ],
+      "tid": 174,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": false,
+      "question": "What is the hometown of my father?",
+      "retrieved_ids": [
+        "simple_roles_175|sid=80|g=80|s=4|t=0",
+        "simple_roles_175|sid=99|g=99|s=4|t=19",
+        "simple_roles_175|sid=24|g=24|s=1|t=4",
+        "simple_roles_175|sid=19|g=19|s=0|t=19",
+        "simple_roles_175|sid=141|g=141|s=7|t=0"
+      ],
+      "target_ids": [
+        "88"
+      ],
+      "tid": 175,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of the company where the subordinate works?",
+      "retrieved_ids": [
+        "simple_roles_176|sid=88|g=88|s=4|t=7",
+        "simple_roles_176|sid=75|g=75|s=3|t=14",
+        "simple_roles_176|sid=151|g=151|s=7|t=9",
+        "simple_roles_176|sid=130|g=130|s=6|t=7",
+        "simple_roles_176|sid=157|g=157|s=7|t=15"
+      ],
+      "target_ids": [
+        "75"
+      ],
+      "tid": 176,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobbies does my female cousin have?",
+      "retrieved_ids": [
+        "simple_roles_177|sid=158|g=158|s=7|t=12",
+        "simple_roles_177|sid=73|g=73|s=3|t=10",
+        "simple_roles_177|sid=50|g=50|s=2|t=7",
+        "simple_roles_177|sid=146|g=146|s=7|t=0",
+        "simple_roles_177|sid=164|g=164|s=7|t=18"
+      ],
+      "target_ids": [
+        "158"
+      ],
+      "tid": 177,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is my female cousin's email address?",
+      "retrieved_ids": [
+        "simple_roles_178|sid=124|g=124|s=6|t=2",
+        "simple_roles_178|sid=58|g=58|s=2|t=16",
+        "simple_roles_178|sid=91|g=91|s=4|t=11",
+        "simple_roles_178|sid=122|g=122|s=6|t=0",
+        "simple_roles_178|sid=141|g=141|s=6|t=19"
+      ],
+      "target_ids": [
+        "124"
+      ],
+      "tid": 178,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my male cousin have?",
+      "retrieved_ids": [
+        "simple_roles_179|sid=135|g=135|s=6|t=10",
+        "simple_roles_179|sid=63|g=63|s=3|t=0",
+        "simple_roles_179|sid=69|g=69|s=3|t=6",
+        "simple_roles_179|sid=113|g=113|s=5|t=8",
+        "simple_roles_179|sid=50|g=50|s=2|t=8"
+      ],
+      "target_ids": [
+        "69"
+      ],
+      "tid": 179,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the height of my sister?",
+      "retrieved_ids": [
+        "simple_roles_180|sid=79|g=79|s=3|t=18",
+        "simple_roles_180|sid=21|g=21|s=1|t=1",
+        "simple_roles_180|sid=61|g=61|s=3|t=0",
+        "simple_roles_180|sid=83|g=83|s=4|t=1",
+        "simple_roles_180|sid=106|g=106|s=5|t=3"
+      ],
+      "target_ids": [
+        "79"
+      ],
+      "tid": 180,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the occupation of the boss?",
+      "retrieved_ids": [
+        "simple_roles_181|sid=60|g=60|s=3|t=0",
+        "simple_roles_181|sid=73|g=73|s=3|t=13",
+        "simple_roles_181|sid=76|g=76|s=3|t=16"
+      ],
+      "target_ids": [
+        "73"
+      ],
+      "tid": 181,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of my subordinate's company?",
+      "retrieved_ids": [
+        "simple_roles_182|sid=79|g=79|s=3|t=18",
+        "simple_roles_182|sid=151|g=151|s=7|t=7",
+        "simple_roles_182|sid=57|g=57|s=2|t=17",
+        "simple_roles_182|sid=46|g=46|s=2|t=6",
+        "simple_roles_182|sid=61|g=61|s=3|t=0"
+      ],
+      "target_ids": [
+        "79"
+      ],
+      "tid": 182,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "How old is my aunt?",
+      "retrieved_ids": [
+        "simple_roles_183|sid=7|g=7|s=0|t=7",
+        "simple_roles_183|sid=17|g=17|s=0|t=17",
+        "simple_roles_183|sid=38|g=38|s=1|t=18",
+        "simple_roles_183|sid=0|g=0|s=0|t=0",
+        "simple_roles_183|sid=100|g=100|s=5|t=0"
+      ],
+      "target_ids": [
+        "7"
+      ],
+      "tid": 183,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the work location of the uncle?",
+      "retrieved_ids": [
+        "simple_roles_184|sid=106|g=106|s=5|t=3",
+        "simple_roles_184|sid=103|g=103|s=5|t=0",
+        "simple_roles_184|sid=88|g=88|s=4|t=6",
+        "simple_roles_184|sid=121|g=121|s=5|t=18",
+        "simple_roles_184|sid=157|g=157|s=7|t=14"
+      ],
+      "target_ids": [
+        "106"
+      ],
+      "tid": 184,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my brother enjoy?",
+      "retrieved_ids": [
+        "simple_roles_185|sid=71|g=71|s=3|t=9",
+        "simple_roles_185|sid=20|g=20|s=1|t=0",
+        "simple_roles_185|sid=36|g=36|s=1|t=16",
+        "simple_roles_185|sid=159|g=159|s=7|t=15",
+        "simple_roles_185|sid=7|g=7|s=0|t=7"
+      ],
+      "target_ids": [
+        "36"
+      ],
+      "tid": 185,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is my female cousin's email address?",
+      "retrieved_ids": [
+        "simple_roles_186|sid=42|g=42|s=2|t=1",
+        "simple_roles_186|sid=0|g=0|s=0|t=0",
+        "simple_roles_186|sid=116|g=116|s=5|t=12",
+        "simple_roles_186|sid=139|g=139|s=6|t=16",
+        "simple_roles_186|sid=99|g=99|s=4|t=16"
+      ],
+      "target_ids": [
+        "42"
+      ],
+      "tid": 186,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "How old is my female cousin?",
+      "retrieved_ids": [
+        "simple_roles_187|sid=25|g=25|s=1|t=5",
+        "simple_roles_187|sid=0|g=0|s=0|t=0",
+        "simple_roles_187|sid=20|g=20|s=1|t=0",
+        "simple_roles_187|sid=104|g=104|s=5|t=0",
+        "simple_roles_187|sid=124|g=124|s=6|t=0"
+      ],
+      "target_ids": [
+        "25"
+      ],
+      "tid": 187,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "When is my nephew's birthday?",
+      "retrieved_ids": [
+        "simple_roles_188|sid=82|g=82|s=4|t=1",
+        "simple_roles_188|sid=41|g=41|s=1|t=20",
+        "simple_roles_188|sid=142|g=142|s=6|t=19",
+        "simple_roles_188|sid=81|g=81|s=4|t=0",
+        "simple_roles_188|sid=102|g=102|s=5|t=0"
+      ],
+      "target_ids": [
+        "82"
+      ],
+      "tid": 188,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the contact number for my brother?",
+      "retrieved_ids": [
+        "simple_roles_189|sid=44|g=44|s=2|t=4",
+        "simple_roles_189|sid=99|g=99|s=4|t=18",
+        "simple_roles_189|sid=10|g=10|s=0|t=10",
+        "simple_roles_189|sid=76|g=76|s=3|t=16",
+        "simple_roles_189|sid=114|g=114|s=5|t=12"
+      ],
+      "target_ids": [
+        "44"
+      ],
+      "tid": 189,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of my uncle?",
+      "retrieved_ids": [
+        "simple_roles_190|sid=0|g=0|s=0|t=0",
+        "simple_roles_190|sid=80|g=80|s=4|t=0",
+        "simple_roles_190|sid=88|g=88|s=4|t=8",
+        "simple_roles_190|sid=37|g=37|s=1|t=17",
+        "simple_roles_190|sid=6|g=6|s=0|t=6"
+      ],
+      "target_ids": [
+        "88"
+      ],
+      "tid": 190,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the work location of my nephew?",
+      "retrieved_ids": [
+        "simple_roles_191|sid=46|g=46|s=2|t=4",
+        "simple_roles_191|sid=89|g=89|s=4|t=6",
+        "simple_roles_191|sid=105|g=105|s=5|t=1",
+        "simple_roles_191|sid=42|g=42|s=2|t=0",
+        "simple_roles_191|sid=124|g=124|s=6|t=0"
+      ],
+      "target_ids": [
+        "46"
+      ],
+      "tid": 191,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the hometown of my sister?",
+      "retrieved_ids": [
+        "simple_roles_192|sid=42|g=42|s=2|t=0",
+        "simple_roles_192|sid=148|g=148|s=7|t=3",
+        "simple_roles_192|sid=60|g=60|s=2|t=18",
+        "simple_roles_192|sid=68|g=68|s=3|t=5",
+        "simple_roles_192|sid=51|g=51|s=2|t=9"
+      ],
+      "target_ids": [
+        "51"
+      ],
+      "tid": 192,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my niece have?",
+      "retrieved_ids": [
+        "simple_roles_193|sid=21|g=21|s=1|t=0",
+        "simple_roles_193|sid=25|g=25|s=1|t=4",
+        "simple_roles_193|sid=135|g=135|s=6|t=12",
+        "simple_roles_193|sid=89|g=89|s=4|t=7",
+        "simple_roles_193|sid=133|g=133|s=6|t=10"
+      ],
+      "target_ids": [
+        "25"
+      ],
+      "tid": 193,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the name of my nephew's company?",
+      "retrieved_ids": [
+        "simple_roles_194|sid=121|g=121|s=6|t=0",
+        "simple_roles_194|sid=125|g=125|s=6|t=4",
+        "simple_roles_194|sid=7|g=7|s=0|t=7",
+        "simple_roles_194|sid=38|g=38|s=1|t=18",
+        "simple_roles_194|sid=108|g=108|s=5|t=7"
+      ],
+      "target_ids": [
+        "125"
+      ],
+      "tid": 194,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "Where does my uncle work?",
+      "retrieved_ids": [
+        "simple_roles_195|sid=93|g=93|s=4|t=9",
+        "simple_roles_195|sid=142|g=142|s=6|t=18",
+        "simple_roles_195|sid=161|g=161|s=7|t=17",
+        "simple_roles_195|sid=34|g=34|s=1|t=13",
+        "simple_roles_195|sid=84|g=84|s=4|t=0"
+      ],
+      "target_ids": [
+        "93"
+      ],
+      "tid": 195,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the email address of the subordinate?",
+      "retrieved_ids": [
+        "simple_roles_196|sid=31|g=31|s=1|t=10",
+        "simple_roles_196|sid=21|g=21|s=1|t=0",
+        "simple_roles_196|sid=53|g=53|s=2|t=11",
+        "simple_roles_196|sid=81|g=81|s=3|t=18",
+        "simple_roles_196|sid=18|g=18|s=0|t=18"
+      ],
+      "target_ids": [
+        "31"
+      ],
+      "tid": 196,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What is the age of that coworker?",
+      "retrieved_ids": [
+        "simple_roles_197|sid=49|g=49|s=2|t=9",
+        "simple_roles_197|sid=59|g=59|s=2|t=19",
+        "simple_roles_197|sid=17|g=17|s=0|t=17",
+        "simple_roles_197|sid=20|g=20|s=1|t=1",
+        "simple_roles_197|sid=101|g=101|s=5|t=0"
+      ],
+      "target_ids": [
+        "49"
+      ],
+      "tid": 197,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my brother have?",
+      "retrieved_ids": [
+        "simple_roles_198|sid=122|g=122|s=6|t=0",
+        "simple_roles_198|sid=12|g=12|s=0|t=12",
+        "simple_roles_198|sid=49|g=49|s=2|t=9",
+        "simple_roles_198|sid=85|g=85|s=4|t=5",
+        "simple_roles_198|sid=127|g=127|s=6|t=5"
+      ],
+      "target_ids": [
+        "127"
+      ],
+      "tid": 198,
+      "topic": "roles"
+    },
+    {
+      "category": "simple",
+      "hit_at_k": true,
+      "question": "What hobby does my niece have?",
+      "retrieved_ids": [
+        "simple_roles_199|sid=123|g=123|s=6|t=0",
+        "simple_roles_199|sid=135|g=135|s=6|t=12",
+        "simple_roles_199|sid=8|g=8|s=0|t=8",
+        "simple_roles_199|sid=150|g=150|s=7|t=8",
+        "simple_roles_199|sid=131|g=131|s=6|t=8"
+      ],
+      "target_ids": [
+        "131"
+      ],
+      "tid": 199,
+      "topic": "roles"
+    }
+  ],
+  "runtime_seconds": 140.08,
+  "series_name": "new_brainctl",
+  "source_path": null,
+  "status": "partial",
+  "system_name": "brainctl"
+}
