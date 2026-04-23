@@ -10,6 +10,7 @@ def build_debug_payload(
     query_plan: dict[str, Any],
     procedure_debug: dict[str, Any] | None,
     answerability: dict[str, Any] | None,
+    second_stage: dict[str, Any] | None = None,
     top_candidates: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
@@ -17,6 +18,8 @@ def build_debug_payload(
     }
     if procedure_debug:
         payload["procedures"] = procedure_debug
+    if second_stage:
+        payload["second_stage"] = second_stage
     if answerability:
         payload["answerability"] = answerability
     if top_candidates is not None:
@@ -25,7 +28,12 @@ def build_debug_payload(
                 "type": cand.get("type"),
                 "id": cand.get("id"),
                 "final_score": cand.get("final_score"),
+                "pre_second_stage_score": cand.get("pre_second_stage_score"),
+                "second_stage_heuristic": cand.get("second_stage_heuristic"),
+                "second_stage_mlp": cand.get("second_stage_mlp"),
+                "second_stage_judge": cand.get("second_stage_judge"),
                 "why_retrieved": cand.get("why_retrieved"),
+                "feature_summary": cand.get("second_stage_features"),
                 "text": cand.get("content") or cand.get("summary") or cand.get("title") or cand.get("goal") or cand.get("name"),
             }
             for cand in top_candidates[:5]

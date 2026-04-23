@@ -1,0 +1,375 @@
+"""Feature extraction for the shared second-stage reranker."""
+
+from __future__ import annotations
+
+import json
+import math
+import re
+from datetime import datetime, timezone
+from typing import Any, Iterable
+
+try:  # pragma: no cover - numpy is optional at import time
+    import numpy as _np
+except Exception:  # pragma: no cover
+    _np = None
+
+_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "did", "do", "does", "for",
+    "from", "has", "have", "how", "i", "in", "is", "it", "its", "of",
+    "on", "or", "that", "the", "to", "was", "we", "what", "when", "where",
+    "which", "who", "why", "will", "with", "you",
+}
+_LOW_SIGNAL_TOKENS = {
+    "summary", "history", "timeline", "recent", "today", "yesterday", "tomorrow",
+    "game", "issue", "problem", "thing", "stuff", "update",
+}
+_DATE_RE = re.compile(
+    r"\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?|"
+    r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
+    r"jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|"
+    r"dec(?:ember)?)\b",
+    re.IGNORECASE,
+)
+_TEMPORAL_RE = re.compile(
+    r"\b(yesterday|today|tomorrow|when|before|after|during|timeline|history|recent|latest|first|last)\b",
+    re.IGNORECASE,
+)
+_SESSION_RE = re.compile(r"\bsession[_ :#-]*(\d+)\b", re.IGNORECASE)
+_DIALOG_RE = re.compile(r"\bD(\d+):", re.IGNORECASE)
+_ENTITY_RE = re.compile(r"\b[A-Z][A-Za-z0-9_.:-]+\b")
+
+FEATURE_VERSION_V1 = "v1"
+FEATURE_ORDER_V1 = [
+    "base_score",
+    "retrieval_score",
+    "rrf_score",
+    "confidence",
+    "query_overlap",
+    "informative_overlap",
+    "tfidf_cosine",
+    "exact_phrase",
+    "entity_overlap",
+    "alias_overlap",
+    "query_temporal",
+    "candidate_temporal",
+    "temporal_anchor_overlap",
+    "query_session_hint",
+    "candidate_session_hint",
+    "session_gap_score",
+    "intent_bucket_fit",
+    "source_keyword",
+    "source_semantic",
+    "source_both",
+    "source_graph",
+    "bucket_memories",
+    "bucket_events",
+    "bucket_entities",
+    "bucket_procedures",
+    "bucket_decisions",
+    "candidate_age_score",
+    "support_evidence_score",
+    "status_active",
+    "status_stale",
+    "status_needs_review",
+    "position_score",
+    "neighbor_margin",
+    "query_length_score",
+    "candidate_length_score",
+    "procedural_candidate",
+]
+
+
+def _normalize_token(token: str) -> str:
+    tok = re.sub(r"[^a-z0-9]+", "", (token or "").lower())
+    if len(tok) <= 2 or tok in _STOPWORDS:
+        return ""
+    if tok.endswith("ies") and len(tok) > 4:
+        tok = tok[:-3] + "y"
+    elif tok.endswith("ed") and len(tok) > 4:
+        tok = tok[:-2]
+    elif tok.endswith("es") and len(tok) > 4:
+        tok = tok[:-2]
+    elif tok.endswith("s") and len(tok) > 3:
+        tok = tok[:-1]
+    return tok
+
+
+def _token_set(text: str) -> set[str]:
+    return {
+        token
+        for part in re.split(r"\s+", text or "")
+        if (token := _normalize_token(part))
+    }
+
+
+def _informative_tokens(text: str) -> set[str]:
+    return {token for token in _token_set(text) if token not in _LOW_SIGNAL_TOKENS}
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def candidate_text(candidate: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for key in (
+        "content", "summary", "title", "goal", "description", "search_text",
+        "name", "compiled_truth", "why_retrieved",
+    ):
+        value = candidate.get(key)
+        if value:
+            parts.append(str(value))
+    for key in ("observations", "aliases", "supporting_evidence"):
+        value = candidate.get(key)
+        if not value:
+            continue
+        if isinstance(value, str):
+            parts.append(value)
+        else:
+            try:
+                parts.append(json.dumps(value, ensure_ascii=True))
+            except Exception:
+                parts.append(str(value))
+    return " ".join(parts)
+
+
+def _alias_values(candidate: dict[str, Any]) -> list[str]:
+    raw = candidate.get("aliases")
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return [str(value) for value in raw if value]
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            return [raw]
+        if isinstance(parsed, list):
+            return [str(value) for value in parsed if value]
+        return [raw]
+    return [str(raw)]
+
+
+def _entity_terms(text: str) -> set[str]:
+    return {
+        match.group(0).lower()
+        for match in _ENTITY_RE.finditer(text or "")
+        if len(match.group(0)) > 2
+    }
+
+
+def _intent_bucket_preference(plan: Any, bucket: str) -> float:
+    if plan is None:
+        return 0.5
+    tables = list(getattr(plan, "candidate_tables", []) or [])
+    if not tables:
+        return 0.5
+    try:
+        position = tables.index(bucket)
+    except ValueError:
+        return 0.2
+    return max(0.2, 1.0 - (position * 0.12))
+
+
+def _source_flags(candidate: dict[str, Any]) -> tuple[float, float, float, float]:
+    source = str(candidate.get("source") or "").lower()
+    return (
+        1.0 if source in {"keyword", "procedure_fts", "intent_entity", "intent_decision"} else 0.0,
+        1.0 if source == "semantic" else 0.0,
+        1.0 if source == "both" else 0.0,
+        1.0 if source == "graph" else 0.0,
+    )
+
+
+def _bucket_flags(bucket: str) -> tuple[float, float, float, float, float]:
+    return (
+        1.0 if bucket == "memories" else 0.0,
+        1.0 if bucket == "events" else 0.0,
+        1.0 if bucket == "entities" else 0.0,
+        1.0 if bucket == "procedures" else 0.0,
+        1.0 if bucket == "decisions" else 0.0,
+    )
+
+
+def _temporal_anchor_overlap(query: str, text: str) -> float:
+    query_dates = {match.group(0).lower() for match in _DATE_RE.finditer(query or "")}
+    cand_dates = {match.group(0).lower() for match in _DATE_RE.finditer(text or "")}
+    if not query_dates:
+        return 0.0
+    return len(query_dates & cand_dates) / len(query_dates)
+
+
+def _extract_session_hints(text: str) -> list[int]:
+    hints = [int(match.group(1)) for match in _SESSION_RE.finditer(text or "")]
+    hints.extend(int(match.group(1)) for match in _DIALOG_RE.finditer(text or ""))
+    return hints
+
+
+def _session_gap_score(query: str, candidate_text_value: str) -> tuple[float, float, float]:
+    query_sessions = _extract_session_hints(query)
+    candidate_sessions = _extract_session_hints(candidate_text_value)
+    if not query_sessions:
+        return 0.0, 0.0, 0.0
+    if not candidate_sessions:
+        return 1.0, 0.0, 0.0
+    gap = min(abs(q - c) for q in query_sessions for c in candidate_sessions)
+    return 1.0 / (1.0 + gap), 1.0, 1.0
+
+
+def _parse_iso_timestamp(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        text = str(value).replace("Z", "+00:00")
+        dt = datetime.fromisoformat(text)
+    except Exception:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _age_score(candidate: dict[str, Any]) -> float:
+    when = _parse_iso_timestamp(candidate.get("created_at")) or _parse_iso_timestamp(candidate.get("updated_at"))
+    if when is None:
+        return 0.5
+    age_days = max((datetime.now(timezone.utc) - when).total_seconds() / 86400.0, 0.0)
+    return 1.0 / (1.0 + age_days / 30.0)
+
+
+def _tfidf_cosine(query: str, text: str) -> float:
+    q_tokens = list(_informative_tokens(query))
+    c_tokens = list(_informative_tokens(text))
+    if not q_tokens or not c_tokens:
+        return 0.0
+    docs = [q_tokens, c_tokens]
+    vocab = sorted({token for doc in docs for token in doc})
+    if not vocab:
+        return 0.0
+    doc_freq: dict[str, int] = {}
+    for token in vocab:
+        doc_freq[token] = sum(1 for doc in docs if token in doc)
+    n_docs = len(docs)
+
+    def _weights(tokens: Iterable[str]) -> dict[str, float]:
+        counts: dict[str, int] = {}
+        for token in tokens:
+            counts[token] = counts.get(token, 0) + 1
+        if not counts:
+            return {}
+        max_tf = max(counts.values()) or 1
+        weights: dict[str, float] = {}
+        for token, count in counts.items():
+            tf = count / max_tf
+            idf = math.log((1 + n_docs) / (1 + doc_freq[token])) + 1.0
+            weights[token] = tf * idf
+        return weights
+
+    q_weights = _weights(q_tokens)
+    c_weights = _weights(c_tokens)
+    dot = sum(q_weights.get(token, 0.0) * c_weights.get(token, 0.0) for token in vocab)
+    q_norm = math.sqrt(sum(value * value for value in q_weights.values()))
+    c_norm = math.sqrt(sum(value * value for value in c_weights.values()))
+    if q_norm == 0.0 or c_norm == 0.0:
+        return 0.0
+    return dot / (q_norm * c_norm)
+
+
+def build_features(
+    query: str,
+    plan: Any,
+    candidate: dict[str, Any],
+    *,
+    neighbors: dict[str, Any] | None = None,
+) -> dict[str, float]:
+    """Build numeric features for a candidate row."""
+
+    bucket = str(candidate.get("bucket") or candidate.get("type") or "memories")
+    text = candidate_text(candidate)
+    query_tokens = _token_set(query)
+    query_informative = _informative_tokens(query)
+    cand_tokens = _token_set(text)
+    cand_informative = _informative_tokens(text)
+    query_overlap = len(query_tokens & cand_tokens) / max(len(query_tokens), 1) if query_tokens else 0.0
+    informative_overlap = (
+        len(query_informative & cand_informative) / max(len(query_informative), 1)
+        if query_informative else query_overlap
+    )
+    exact_phrase = 1.0 if query and len(query.strip()) >= 4 and query.lower().strip() in text.lower() else 0.0
+    query_entities = _entity_terms(query) | {term.lower() for term in getattr(plan, "target_entities", []) or []}
+    cand_entities = _entity_terms(text)
+    entity_overlap = len(query_entities & cand_entities) / max(len(query_entities), 1) if query_entities else 0.0
+    aliases = {alias.lower() for alias in _alias_values(candidate) if len(alias) > 2}
+    alias_overlap = len(query_entities & aliases) / max(len(query_entities), 1) if query_entities and aliases else 0.0
+    query_temporal = 1.0 if _TEMPORAL_RE.search(query or "") else 0.0
+    candidate_temporal = 1.0 if _TEMPORAL_RE.search(text or "") or _DATE_RE.search(text or "") else 0.0
+    temporal_anchor_overlap = _temporal_anchor_overlap(query, text)
+    session_gap_score, query_session_hint, candidate_session_hint = _session_gap_score(query, text)
+    source_keyword, source_semantic, source_both, source_graph = _source_flags(candidate)
+    bucket_memories, bucket_events, bucket_entities, bucket_procedures, bucket_decisions = _bucket_flags(bucket)
+    status = str(candidate.get("status") or "").lower()
+    position = max(int(candidate.get("_stage_position") or 0), 0)
+    prev_score = _safe_float((neighbors or {}).get("prev_score"))
+    next_score = _safe_float((neighbors or {}).get("next_score"))
+    current_score = _safe_float(candidate.get("final_score") or candidate.get("retrieval_score"))
+    neighbor_margin = max(current_score - prev_score, current_score - next_score, 0.0)
+    confidence = _safe_float(candidate.get("confidence"), 0.5)
+    support_evidence_score = min(len(candidate.get("supporting_evidence") or []) / 3.0, 1.0)
+    features = {
+        "base_score": current_score,
+        "retrieval_score": _safe_float(candidate.get("retrieval_score"), current_score),
+        "rrf_score": _safe_float(candidate.get("rrf_score")),
+        "confidence": confidence,
+        "query_overlap": query_overlap,
+        "informative_overlap": informative_overlap,
+        "tfidf_cosine": _tfidf_cosine(query, text),
+        "exact_phrase": exact_phrase,
+        "entity_overlap": entity_overlap,
+        "alias_overlap": alias_overlap,
+        "query_temporal": query_temporal,
+        "candidate_temporal": candidate_temporal,
+        "temporal_anchor_overlap": temporal_anchor_overlap,
+        "query_session_hint": query_session_hint,
+        "candidate_session_hint": candidate_session_hint,
+        "session_gap_score": session_gap_score,
+        "intent_bucket_fit": _intent_bucket_preference(plan, bucket),
+        "source_keyword": source_keyword,
+        "source_semantic": source_semantic,
+        "source_both": source_both,
+        "source_graph": source_graph,
+        "bucket_memories": bucket_memories,
+        "bucket_events": bucket_events,
+        "bucket_entities": bucket_entities,
+        "bucket_procedures": bucket_procedures,
+        "bucket_decisions": bucket_decisions,
+        "candidate_age_score": _age_score(candidate),
+        "support_evidence_score": support_evidence_score,
+        "status_active": 1.0 if status in {"", "active"} else 0.0,
+        "status_stale": 1.0 if status in {"stale", "superseded", "retired"} else 0.0,
+        "status_needs_review": 1.0 if status == "needs_review" else 0.0,
+        "position_score": 1.0 / (1.0 + position),
+        "neighbor_margin": neighbor_margin,
+        "query_length_score": min(len(query_informative) / 8.0, 1.0),
+        "candidate_length_score": min(len(cand_informative) / 64.0, 1.0),
+        "procedural_candidate": 1.0 if bucket == "procedures" else 0.0,
+    }
+    return {name: round(float(features.get(name, 0.0)), 6) for name in FEATURE_ORDER_V1}
+
+
+def vectorize_features(
+    feature_dict: dict[str, float],
+    *,
+    feature_version: str = FEATURE_VERSION_V1,
+):
+    """Return a numeric feature vector in canonical order."""
+
+    if feature_version != FEATURE_VERSION_V1:
+        raise ValueError(f"Unsupported feature version: {feature_version}")
+    values = [float(feature_dict.get(name, 0.0)) for name in FEATURE_ORDER_V1]
+    if _np is not None:
+        return _np.asarray(values, dtype=float)
+    return values
+

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import time
+import urllib.error
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from benchmarks.brainctl_retrieval import rank_documents
-from benchmarks.framework import BenchmarkRunResult, BLOCKED, PARTIAL
+from benchmarks.framework import BenchmarkRunResult, BLOCKED, FULL_SAME_MACHINE, PARTIAL
 
 
 HF_BASE = "https://huggingface.co/datasets/Salesforce/ConvoMem/resolve/main/core_benchmark/evidence_questions"
@@ -32,10 +33,22 @@ def _download_json(url: str, path: Path) -> Any:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         return _read_json(path)
-    with urllib.request.urlopen(url, timeout=30) as response:
-        payload = response.read().decode("utf-8")
-    path.write_text(payload, encoding="utf-8")
-    return json.loads(payload)
+    last_error: Exception | None = None
+    req = urllib.request.Request(url, headers={"User-Agent": "brainctl-convomem-bench/1.0"})
+    for _attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:  # noqa: S310 - remote dataset fetch
+                payload = response.read().decode("utf-8")
+            path.write_text(payload, encoding="utf-8")
+            return json.loads(payload)
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
+            last_error = exc
+            time.sleep(0.4)
+            if path.exists():
+                return _read_json(path)
+    if path.exists():
+        return _read_json(path)
+    raise last_error or RuntimeError(f"Failed to download {url}")
 
 
 def _discover_files(category: str, cache_dir: Path) -> list[str]:
@@ -55,14 +68,25 @@ def load_evidence_items(
     categories: list[str],
     limit_per_category: int,
     cache_dir: Path,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[str], list[str]]:
     items: list[dict[str, Any]] = []
+    caveats: list[str] = []
+    loaded_categories: list[str] = []
     for category in categories:
         loaded = 0
-        for subpath in _discover_files(category, cache_dir):
+        try:
+            subpaths = _discover_files(category, cache_dir)
+        except Exception as exc:
+            caveats.append(f"{category}: discover failed: {exc!s}")
+            continue
+        for subpath in subpaths:
             cache_path = cache_dir / category / subpath.replace("/", "_")
             url = f"{HF_BASE}/{category}/{subpath}"
-            payload = _download_json(url, cache_path)
+            try:
+                payload = _download_json(url, cache_path)
+            except Exception as exc:
+                caveats.append(f"{category}: item load failed for {subpath}: {exc!s}")
+                continue
             for item in payload.get("evidence_items", []):
                 item["_category_key"] = category
                 items.append(item)
@@ -71,7 +95,11 @@ def load_evidence_items(
                     break
             if loaded >= limit_per_category:
                 break
-    return items
+        if loaded > 0:
+            loaded_categories.append(category)
+        else:
+            caveats.append(f"{category}: no evidence items loaded")
+    return items, caveats, loaded_categories
 
 
 def _message_docs(item: dict[str, Any]) -> list[tuple[str, str]]:
@@ -134,28 +162,12 @@ def run_brainctl_convomem(
         )
         return run, []
 
-    try:
-        items = load_evidence_items(
-            categories=categories or list(CATEGORIES.keys()),
-            limit_per_category=limit_per_category,
-            cache_dir=cache_dir,
-        )
-    except Exception as exc:
-        run = BenchmarkRunResult(
-            benchmark="convomem",
-            system_name="brainctl",
-            mode=pipeline,
-            status=BLOCKED,
-            example_count=0,
-            metrics={},
-            primary_metric="avg_recall",
-            primary_metric_value=None,
-            dataset_path=str(cache_dir),
-            notes=[f"limit_per_category={limit_per_category}", f"top_k={top_k}"],
-            series_name="new_brainctl",
-            caveats=[f"Blocked while loading ConvoMem evidence data: {exc!s}"],
-        )
-        return run, []
+    requested_categories = categories or list(CATEGORIES.keys())
+    items, caveats, loaded_categories = load_evidence_items(
+        categories=requested_categories,
+        limit_per_category=limit_per_category,
+        cache_dir=cache_dir,
+    )
 
     if not items:
         run = BenchmarkRunResult(
@@ -170,7 +182,7 @@ def run_brainctl_convomem(
             dataset_path=str(cache_dir),
             notes=[f"limit_per_category={limit_per_category}", f"top_k={top_k}"],
             series_name="new_brainctl",
-            caveats=["Blocked because no ConvoMem evidence items could be loaded for the requested categories."],
+            caveats=caveats or ["Blocked because no ConvoMem evidence items could be loaded for the requested categories."],
         )
         return run, []
 
@@ -212,15 +224,15 @@ def run_brainctl_convomem(
         benchmark="convomem",
         system_name="brainctl",
         mode=pipeline,
-        status=PARTIAL,
+        status=FULL_SAME_MACHINE if len(loaded_categories) == len(requested_categories) else PARTIAL,
         example_count=example_count,
         metrics=metrics,
         primary_metric="avg_recall",
         primary_metric_value=avg_recall,
         runtime_seconds=runtime_seconds,
         dataset_path=str(cache_dir),
-        notes=[f"categories={len(categories or list(CATEGORIES.keys()))}", f"limit_per_category={limit_per_category}", f"top_k={top_k}"],
-        caveats=["ConvoMem comparison is partial because it uses a bounded same-machine sample, not the full benchmark."],
+        notes=[f"categories={len(requested_categories)}", f"limit_per_category={limit_per_category}", f"top_k={top_k}"],
+        caveats=(caveats + ["ConvoMem comparison is partial because it uses a bounded same-machine sample, not the full benchmark."]) if len(loaded_categories) != len(requested_categories) else caveats,
         series_name="new_brainctl",
     )
     return run, rows

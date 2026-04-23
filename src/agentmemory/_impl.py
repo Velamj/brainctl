@@ -7663,6 +7663,23 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
             limit=limit,
         )
 
+    _second_stage_debug = None
+    try:
+        from agentmemory.retrieval.second_stage import (
+            SecondStageConfig as _SecondStageConfig,
+            rerank_bucketed_results as _rerank_bucketed_results,
+        )
+
+        _second_stage_config = _SecondStageConfig.from_args(args)
+        results, _second_stage_debug = _rerank_bucketed_results(
+            query,
+            _query_plan,
+            results,
+            config=_second_stage_config,
+        )
+    except Exception as exc:
+        _debug_skips["second_stage.skipped"] = f"{type(exc).__name__}: {exc}"
+
     if db_vec:
         db_vec.close()
 
@@ -7709,6 +7726,12 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
                     results[key] = []
         except Exception as exc:
             _debug_skips["answerability.skipped"] = f"{type(exc).__name__}: {exc}"
+
+    if (_second_stage_debug or {}).get("enabled"):
+        for key in ("procedures", "memories", "events", "context", "entities", "decisions"):
+            rows = list(results.get(key) or [])
+            rows.sort(key=lambda item: item.get("final_score", 0.0), reverse=True)
+            results[key] = rows[:limit]
 
     total = sum(len(v) for v in results.values())
     tokens_out = _estimate_tokens(results)
@@ -7870,6 +7893,7 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
                 query_plan=_query_plan_dict or {},
                 procedure_debug=_procedure_debug,
                 answerability=_answerability,
+                second_stage=_second_stage_debug,
                 top_candidates=_top_candidates,
             )
     except Exception as exc:
@@ -17258,6 +17282,22 @@ def build_parser():
     srch.add_argument("--rerank-budget-ms", type=float, default=None, metavar="MS",
                        help="Strict latency budget for cross-encoder rerank (per-call and rolling p95). "
                             "Defaults to env BRAINCTL_CE_P95_BUDGET_MS or 350.")
+    srch.add_argument("--no-second-stage", action="store_true", default=False,
+                       help="Disable the shared deterministic second-stage reranker.")
+    srch.add_argument("--no-second-stage-model", action="store_true", default=False,
+                       help="Run the second-stage reranker without the tiny MLP residual model.")
+    srch.add_argument("--second-stage-top-n", type=int, default=None, metavar="N",
+                       help="Combined top-N candidate window for the shared second-stage reranker. "
+                            "Defaults to env BRAINCTL_SECOND_STAGE_TOP_N or 10.")
+    srch.add_argument("--second-stage-model-path", default=None, metavar="PATH",
+                       help="Override the tiny MLP JSON artifact used by the shared second-stage reranker.")
+    srch.add_argument("--judge-rerank", nargs="?", const="ollama", default=None, metavar="PROVIDER",
+                       help="Enable the optional top-5 judge reranker with the given provider "
+                            "(default when passed without value: ollama).")
+    srch.add_argument("--judge-model", default="llama3.2:3b", metavar="MODEL",
+                       help="Model name for the optional judge reranker (provider-specific).")
+    srch.add_argument("--judge-top-k", type=int, default=5, metavar="N",
+                       help="Top-K candidates sent to the optional judge reranker (max recommended: 5).")
     srch.add_argument("--rollout-mode", choices=["on", "off", "canary"], default=None,
                        help="Top-heavy retrieval rollout mode override. "
                             "Defaults to env BRAINCTL_TOPHEAVY_ROLLOUT_MODE or on.")

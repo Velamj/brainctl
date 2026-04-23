@@ -77,7 +77,7 @@ def _search_brain(db_path: Path, query: str, top_k: int) -> list[dict]:
         brain.close()
 
 
-def _search_cmd(db_path: Path, query: str, top_k: int) -> list[dict]:
+def _search_cmd(db_path: Path, query: str, top_k: int, *, debug: bool = False) -> list[dict]:
     import agentmemory._impl as _impl
 
     _impl.DB_PATH = db_path
@@ -101,7 +101,7 @@ def _search_cmd(db_path: Path, query: str, top_k: int) -> list[dict]:
         format="json",
         oneline=False,
         verbose=False,
-        debug=False,
+        debug=debug,
     )
     payload = _impl.cmd_search(args, db=None, db_path=str(db_path))
     memories = list((payload or {}).get("memories") or [])
@@ -177,6 +177,34 @@ def rank_seeded_documents(
         shutil.rmtree(work_dir, ignore_errors=True)
 
 
+def search_seeded_documents(
+    query: str,
+    seeded: SeededCorpus,
+    *,
+    pipeline: str = "cmd",
+    top_k: int = 10,
+    debug: bool = False,
+) -> list[dict]:
+    work_dir = Path(tempfile.mkdtemp(prefix="brainctl-legacy-query-"))
+    db_path = work_dir / "brain.db"
+    try:
+        shutil.copy2(seeded.template_db_path, db_path)
+        if pipeline == "brain":
+            results = _search_brain(db_path, query, top_k)
+        elif pipeline == "cmd":
+            results = _search_cmd(db_path, query, top_k, debug=debug)
+        else:
+            raise ValueError(f"Unknown pipeline {pipeline!r}")
+        out: list[dict] = []
+        for result in results:
+            row = dict(result)
+            row["doc_id"] = seeded.rowid_to_doc_id.get(int(result["id"]), "")
+            out.append(row)
+        return out
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
+
+
 def rank_documents(
     query: str,
     documents: Iterable[tuple[str, str]],
@@ -188,5 +216,21 @@ def rank_documents(
     seeded = seed_documents(documents, category=category)
     try:
         return rank_seeded_documents(query, seeded, pipeline=pipeline, top_k=top_k)
+    finally:
+        seeded.cleanup()
+
+
+def rank_documents_with_rows(
+    query: str,
+    documents: Iterable[tuple[str, str]],
+    *,
+    pipeline: str = "cmd",
+    top_k: int = 10,
+    category: str = "benchmark",
+    debug: bool = False,
+) -> list[dict]:
+    seeded = seed_documents(documents, category=category)
+    try:
+        return search_seeded_documents(query, seeded, pipeline=pipeline, top_k=top_k, debug=debug)
     finally:
         seeded.cleanup()
