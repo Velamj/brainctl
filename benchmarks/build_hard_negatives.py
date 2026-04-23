@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import sys
 from collections import Counter
 from pathlib import Path
@@ -23,6 +24,40 @@ from benchmarks.longmemeval_bench import load_entries as _load_longmemeval_entri
 from benchmarks.longmemeval_bench import session_document as _longmemeval_session_document
 from agentmemory.retrieval.feature_builder import FEATURE_ORDER_V1, FEATURE_VERSION_V1, build_features, vectorize_features
 from agentmemory.retrieval.query_planner import plan_query
+
+
+def _dcg_from_labels(labels: list[int], k: int) -> float:
+    total = 0.0
+    for idx, label in enumerate(labels[:k], start=1):
+        if label > 0:
+            total += ((2 ** int(label)) - 1) / max(1.0, math.log2(idx + 1))
+    return total
+
+
+def _dcg_summary(gold_doc_ids: list[str], ranked_doc_ids: list[str], *, k: int) -> tuple[float, float, float]:
+    labels = [1 if doc_id in set(gold_doc_ids) else 0 for doc_id in ranked_doc_ids[:k]]
+    dcg = _dcg_from_labels(labels, k)
+    ideal_labels = sorted(labels + [1] * max(0, len(gold_doc_ids) - len(labels)), reverse=True)[:k]
+    idcg = _dcg_from_labels(ideal_labels, k)
+    return round(dcg, 6), round(idcg, 6), round(max(idcg - dcg, 0.0), 6)
+
+
+def _failure_bucket(*, benchmark: str, gold_doc_ids: list[str], ranked_doc_ids: list[str], query_label: str) -> str:
+    top = ranked_doc_ids[:5]
+    top_hits = [doc_id for doc_id in top if doc_id in set(gold_doc_ids)]
+    if benchmark == "longmemeval":
+        if top_hits and top[0] not in set(gold_doc_ids):
+            return "late_gold"
+        if len(set(top)) < len(top):
+            return "duplicate_top_slate"
+        if "temporal" in query_label.lower():
+            return "temporal_anchor_miss"
+        return "coverage_miss"
+    if len(top_hits) < len(gold_doc_ids):
+        return "coverage_miss"
+    if "temporal" in query_label.lower():
+        return "temporal_anchor_miss"
+    return "late_gold"
 
 
 def _latest_bundle() -> Path:
@@ -59,6 +94,7 @@ def _record_for_candidate(
     candidate: dict[str, Any],
     rank: int,
     query_label: str,
+    slate_doc_ids: list[str],
 ) -> dict[str, Any]:
     plan = plan_query(query, requested_tables=["memories"])
     candidate = dict(candidate)
@@ -67,6 +103,8 @@ def _record_for_candidate(
     candidate["_stage_position"] = rank
     features = build_features(query, plan, candidate)
     doc_id = str(candidate.get("doc_id") or "")
+    dcg_at_5, idcg_at_5, dcg_gap_at_5 = _dcg_summary(gold_doc_ids, slate_doc_ids, k=5)
+    dcg_at_10, idcg_at_10, dcg_gap_at_10 = _dcg_summary(gold_doc_ids, slate_doc_ids, k=10)
     return {
         "benchmark": benchmark,
         "query_id": query_id,
@@ -77,6 +115,20 @@ def _record_for_candidate(
         "candidate_doc_id": doc_id,
         "label": 1 if doc_id in set(gold_doc_ids) else 0,
         "rank": rank,
+        "slate_doc_ids": slate_doc_ids,
+        "slate_labels": [1 if value in set(gold_doc_ids) else 0 for value in slate_doc_ids],
+        "failure_bucket": _failure_bucket(
+            benchmark=benchmark,
+            gold_doc_ids=gold_doc_ids,
+            ranked_doc_ids=slate_doc_ids,
+            query_label=query_label,
+        ),
+        "dcg_at_5": dcg_at_5,
+        "idcg_at_5": idcg_at_5,
+        "dcg_gap_at_5": dcg_gap_at_5,
+        "dcg_at_10": dcg_at_10,
+        "idcg_at_10": idcg_at_10,
+        "dcg_gap_at_10": dcg_gap_at_10,
         "source": candidate.get("source"),
         "base_score": candidate.get("pre_second_stage_score", candidate.get("final_score")),
         "retrieval_score": candidate.get("retrieval_score"),
@@ -122,7 +174,8 @@ def build_longmemeval_records(bundle_dir: Path, dataset_path: Path, *, top_k: in
         ]
         ranked = rank_documents_with_rows(entry.question, docs, pipeline="cmd", top_k=top_k, debug=True)
         gold_ids = list(entry.answer_session_ids)
-        if not any(str(candidate.get("doc_id") or "") in set(gold_ids) for candidate in ranked):
+        ranked_doc_ids = [str(candidate.get("doc_id") or "") for candidate in ranked[:top_k]]
+        if not any(doc_id in set(gold_ids) for doc_id in ranked_doc_ids):
             skipped_no_window += 1
             continue
         selected += 1
@@ -138,6 +191,7 @@ def build_longmemeval_records(bundle_dir: Path, dataset_path: Path, *, top_k: in
                     candidate=candidate,
                     rank=rank,
                     query_label=entry.question_type,
+                    slate_doc_ids=ranked_doc_ids,
                 )
             )
 
@@ -178,7 +232,8 @@ def build_locomo_records(bundle_dir: Path, dataset_path: Path, *, top_k: int) ->
         docs = _locomo_build_corpus(sessions, granularity="session")
         ranked = rank_documents_with_rows(str(row["question"]), docs, pipeline="cmd", top_k=top_k, debug=True)
         gold_ids = [str(value) for value in row.get("evidence_ids", [])]
-        if not any(str(candidate.get("doc_id") or "") in set(gold_ids) for candidate in ranked):
+        ranked_doc_ids = [str(candidate.get("doc_id") or "") for candidate in ranked[:top_k]]
+        if not any(doc_id in set(gold_ids) for doc_id in ranked_doc_ids):
             skipped_no_window += 1
             continue
         query_id = hashlib.sha1(f"{row['sample_id']}|{row['question']}|{idx}".encode("utf-8")).hexdigest()[:12]
@@ -195,6 +250,7 @@ def build_locomo_records(bundle_dir: Path, dataset_path: Path, *, top_k: int) ->
                     candidate=candidate,
                     rank=rank,
                     query_label=str(row.get("category_name") or row.get("category") or "unknown"),
+                    slate_doc_ids=ranked_doc_ids,
                 )
             )
     return records, {

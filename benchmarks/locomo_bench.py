@@ -83,6 +83,14 @@ def _recall(retrieved_ids: list[str], evidence_ids: set[str]) -> float:
     return found / len(evidence_ids)
 
 
+def _dcg_from_binary(retrieved_ids: list[str], evidence_ids: set[str], k: int) -> float:
+    total = 0.0
+    for idx, item in enumerate(retrieved_ids[:k], start=1):
+        if item in evidence_ids:
+            total += 1.0 / __import__("math").log2(idx + 1)
+    return total
+
+
 def run_brainctl_locomo(
     data_path: Path | None,
     *,
@@ -136,6 +144,21 @@ def run_brainctl_locomo(
                         "evidence_ids": sorted(evidence_ids),
                         "retrieved_ids": retrieved_ids,
                         "recall": round(recall, 4),
+                        "dcg_at_5": round(_dcg_from_binary(retrieved_ids, evidence_ids, 5), 4),
+                        "idcg_at_5": round(_dcg_from_binary(sorted(evidence_ids), evidence_ids, 5), 4),
+                        "dcg_gap_at_5": round(max(_dcg_from_binary(sorted(evidence_ids), evidence_ids, 5) - _dcg_from_binary(retrieved_ids, evidence_ids, 5), 0.0), 4),
+                        "dcg_at_10": round(_dcg_from_binary(retrieved_ids, evidence_ids, 10), 4),
+                        "idcg_at_10": round(_dcg_from_binary(sorted(evidence_ids), evidence_ids, 10), 4),
+                        "dcg_gap_at_10": round(max(_dcg_from_binary(sorted(evidence_ids), evidence_ids, 10) - _dcg_from_binary(retrieved_ids, evidence_ids, 10), 0.0), 4),
+                        "failure_bucket": (
+                            "coverage_miss"
+                            if recall < 1.0 and any(item in evidence_ids for item in retrieved_ids[:top_k])
+                            else "temporal_anchor_miss"
+                            if "temporal" in CATEGORIES.get(category, "").lower()
+                            else "late_gold"
+                            if any(item in evidence_ids for item in retrieved_ids[:top_k]) and retrieved_ids[:1] and retrieved_ids[0] not in evidence_ids
+                            else "grounded"
+                        ),
                     }
                 )
         finally:

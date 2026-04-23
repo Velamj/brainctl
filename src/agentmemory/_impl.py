@@ -6489,20 +6489,26 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
     use_mmr = getattr(args, "mmr", False)                # --mmr: MMR diversity reranking
     mmr_lambda = getattr(args, "mmr_lambda", 0.7)        # --mmr-lambda: relevance/diversity trade-off
     use_explore = getattr(args, "explore", False)        # --explore: curiosity mode
-    # --benchmark (2.3.1): bypass the recency/salience/Q-value reranker chain
-    # and return raw FTS+vec RRF-fused ranking. Trust reranker is *retained*
-    # because trust is provenance, not stale-data leakage. The flag exists as
-    # an escape hatch for synthetic-conversational benchmarks (LOCOMO,
-    # LongMemEval) where uniform timestamps and zero recall history make the
-    # rerankers worse than no-op. See memory id 1690 and tests/test_reranker_robustness.
     benchmark_mode = getattr(args, "benchmark", False)
+    benchmark_ranking_mode = str(
+        getattr(args, "benchmark_ranking_mode", None)
+        or os.environ.get("BRAINCTL_BENCHMARK_RANKING_MODE", "full")
+        or "full"
+    ).strip().lower()
+    if benchmark_ranking_mode not in {"full", "raw"}:
+        benchmark_ranking_mode = "full"
+    benchmark_raw_ranking = bool(benchmark_mode and benchmark_ranking_mode == "raw")
     if benchmark_mode:
-        # One-line stderr note so the user can see the reranker chain went
-        # silent. Avoids log spam on the hot path while still being visible.
-        print(
-            "[brainctl] --benchmark: reranker chain disabled, returning raw FTS+vec ranking",
-            file=sys.stderr,
-        )
+        if benchmark_raw_ranking:
+            print(
+                "[brainctl] --benchmark: raw ranking ablation mode, returning raw FTS+vec ranking",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "[brainctl] --benchmark: stable-eval mode with full shared ranking",
+                file=sys.stderr,
+            )
     results = {"memories": [], "events": [], "context": [], "entities": [], "decisions": [], "procedures": []}
     # Accumulator for which signal-informativeness gates tripped this call.
     # Each value is a string reason like "uniform_timestamps_stdev_3.2s" or a
@@ -6510,6 +6516,8 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
     # "_debug" key so auditors can see WHY a particular ranking happened.
     _debug_skips: Dict[str, Any] = {}
     _debug_mode = bool(getattr(args, "debug", False))
+    if benchmark_mode:
+        _debug_skips["benchmark.ranking_mode"] = benchmark_ranking_mode
 
     # I6 staged rollout controls for top-heavy retrieval features.
     _rollout_agent = getattr(args, "agent", None) or "unknown"
@@ -6596,8 +6604,20 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
     except Exception as exc:
         _debug_skips["entity_linking.skipped"] = f"{type(exc).__name__}: {exc}"
 
+    _hard_query_expansion = bool(
+        _query_plan
+        and (
+            getattr(_query_plan, "requires_temporal_reasoning", False)
+            or getattr(_query_plan, "requires_multi_hop", False)
+            or getattr(_query_plan, "needs_comparison", False)
+            or getattr(_query_plan, "needs_ordering", False)
+            or getattr(_query_plan, "needs_update_resolution", False)
+            or getattr(_query_plan, "needs_set_coverage", False)
+        )
+    )
     base_fetch = limit * 5 if not no_recency else limit * 3
     fetch_limit = max(limit, round(base_fetch * _nm_breadth))
+    expanded_fetch_limit = max(fetch_limit, round(fetch_limit * (1.8 if _hard_query_expansion else 1.0)))
     # Build an OR-expanded FTS5 MATCH expression so natural-language queries
     # (e.g. "What does Alice prefer?") retrieve memories that match any token,
     # not only memories that contain every word. The simple Brain.search path
@@ -6641,9 +6661,10 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
             _adaptive_weights = None
     _max_recalls_cache = [None]  # lazy-compute once per cmd_search
 
-    def _fts_memories():
+    def _fts_memories(limit_override=None):
         if not fts_query:
             return []
+        _fetch = int(limit_override or fetch_limit)
         # Content-weighted BM25. memories_fts indexes (content, category, tags).
         # Default FTS5 `rank` uses weight 1.0 for every column, which treats a
         # 200-char content column equally with a one-word `category` label
@@ -6665,17 +6686,18 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
             "WHERE memories_fts MATCH ? AND m.retired_at IS NULL "
             "AND COALESCE(m.memory_type, 'episodic') != 'procedural' "
             "ORDER BY bm25(memories_fts, 3.0, 1.0, 1.0) LIMIT ?",
-            (fts_query, fetch_limit)
+            (fts_query, _fetch)
         ).fetchall()
         return rows_to_list(rows)
 
-    def _vec_memories():
+    def _vec_memories(limit_override=None):
         if not hybrid:
             return []
+        _fetch = int(limit_override or fetch_limit)
         try:
             vec_rows = db_vec.execute(
                 "SELECT rowid, distance FROM vec_memories WHERE embedding MATCH ? AND k=?",
-                (q_blob, fetch_limit)
+                (q_blob, _fetch)
             ).fetchall()
         except Exception:
             return []
@@ -7305,6 +7327,35 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
                 merged = _rrf_fuse(fts_list, vec_list)
             else:
                 merged = [r | {"rrf_score": 0.0, "source": "keyword"} for r in fts_list]
+            if (
+                _hard_query_expansion
+                and not benchmark_mode
+                and expanded_fetch_limit > fetch_limit
+                and len(merged) >= 2
+            ):
+                try:
+                    _rank_key = "rrf_score" if hybrid else "fts_rank"
+                    _sorted_merged = sorted(
+                        merged,
+                        key=lambda r: float(r.get(_rank_key) or 0.0),
+                        reverse=bool(hybrid),
+                    )
+                    if hybrid:
+                        _top_gap = abs(float(_sorted_merged[0].get("rrf_score") or 0.0) - float(_sorted_merged[1].get("rrf_score") or 0.0))
+                    else:
+                        _top_gap = abs(float(_sorted_merged[0].get("fts_rank") or 0.0) - float(_sorted_merged[1].get("fts_rank") or 0.0))
+                    if _top_gap <= (0.03 if hybrid else 0.4):
+                        _fts_expanded = _fts_memories(limit_override=expanded_fetch_limit)
+                        _vec_expanded = _vec_memories(limit_override=expanded_fetch_limit)
+                        if hybrid:
+                            merged = _rrf_fuse(_fts_expanded, _vec_expanded)
+                        else:
+                            merged = [r | {"rrf_score": 0.0, "source": "keyword"} for r in _fts_expanded]
+                        _debug_skips["memories.candidate_expansion"] = (
+                            f"hard_query_margin_{round(_top_gap, 4)}_fetch_{fetch_limit}_to_{expanded_fetch_limit}"
+                        )
+                except Exception as exc:
+                    _debug_skips["memories.candidate_expansion_skipped"] = f"{type(exc).__name__}: {exc}"
             trimmed = _apply_recency_and_trim(merged, lambda r: r.get("scope"), use_adaptive_salience=True, bucket="memories")
             # MMR diversity reranking — applied after salience scoring, before graph expand
             if use_mmr and trimmed:
@@ -7466,7 +7517,7 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
             reranked = _rerank_procedure_candidates(
                 generated.get("candidates", []),
                 evidence,
-                benchmark_mode=benchmark_mode,
+                benchmark_mode=benchmark_raw_ranking,
             )
             results["procedures"] = _apply_query_alignment(
                 reranked[:limit],

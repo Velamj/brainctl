@@ -320,6 +320,9 @@ def _should_probe_long_context(
     query_needs_probe = (
         bool(getattr(plan, "requires_temporal_reasoning", False))
         or bool(getattr(plan, "requires_multi_hop", False))
+        or bool(getattr(plan, "needs_ordering", False))
+        or bool(getattr(plan, "needs_update_resolution", False))
+        or bool(getattr(plan, "needs_set_coverage", False))
         or bool(_LONG_CONTEXT_HINT_RE.search(lowered_query))
     )
     if not query_needs_probe:
@@ -435,6 +438,12 @@ def build_features(
         "query_length_score": min(len(query_informative) / 8.0, 1.0),
         "candidate_length_score": min(len(cand_informative) / 64.0, 1.0),
         "procedural_candidate": 1.0 if bucket == "procedures" else 0.0,
+        "query_needs_counting": 1.0 if getattr(plan, "needs_counting", False) else 0.0,
+        "query_needs_comparison": 1.0 if getattr(plan, "needs_comparison", False) else 0.0,
+        "query_needs_ordering": 1.0 if getattr(plan, "needs_ordering", False) else 0.0,
+        "query_needs_update_resolution": 1.0 if getattr(plan, "needs_update_resolution", False) else 0.0,
+        "query_needs_set_coverage": 1.0 if getattr(plan, "needs_set_coverage", False) else 0.0,
+        "query_requires_multi_hop": 1.0 if getattr(plan, "requires_multi_hop", False) else 0.0,
         "long_context_applicable": 1.0 if long_context_debug.get("applicable") else 0.0,
         "long_context_score": _safe_float(long_context_debug.get("score")),
         "long_context_confidence": _safe_float(long_context_debug.get("confidence")),

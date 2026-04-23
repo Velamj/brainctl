@@ -117,6 +117,22 @@ def run_entry(entry: QuestionEntry, *, pipeline: str = "cmd", top_k: int = 10) -
     corpus_ids = ranked_session_ids + remaining
     ranked_indices = list(range(len(ranked_session_ids)))
     correct_ids = set(entry.answer_session_ids)
+    dcg_at_5 = round(dcg([1.0 if corpus_ids[idx] in correct_ids else 0.0 for idx in ranked_indices[:5]], 5), 4)
+    dcg_at_10 = round(dcg([1.0 if corpus_ids[idx] in correct_ids else 0.0 for idx in ranked_indices[:10]], 10), 4)
+    ideal_labels = sorted([1.0 if session_id in correct_ids else 0.0 for session_id in corpus_ids], reverse=True)
+    idcg_at_5 = round(dcg(ideal_labels, 5), 4)
+    idcg_at_10 = round(dcg(ideal_labels, 10), 4)
+    top_ids = ranked_session_ids[:5]
+    if any(session_id in correct_ids for session_id in top_ids) and top_ids and top_ids[0] not in correct_ids:
+        failure_bucket = "late_gold"
+    elif len(set(top_ids)) < len(top_ids):
+        failure_bucket = "duplicate_top_slate"
+    elif "temporal" in entry.question_type.lower():
+        failure_bucket = "temporal_anchor_miss"
+    elif top_ids and len([session_id for session_id in top_ids if session_id in correct_ids]) < min(len(correct_ids), 5):
+        failure_bucket = "coverage_miss"
+    else:
+        failure_bucket = "grounded"
     return {
         "question_id": entry.question_id,
         "question_type": entry.question_type,
@@ -126,6 +142,13 @@ def run_entry(entry: QuestionEntry, *, pipeline: str = "cmd", top_k: int = 10) -
         "r_all_at_10": recall_all(ranked_indices, correct_ids, corpus_ids, 10),
         "ndcg_at_5": round(ndcg(ranked_indices, correct_ids, corpus_ids, 5), 4),
         "ndcg_at_10": round(ndcg(ranked_indices, correct_ids, corpus_ids, 10), 4),
+        "dcg_at_5": dcg_at_5,
+        "idcg_at_5": idcg_at_5,
+        "dcg_gap_at_5": round(max(idcg_at_5 - dcg_at_5, 0.0), 4),
+        "dcg_at_10": dcg_at_10,
+        "idcg_at_10": idcg_at_10,
+        "dcg_gap_at_10": round(max(idcg_at_10 - dcg_at_10, 0.0), 4),
+        "failure_bucket": failure_bucket,
         "answer_session_ids": entry.answer_session_ids,
         "top_session_ids": ranked_session_ids[:top_k],
     }

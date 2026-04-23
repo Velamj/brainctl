@@ -321,8 +321,36 @@ def run_queries(search_fn: SearchFn, k: int = 10) -> List[Dict[str, Any]]:
             "recall_at_5": recall_at_k(ranked_keys, q.relevance, 5),
             "recall_at_10": recall_at_k(ranked_keys, q.relevance, 10),
             "mrr": mrr(ranked_keys, q.relevance),
+            "dcg_at_5": dcg_at_k(ranked_keys, q.relevance, 5),
+            "idcg_at_5": dcg_at_k(
+                [key for key, _grade in sorted(q.relevance.items(), key=lambda item: item[1], reverse=True)],
+                q.relevance,
+                5,
+            ),
             "ndcg_at_5": ndcg_at_k(ranked_keys, q.relevance, 5),
+            "dcg_gap_at_5": max(
+                dcg_at_k(
+                    [key for key, _grade in sorted(q.relevance.items(), key=lambda item: item[1], reverse=True)],
+                    q.relevance,
+                    5,
+                ) - dcg_at_k(ranked_keys, q.relevance, 5),
+                0.0,
+            ),
+            "dcg_at_10": dcg_at_k(ranked_keys, q.relevance, 10),
+            "idcg_at_10": dcg_at_k(
+                [key for key, _grade in sorted(q.relevance.items(), key=lambda item: item[1], reverse=True)],
+                q.relevance,
+                10,
+            ),
             "ndcg_at_10": ndcg_at_k(ranked_keys, q.relevance, 10),
+            "dcg_gap_at_10": max(
+                dcg_at_k(
+                    [key for key, _grade in sorted(q.relevance.items(), key=lambda item: item[1], reverse=True)],
+                    q.relevance,
+                    10,
+                ) - dcg_at_k(ranked_keys, q.relevance, 10),
+                0.0,
+            ),
         })
     return rows
 
@@ -485,6 +513,7 @@ def _build_cmd_search_fn(db_path: Path):
             pagerank_boost=0.0,
             quantum=False,
             benchmark=True,
+            benchmark_ranking_mode="raw",
             agent="bench-agent",
             format="json",
             oneline=False,

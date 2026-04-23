@@ -48,6 +48,40 @@ _MULTIHOP_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+_COUNT_RE = re.compile(
+    r"\b("
+    r"how many|how much|count|number of|total|sum|combined total"
+    r")\b",
+    re.IGNORECASE,
+)
+_COMPARE_RE = re.compile(
+    r"\b("
+    r"compare|difference|different|versus|vs\.?|better|worse|older|newer|"
+    r"more than|less than|changed|relative to"
+    r")\b",
+    re.IGNORECASE,
+)
+_ORDER_RE = re.compile(
+    r"\b("
+    r"before|after|between|order|ordered|sequence|timeline|earliest|latest|"
+    r"first|last|most recent|newest|oldest|rank"
+    r")\b",
+    re.IGNORECASE,
+)
+_UPDATE_RE = re.compile(
+    r"\b("
+    r"current(?:ly)?|previous(?:ly)?|formerly|used to|now|new|updated|"
+    r"latest|most recent|superseded|stale|still|anymore"
+    r")\b",
+    re.IGNORECASE,
+)
+_COVERAGE_RE = re.compile(
+    r"\b("
+    r"all|both|each|every|across|combined|together|list|which sessions|"
+    r"what were the sessions|set of"
+    r")\b",
+    re.IGNORECASE,
+)
 _NEGATIVE_RE = re.compile(
     r"\b("
     r"no answer|"
@@ -71,6 +105,11 @@ class QueryPlan:
     temporal_anchors: list[str] = field(default_factory=list)
     requires_temporal_reasoning: bool = False
     requires_multi_hop: bool = False
+    needs_counting: bool = False
+    needs_comparison: bool = False
+    needs_ordering: bool = False
+    needs_update_resolution: bool = False
+    needs_set_coverage: bool = False
     prefer_memory_types: list[str] = field(default_factory=list)
     candidate_tables: list[str] = field(default_factory=list)
     abstain_allowed: bool = False
@@ -206,6 +245,15 @@ def plan_query(
     candidate_tables = list(requested_tables or _TABLE_ROUTES.get(normalized_intent, _TABLE_ROUTES["factual"]))
     requires_temporal = bool(_TEMPORAL_RE.search(query))
     requires_multi_hop = bool(_MULTIHOP_RE.search(query))
+    needs_counting = bool(_COUNT_RE.search(query))
+    needs_comparison = bool(_COMPARE_RE.search(query))
+    needs_ordering = bool(_ORDER_RE.search(query))
+    needs_update_resolution = bool(_UPDATE_RE.search(query))
+    needs_set_coverage = bool(_COVERAGE_RE.search(query))
+    if requires_multi_hop and normalized_intent in {"temporal", "decision", "graph"}:
+        needs_set_coverage = True
+    if needs_counting or needs_comparison or needs_ordering:
+        needs_set_coverage = True
     abstain_allowed = bool(_NEGATIVE_RE.search(query)) or normalized_intent in {"factual", "troubleshooting", "procedural"}
     if _ENTITY_QUERY_RE.search(query) and normalized_intent == "factual":
         reasons.append("entity_or_role_lookup")
@@ -213,6 +261,16 @@ def plan_query(
         reasons.append("temporal_reasoning")
     if requires_multi_hop:
         reasons.append("multi_hop_or_inference")
+    if needs_counting:
+        reasons.append("operator:counting")
+    if needs_comparison:
+        reasons.append("operator:comparison")
+    if needs_ordering:
+        reasons.append("operator:ordering")
+    if needs_update_resolution:
+        reasons.append("operator:update_resolution")
+    if needs_set_coverage:
+        reasons.append("operator:set_coverage")
     if "summary of yesterday" in query_lower:
         abstain_allowed = True
         reasons.append("negative_or_out_of_domain_summary")
@@ -227,6 +285,11 @@ def plan_query(
         temporal_anchors=temporal_anchors,
         requires_temporal_reasoning=requires_temporal,
         requires_multi_hop=requires_multi_hop,
+        needs_counting=needs_counting,
+        needs_comparison=needs_comparison,
+        needs_ordering=needs_ordering,
+        needs_update_resolution=needs_update_resolution,
+        needs_set_coverage=needs_set_coverage,
         prefer_memory_types=prefer_memory_types,
         candidate_tables=candidate_tables,
         abstain_allowed=abstain_allowed,

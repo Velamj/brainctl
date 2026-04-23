@@ -77,7 +77,15 @@ def _search_brain(db_path: Path, query: str, top_k: int) -> list[dict]:
         brain.close()
 
 
-def _search_cmd(db_path: Path, query: str, top_k: int, *, debug: bool = False) -> list[dict]:
+def _search_cmd(
+    db_path: Path,
+    query: str,
+    top_k: int,
+    *,
+    debug: bool = False,
+    benchmark: bool = False,
+    benchmark_ranking_mode: str = "full",
+) -> list[dict]:
     import agentmemory._impl as _impl
 
     _impl.DB_PATH = db_path
@@ -96,7 +104,8 @@ def _search_cmd(db_path: Path, query: str, top_k: int, *, debug: bool = False) -
         explore=False,
         pagerank_boost=0.0,
         quantum=False,
-        benchmark=False,
+        benchmark=benchmark,
+        benchmark_ranking_mode=benchmark_ranking_mode,
         agent=AGENT_ID,
         format="json",
         oneline=False,

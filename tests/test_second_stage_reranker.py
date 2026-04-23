@@ -175,3 +175,62 @@ def test_judge_disabled_returns_empty():
         JudgeConfig(enabled=False),
     )
     assert scores == []
+
+
+def test_query_plan_sets_operator_flags():
+    plan = plan_query(
+        "Which sessions this month happened before the latest rollback, and what changed?",
+        requested_tables=["memories"],
+    )
+    assert plan.requires_temporal_reasoning is True
+    assert plan.needs_ordering is True
+    assert plan.needs_update_resolution is True
+    assert plan.needs_set_coverage is True
+
+
+def test_listwise_slate_avoids_duplicate_session_cluster(tmp_path: Path):
+    plan = plan_query(
+        "What happened before and after the latest outage across both sessions?",
+        requested_tables=["memories"],
+    )
+    model_path = _temp_model(tmp_path / "tiny.json")
+    candidates = [
+        {
+            "id": 1,
+            "bucket": "memories",
+            "type": "memory",
+            "content": "Session ID: session_2\nSession Date: 2026-02-10\nOutage started and alerts fired.",
+            "final_score": 0.92,
+            "retrieval_score": 0.92,
+            "source": "keyword",
+            "confidence": 0.95,
+        },
+        {
+            "id": 2,
+            "bucket": "memories",
+            "type": "memory",
+            "content": "Session ID: session_2\nSession Date: 2026-02-10\nEngineers confirmed the same outage details again.",
+            "final_score": 0.91,
+            "retrieval_score": 0.91,
+            "source": "keyword",
+            "confidence": 0.95,
+        },
+        {
+            "id": 3,
+            "bucket": "memories",
+            "type": "memory",
+            "content": "Session ID: session_3\nSession Date: 2026-02-11\nRollback completed after the outage and service recovered.",
+            "final_score": 0.88,
+            "retrieval_score": 0.88,
+            "source": "keyword",
+            "confidence": 0.95,
+        },
+    ]
+    reranked, debug = rerank_top_candidates(
+        "What happened before and after the latest outage across both sessions?",
+        plan,
+        candidates,
+        config=SecondStageConfig(top_n=3, model_path=str(model_path)),
+    )
+    assert {row["id"] for row in reranked[:2]} == {1, 3}
+    assert debug["strategy"] == "listwise_greedy_slate"

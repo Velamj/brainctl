@@ -32,6 +32,8 @@ def build_debug_payload(
                 "second_stage_heuristic": cand.get("second_stage_heuristic"),
                 "second_stage_mlp": cand.get("second_stage_mlp"),
                 "second_stage_judge": cand.get("second_stage_judge"),
+                "second_stage_slate_score": cand.get("second_stage_slate_score"),
+                "second_stage_slate_terms": cand.get("second_stage_slate_terms"),
                 "why_retrieved": cand.get("why_retrieved"),
                 "feature_summary": cand.get("second_stage_features"),
                 "text": cand.get("content") or cand.get("summary") or cand.get("title") or cand.get("goal") or cand.get("name"),

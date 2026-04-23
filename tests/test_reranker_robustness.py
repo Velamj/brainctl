@@ -209,6 +209,7 @@ def _build_args(query: str, limit: int = 10, **overrides) -> types.SimpleNamespa
         pagerank_boost=0.0,
         quantum=False,
         benchmark=False,
+        benchmark_ranking_mode="full",
         agent="robustness-agent",
         output="json",
         format="json",
@@ -426,24 +427,20 @@ class TestBenchmarkFlag:
         _seed_locomo_shape(db_path, n=50)
         return db_path
 
-    def test_benchmark_skips_three_rerankers(self, db):
+    def test_benchmark_full_mode_retains_shared_reranking(self, db):
         args = _build_args("alice prefers dark mode", benchmark=True)
         out = _call_cmd_search(db, args)
         debug = out.get("_debug", {})
+        assert debug.get("benchmark.ranking_mode") == "full"
+        assert debug.get("second_stage", {}).get("enabled") is True
         assert debug.get("memories.recency_skipped") == "benchmark_mode"
-        assert debug.get("memories.salience_skipped") == "benchmark_mode"
         assert debug.get("memories.qvalue_skipped") == "benchmark_mode"
 
-    def test_benchmark_preserves_trust(self, db):
-        """Spec: trust reranker is preserved under --benchmark (different
-        signal class — provenance, not stale-data). Even on a uniform-trust
-        corpus the trust skip reason must NOT show up under benchmark."""
+    def test_benchmark_full_mode_uses_normal_trust_gate(self, db):
         args = _build_args("alice prefers dark mode", benchmark=True)
         out = _call_cmd_search(db, args)
         debug = out.get("_debug", {})
-        assert "memories.trust_skipped" not in debug, (
-            f"trust must be preserved under --benchmark; debug={debug}"
-        )
+        assert "memories.trust_skipped" not in debug, debug
 
     def test_benchmark_emits_stderr_note(self, db):
         # Capture the stderr message.
@@ -460,7 +457,7 @@ class TestBenchmarkFlag:
                 with contextlib.redirect_stderr(buf_err):
                     _impl.cmd_search(args)
             assert "--benchmark" in buf_err.getvalue()
-            assert "raw FTS+vec ranking" in buf_err.getvalue()
+            assert "full shared ranking" in buf_err.getvalue()
         finally:
             _impl.json_out = saved_json
 
@@ -500,7 +497,16 @@ class TestBenchmarkFlag:
         # Parse the JSON payload off stdout.
         payload = json.loads(result.stdout)
         debug = payload.get("_debug", {})
+        assert debug.get("benchmark.ranking_mode") == "full"
+
+    def test_benchmark_raw_mode_preserves_legacy_ablation(self, db):
+        args = _build_args("alice prefers dark mode", benchmark=True, benchmark_ranking_mode="raw")
+        out = _call_cmd_search(db, args)
+        debug = out.get("_debug", {})
+        assert debug.get("benchmark.ranking_mode") == "raw"
         assert debug.get("memories.recency_skipped") == "benchmark_mode"
+        assert debug.get("memories.salience_skipped") == "benchmark_mode"
+        assert debug.get("memories.qvalue_skipped") == "benchmark_mode"
 
 
 # ---------------------------------------------------------------------------
