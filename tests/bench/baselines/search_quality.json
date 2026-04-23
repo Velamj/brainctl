@@ -3,7 +3,7 @@
     "ambiguous": {
       "count": 2,
       "mrr": 1.0,
-      "ndcg_at_5": 0.8026,
+      "ndcg_at_5": 0.7774,
       "p_at_1": 1.0,
       "p_at_5": 0.5,
       "recall_at_5": 0.8333
@@ -11,7 +11,7 @@
     "decision": {
       "count": 3,
       "mrr": 1.0,
-      "ndcg_at_5": 1.0,
+      "ndcg_at_5": 0.9775,
       "p_at_1": 1.0,
       "p_at_5": 0.3333,
       "recall_at_5": 1.0
@@ -19,10 +19,10 @@
     "entity": {
       "count": 7,
       "mrr": 1.0,
-      "ndcg_at_5": 0.8474,
+      "ndcg_at_5": 0.8983,
       "p_at_1": 1.0,
-      "p_at_5": 0.2857,
-      "recall_at_5": 0.6429
+      "p_at_5": 0.4,
+      "recall_at_5": 0.8571
     },
     "negative": {
       "count": 2,
@@ -34,9 +34,9 @@
     },
     "procedural": {
       "count": 4,
-      "mrr": 0.875,
-      "ndcg_at_5": 0.8223,
-      "p_at_1": 0.75,
+      "mrr": 1.0,
+      "ndcg_at_5": 0.9122,
+      "p_at_1": 1.0,
       "p_at_5": 0.5,
       "recall_at_5": 0.9167
     },
@@ -51,7 +51,7 @@
     "troubleshooting": {
       "count": 2,
       "mrr": 1.0,
-      "ndcg_at_5": 1.0,
+      "ndcg_at_5": 0.9735,
       "p_at_1": 1.0,
       "p_at_5": 0.4,
       "recall_at_5": 1.0
@@ -59,13 +59,13 @@
   },
   "k": 10,
   "overall": {
-    "mrr": 0.8864,
+    "mrr": 0.9091,
     "n_queries": 22,
-    "ndcg_at_10": 0.9019,
-    "ndcg_at_5": 0.898,
-    "p_at_1": 0.8636,
-    "p_at_5": 0.3455,
-    "recall_at_10": 0.8712,
-    "recall_at_5": 0.8561
+    "ndcg_at_10": 0.9314,
+    "ndcg_at_5": 0.9228,
+    "p_at_1": 0.9091,
+    "p_at_5": 0.3818,
+    "recall_at_10": 0.9545,
+    "recall_at_5": 0.9242
   }
 }

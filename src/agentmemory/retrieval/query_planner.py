@@ -13,6 +13,18 @@ except Exception:  # pragma: no cover - optional script path
     _classify_intent = None
 
 _ENTITY_RE = re.compile(r"\b[A-Z][A-Za-z0-9_.:-]+\b")
+_ENTITY_QUERY_RE = re.compile(
+    r"\b("
+    r"who(?:\s+is|\s+owns?)?|"
+    r"whose|"
+    r"owner|maintainer|reviewer|assignee|"
+    r"what\s+does|"
+    r"prefers?|preference|"
+    r"role|responsible|"
+    r"works?\s+on"
+    r")\b",
+    re.IGNORECASE,
+)
 _TEMPORAL_RE = re.compile(
     r"\b(yesterday|today|tomorrow|last week|last month|when|timeline|history|recent|overnight)\b",
     re.IGNORECASE,
@@ -22,9 +34,18 @@ _MULTIHOP_RE = re.compile(
     re.IGNORECASE,
 )
 _NEGATIVE_RE = re.compile(
-    r"\b(no answer|do not know|unknown|summary of yesterday(?:'s)? basketball game)\b",
+    r"\b("
+    r"no answer|"
+    r"do not know|"
+    r"unknown|"
+    r"no memory|"
+    r"coverage gap|"
+    r"summary of yesterday(?:'s)? .+|"
+    r"(?:basketball|baseball|football|soccer|weather|stock market|earnings)\b"
+    r")",
     re.IGNORECASE,
 )
+_ENTITY_BLACKLIST = {"what", "who", "where", "when", "why", "how", "summary"}
 
 
 @dataclass(slots=True)
@@ -69,8 +90,8 @@ _TABLE_ROUTES = {
     "procedural": ["procedures", "memories", "decisions", "events", "context", "policy"],
     "troubleshooting": ["procedures", "events", "memories", "decisions", "context", "policy"],
     "decision": ["decisions", "memories", "procedures", "events", "context"],
-    "temporal": ["events", "memories", "context", "procedures"],
-    "factual": ["memories", "procedures", "events", "context", "entities"],
+    "temporal": ["events", "memories", "context", "entities", "procedures"],
+    "factual": ["memories", "entities", "decisions", "context", "events", "procedures"],
     "graph": ["memories", "events", "context", "decisions", "procedures"],
     "orientation": ["memories", "events", "context", "procedures"],
 }
@@ -78,6 +99,8 @@ _TABLE_ROUTES = {
 
 def _builtin_classify(query: str) -> tuple[str, float, str]:
     q = query.lower()
+    if _ENTITY_QUERY_RE.search(query):
+        return ("factual", 0.72, "builtin:entity_fact")
     if any(token in q for token in ("how to", "how do", "procedure", "rollback", "runbook", "playbook")):
         return ("procedural", 0.82, "builtin:procedural")
     if any(token in q for token in ("error", "syntax", "bug", "failed", "fix", "troubleshoot")):
@@ -93,10 +116,19 @@ def _builtin_classify(query: str) -> tuple[str, float, str]:
 
 def _extract_entities(query: str) -> list[str]:
     entities = [match.group(0) for match in _ENTITY_RE.finditer(query or "")]
+    if not entities:
+        pattern_hits = re.findall(
+            r"\b(?:what\s+does|who\s+is|who\s+owns|where\s+is|when\s+did)\s+([A-Za-z0-9_.:-]+)",
+            query or "",
+            flags=re.IGNORECASE,
+        )
+        entities.extend(pattern_hits)
     seen: set[str] = set()
     out: list[str] = []
     for entity in entities:
         key = entity.lower()
+        if key in _ENTITY_BLACKLIST:
+            continue
         if key not in seen:
             seen.add(key)
             out.append(entity)
@@ -157,6 +189,8 @@ def plan_query(
     requires_temporal = bool(_TEMPORAL_RE.search(query))
     requires_multi_hop = bool(_MULTIHOP_RE.search(query))
     abstain_allowed = bool(_NEGATIVE_RE.search(query)) or normalized_intent in {"factual", "troubleshooting", "procedural"}
+    if _ENTITY_QUERY_RE.search(query) and normalized_intent == "factual":
+        reasons.append("entity_or_role_lookup")
     if "summary of yesterday" in query_lower:
         abstain_allowed = True
         reasons.append("negative_or_out_of_domain_summary")

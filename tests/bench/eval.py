@@ -405,7 +405,7 @@ def _build_cmd_search_fn(db_path: Path):
         args = types.SimpleNamespace(
             query=query,
             limit=k,
-            tables="memories,events,context,decisions,procedures",
+            tables="memories,events,context,entities,decisions,procedures",
             no_recency=False,
             no_graph=True,                      # graph expansion adds noise for the bench
             budget=None,

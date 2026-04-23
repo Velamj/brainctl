@@ -550,6 +550,86 @@ class TestExistingBenchRegression:
             f"got: {top_text[:120]!r}"
         )
 
+    def test_entity_bucket_populated_for_entity_query(self, bench_db):
+        args = _build_args(
+            "Who owns the consolidation daemon?",
+            agent="bench-agent",
+            tables="memories,events,context,entities,decisions,procedures",
+            benchmark=True,
+        )
+        out = _call_cmd_search(bench_db, args)
+        assert out.get("entities"), "entity query should populate entities bucket"
+        assert out["entities"][0]["name"] == "Bob"
+
+    def test_negative_out_of_domain_query_abstains(self, bench_db):
+        args = _build_args(
+            "Summary of yesterday's basketball game",
+            agent="bench-agent",
+            tables="memories,events,context,entities,decisions,procedures",
+            benchmark=True,
+        )
+        out = _call_cmd_search(bench_db, args)
+        assert out.get("metacognition", {}).get("abstained") is True
+        for bucket in ("memories", "events", "context", "entities", "decisions", "procedures"):
+            assert not out.get(bucket), f"{bucket} should be empty after abstention"
+
+
+def test_entity_alias_expansion_promotes_canonical_memory(tmp_path):
+    db_path = tmp_path / "alias-linking.db"
+    _seed_schema(db_path)
+    now = _utc_iso()
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute(
+            """
+            INSERT INTO memories (
+                agent_id, category, scope, content, confidence,
+                created_at, updated_at
+            ) VALUES (?, 'preference', 'global', ?, 0.9, ?, ?)
+            """,
+            ("robustness-agent", "Bob prefers four-space indentation for Python code.", now, now),
+        )
+        conn.execute(
+            """
+            INSERT INTO entities (
+                name, entity_type, properties, observations, agent_id, confidence,
+                scope, created_at, updated_at, aliases, compiled_truth
+            ) VALUES (?, 'person', '{}', ?, ?, 0.95, 'global', ?, ?, ?, ?)
+            """,
+            (
+                "Bob",
+                json.dumps(["Prefers four-space indentation"], ensure_ascii=True),
+                "robustness-agent",
+                now,
+                now,
+                json.dumps(["Robert"], ensure_ascii=True),
+                "Bob prefers four-space indentation.",
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    args = _build_args(
+        "What does Robert prefer?",
+        agent="robustness-agent",
+        tables="memories,entities",
+        benchmark=True,
+    )
+    out = _call_cmd_search(db_path, args)
+    flat = []
+    for bucket in ("entities", "memories"):
+        flat.extend(out.get(bucket, []) or [])
+    flat.sort(key=lambda row: row.get("final_score", 0.0), reverse=True)
+    assert flat, "alias-linked query should return at least one result"
+    top_text = (
+        flat[0].get("content")
+        or flat[0].get("name")
+        or flat[0].get("summary")
+        or ""
+    ).lower()
+    assert "bob" in top_text, top_text
+
 
 # ---------------------------------------------------------------------------
 # 6. Trust adjustment math

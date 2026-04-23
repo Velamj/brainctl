@@ -1135,6 +1135,13 @@ def _score_procedure(
     )
     if directness < 0.6 and breakdown["step_overlap"] > 0:
         score *= 0.72
+    if (
+        len(tokens) <= 4
+        and directness < 0.45
+        and (breakdown["goal_match"] + breakdown["title_match"]) < 0.25
+        and breakdown["step_overlap"] >= 0.4
+    ):
+        score *= 0.35
     if debug:
         breakdown.update(
             {
