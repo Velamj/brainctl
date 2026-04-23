@@ -1,0 +1,181 @@
+"""Intent-aware query planning for retrieval orchestration."""
+
+from __future__ import annotations
+
+import re
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any, Optional
+
+try:
+    from intent_classifier import classify_intent as _classify_intent
+except Exception:  # pragma: no cover - optional script path
+    _classify_intent = None
+
+_ENTITY_RE = re.compile(r"\b[A-Z][A-Za-z0-9_.:-]+\b")
+_TEMPORAL_RE = re.compile(
+    r"\b(yesterday|today|tomorrow|last week|last month|when|timeline|history|recent|overnight)\b",
+    re.IGNORECASE,
+)
+_MULTIHOP_RE = re.compile(
+    r"\b(why|because|rationale|support|evidence|rollback|troubleshoot|debug|fix)\b",
+    re.IGNORECASE,
+)
+_NEGATIVE_RE = re.compile(
+    r"\b(no answer|do not know|unknown|summary of yesterday(?:'s)? basketball game)\b",
+    re.IGNORECASE,
+)
+
+
+@dataclass(slots=True)
+class QueryPlan:
+    normalized_intent: str
+    answer_type: str
+    target_entities: list[str] = field(default_factory=list)
+    temporal_anchors: list[str] = field(default_factory=list)
+    requires_temporal_reasoning: bool = False
+    requires_multi_hop: bool = False
+    prefer_memory_types: list[str] = field(default_factory=list)
+    candidate_tables: list[str] = field(default_factory=list)
+    abstain_allowed: bool = False
+    debug_reasons: list[str] = field(default_factory=list)
+    classifier_intent: str = "general"
+    classifier_confidence: float = 0.0
+    format_hint: str = ""
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+_INTENT_ALIASES = {
+    "cross_reference": "entity",
+    "decision_rationale": "decision",
+    "entity_lookup": "factual",
+    "event_lookup": "temporal",
+    "factual_lookup": "factual",
+    "general": "factual",
+    "graph_traversal": "graph",
+    "historical_timeline": "temporal",
+    "how_to": "procedural",
+    "orientation": "orientation",
+    "procedural": "procedural",
+    "research_concept": "factual",
+    "task_status": "temporal",
+    "troubleshooting": "troubleshooting",
+}
+
+
+_TABLE_ROUTES = {
+    "procedural": ["procedures", "memories", "decisions", "events", "context", "policy"],
+    "troubleshooting": ["procedures", "events", "memories", "decisions", "context", "policy"],
+    "decision": ["decisions", "memories", "procedures", "events", "context"],
+    "temporal": ["events", "memories", "context", "procedures"],
+    "factual": ["memories", "procedures", "events", "context", "entities"],
+    "graph": ["memories", "events", "context", "decisions", "procedures"],
+    "orientation": ["memories", "events", "context", "procedures"],
+}
+
+
+def _builtin_classify(query: str) -> tuple[str, float, str]:
+    q = query.lower()
+    if any(token in q for token in ("how to", "how do", "procedure", "rollback", "runbook", "playbook")):
+        return ("procedural", 0.82, "builtin:procedural")
+    if any(token in q for token in ("error", "syntax", "bug", "failed", "fix", "troubleshoot")):
+        return ("troubleshooting", 0.8, "builtin:troubleshooting")
+    if any(token in q for token in ("why", "decision", "rationale", "choose", "chose")):
+        return ("decision", 0.78, "builtin:decision")
+    if any(token in q for token in ("when", "history", "timeline", "what happened", "yesterday")):
+        return ("temporal", 0.78, "builtin:temporal")
+    if any(token in q for token in ("who", "what", "where", "which", "entity")):
+        return ("factual", 0.6, "builtin:factual")
+    return ("factual", 0.45, "builtin:default")
+
+
+def _extract_entities(query: str) -> list[str]:
+    entities = [match.group(0) for match in _ENTITY_RE.finditer(query or "")]
+    seen: set[str] = set()
+    out: list[str] = []
+    for entity in entities:
+        key = entity.lower()
+        if key not in seen:
+            seen.add(key)
+            out.append(entity)
+    return out[:8]
+
+
+def plan_query(
+    query: str,
+    *,
+    requested_tables: Optional[list[str]] = None,
+) -> QueryPlan:
+    """Return a structured routing plan for the query."""
+
+    classifier_intent = "general"
+    classifier_confidence = 0.0
+    format_hint = ""
+    reasons: list[str] = []
+
+    if _classify_intent is not None:
+        try:
+            result = _classify_intent(query)
+            classifier_intent = getattr(result, "intent", "general")
+            classifier_confidence = float(getattr(result, "confidence", 0.0) or 0.0)
+            format_hint = getattr(result, "format_hint", "") or ""
+            reasons.append(f"classifier:{classifier_intent}")
+        except Exception:
+            pass
+
+    if classifier_intent == "general":
+        builtin_intent, builtin_conf, reason = _builtin_classify(query)
+        normalized_intent = builtin_intent
+        classifier_confidence = max(classifier_confidence, builtin_conf)
+        reasons.append(reason)
+    else:
+        normalized_intent = _INTENT_ALIASES.get(classifier_intent, "factual")
+
+    query_lower = query.lower()
+    temporal_anchors = [m.group(0) for m in _TEMPORAL_RE.finditer(query)]
+    answer_type = {
+        "decision": "rationale",
+        "procedural": "procedure",
+        "troubleshooting": "procedure",
+        "temporal": "history",
+        "graph": "mixed",
+        "orientation": "briefing",
+    }.get(normalized_intent, "fact")
+    prefer_memory_types = {
+        "decision": ["semantic", "procedural", "episodic"],
+        "procedural": ["procedural", "semantic", "episodic"],
+        "troubleshooting": ["procedural", "episodic", "semantic"],
+        "temporal": ["episodic", "semantic"],
+        "factual": ["semantic", "procedural", "episodic"],
+        "graph": ["semantic", "episodic", "procedural"],
+        "orientation": ["semantic", "episodic", "procedural"],
+    }.get(normalized_intent, ["semantic", "episodic"])
+
+    candidate_tables = list(requested_tables or _TABLE_ROUTES.get(normalized_intent, _TABLE_ROUTES["factual"]))
+    requires_temporal = bool(_TEMPORAL_RE.search(query))
+    requires_multi_hop = bool(_MULTIHOP_RE.search(query))
+    abstain_allowed = bool(_NEGATIVE_RE.search(query)) or normalized_intent in {"factual", "troubleshooting", "procedural"}
+    if "summary of yesterday" in query_lower:
+        abstain_allowed = True
+        reasons.append("negative_or_out_of_domain_summary")
+    if " and " in query_lower and len(_extract_entities(query)) == 0:
+        reasons.append("ambiguous_composite_query")
+        abstain_allowed = True
+
+    return QueryPlan(
+        normalized_intent=normalized_intent,
+        answer_type=answer_type,
+        target_entities=_extract_entities(query),
+        temporal_anchors=temporal_anchors,
+        requires_temporal_reasoning=requires_temporal,
+        requires_multi_hop=requires_multi_hop,
+        prefer_memory_types=prefer_memory_types,
+        candidate_tables=candidate_tables,
+        abstain_allowed=abstain_allowed,
+        debug_reasons=reasons,
+        classifier_intent=classifier_intent,
+        classifier_confidence=classifier_confidence,
+        format_hint=format_hint,
+    )

@@ -1,31 +1,31 @@
 {
   "by_category": {
     "ambiguous": {
-      "count": 1,
-      "mrr": 0.0,
-      "ndcg_at_5": 0.0,
-      "p_at_1": 0.0,
-      "p_at_5": 0.0,
-      "recall_at_5": 0.0
+      "count": 2,
+      "mrr": 1.0,
+      "ndcg_at_5": 0.8026,
+      "p_at_1": 1.0,
+      "p_at_5": 0.5,
+      "recall_at_5": 0.8333
     },
     "decision": {
       "count": 3,
-      "mrr": 0.3333,
-      "ndcg_at_5": 0.3186,
-      "p_at_1": 0.3333,
-      "p_at_5": 0.1333,
-      "recall_at_5": 0.3333
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "p_at_1": 1.0,
+      "p_at_5": 0.3333,
+      "recall_at_5": 1.0
     },
     "entity": {
       "count": 7,
-      "mrr": 0.7143,
-      "ndcg_at_5": 0.6099,
-      "p_at_1": 0.7143,
-      "p_at_5": 0.2,
-      "recall_at_5": 0.4524
+      "mrr": 1.0,
+      "ndcg_at_5": 0.8474,
+      "p_at_1": 1.0,
+      "p_at_5": 0.2857,
+      "recall_at_5": 0.6429
     },
     "negative": {
-      "count": 1,
+      "count": 2,
       "mrr": 0.0,
       "ndcg_at_5": 1.0,
       "p_at_1": 0.0,
@@ -35,37 +35,37 @@
     "procedural": {
       "count": 4,
       "mrr": 0.875,
-      "ndcg_at_5": 0.6333,
+      "ndcg_at_5": 0.8223,
       "p_at_1": 0.75,
-      "p_at_5": 0.25,
-      "recall_at_5": 0.75
+      "p_at_5": 0.5,
+      "recall_at_5": 0.9167
     },
     "temporal": {
       "count": 2,
       "mrr": 1.0,
-      "ndcg_at_5": 0.8936,
+      "ndcg_at_5": 0.9648,
       "p_at_1": 1.0,
-      "p_at_5": 0.3,
-      "recall_at_5": 0.75
+      "p_at_5": 0.4,
+      "recall_at_5": 1.0
     },
     "troubleshooting": {
       "count": 2,
-      "mrr": 0.5,
-      "ndcg_at_5": 0.3066,
-      "p_at_1": 0.5,
-      "p_at_5": 0.1,
-      "recall_at_5": 0.25
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
+      "p_at_1": 1.0,
+      "p_at_5": 0.4,
+      "recall_at_5": 1.0
     }
   },
   "k": 10,
   "overall": {
-    "mrr": 0.625,
-    "n_queries": 20,
-    "ndcg_at_10": 0.5579,
-    "ndcg_at_5": 0.5579,
-    "p_at_1": 0.6,
-    "p_at_5": 0.18,
-    "recall_at_10": 0.5083,
-    "recall_at_5": 0.5083
+    "mrr": 0.8864,
+    "n_queries": 22,
+    "ndcg_at_10": 0.9019,
+    "ndcg_at_5": 0.898,
+    "p_at_1": 0.8636,
+    "p_at_5": 0.3455,
+    "recall_at_10": 0.8712,
+    "recall_at_5": 0.8561
   }
 }

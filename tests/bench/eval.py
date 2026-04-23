@@ -29,7 +29,7 @@ if str(_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(_ROOT / "src"))
 
 from tests.bench.fixtures import (  # noqa: E402
-    ENTITIES, EVENTS, MEMORIES, QUERIES, Query, key_for_result,
+    ENTITIES, EVENTS, MEMORIES, PROCEDURES, QUERIES, Query, key_for_result,
 )
 
 
@@ -123,6 +123,24 @@ def seed_brain(brain) -> None:
             ent.name, ent.entity_type,
             observations=ent.observations,
         )
+    for proc in PROCEDURES:
+        brain.remember_procedure(
+            goal=proc.goal,
+            title=proc.title,
+            description=proc.description,
+            steps=proc.steps,
+            procedure_kind=proc.procedure_kind,
+            scope=proc.scope,
+            status=proc.status,
+            tools_json=proc.tools,
+            failure_modes_json=proc.failure_modes,
+            rollback_steps_json=proc.rollback_steps,
+            success_criteria_json=proc.success_criteria,
+            execution_count=proc.execution_count,
+            success_count=proc.success_count,
+            failure_count=proc.failure_count,
+            stale_after_days=proc.stale_after_days,
+        )
 
 
 def seed_db_direct(db_path: Path, agent_id: str = "bench-agent") -> None:
@@ -182,6 +200,32 @@ def seed_db_direct(db_path: Path, agent_id: str = "bench-agent") -> None:
                 "VALUES (?, ?, '{}', ?, ?, ?, ?)",
                 (ent.name, ent.entity_type, _json.dumps(ent.observations), agent_id, now, now),
             )
+        from agentmemory import procedural as _procedural
+
+        for proc in PROCEDURES:
+            _procedural.create_procedure(
+                conn,
+                agent_id=agent_id,
+                payload={
+                    "title": proc.title,
+                    "goal": proc.goal,
+                    "description": proc.description,
+                    "procedure_kind": proc.procedure_kind,
+                    "steps_json": [{"action": step} for step in proc.steps],
+                    "tools_json": proc.tools,
+                    "failure_modes_json": proc.failure_modes,
+                    "rollback_steps_json": proc.rollback_steps,
+                    "success_criteria_json": proc.success_criteria,
+                    "status": proc.status,
+                    "execution_count": proc.execution_count,
+                    "success_count": proc.success_count,
+                    "failure_count": proc.failure_count,
+                    "stale_after_days": proc.stale_after_days,
+                },
+                category="convention",
+                scope=proc.scope,
+                confidence=0.92,
+            )
         conn.commit()
         # Force WAL checkpoint so no *-wal / *-shm file lingers to block
         # subsequent connections. Critical for the benchmark runner — its
@@ -202,6 +246,31 @@ def seed_db_direct(db_path: Path, agent_id: str = "bench-agent") -> None:
 SearchFn = Callable[[str, int], List[Dict[str, Any]]]
 
 
+def _classify_failure_mode(
+    query: Query,
+    ranked_keys: List[str],
+    payload: Dict[str, Any],
+) -> str:
+    if not query.relevance:
+        return "correct_abstain" if not ranked_keys else "hallucination"
+    if any(query.relevance.get(key, 0) > 0 for key in ranked_keys):
+        return "grounded"
+    debug = payload.get("_debug") or {}
+    answerability = debug.get("answerability") or {}
+    top_candidates = debug.get("top_candidates") or []
+    debug_keys: list[str] = []
+    for candidate in top_candidates:
+        probe = {"content": candidate.get("text"), "type": candidate.get("type"), "name": candidate.get("text")}
+        key = key_for_result(probe)
+        if key:
+            debug_keys.append(key)
+    if any(query.relevance.get(key, 0) > 0 for key in debug_keys):
+        if answerability.get("abstain"):
+            return "utilization_failure"
+        return "stale_conflict" if answerability.get("reason") == "low_answerability_score" else "utilization_failure"
+    return "retrieval_failure"
+
+
 def run_queries(search_fn: SearchFn, k: int = 10) -> List[Dict[str, Any]]:
     """Run every fixture query through `search_fn` and collect per-query
     metric rows. Returns a flat list of dicts ready for aggregation.
@@ -209,6 +278,7 @@ def run_queries(search_fn: SearchFn, k: int = 10) -> List[Dict[str, Any]]:
     rows = []
     for q in QUERIES:
         results = search_fn(q.text, k)
+        payload = getattr(search_fn, "last_payload", {}) or {}
         ranked_keys = [key_for_result(r) for r in results]
         ranked_keys = [k for k in ranked_keys if k]  # drop untagged distractors
         rows.append({
@@ -217,6 +287,9 @@ def run_queries(search_fn: SearchFn, k: int = 10) -> List[Dict[str, Any]]:
             "relevance": q.relevance,
             "ranked_keys": ranked_keys,
             "n_results": len(results),
+            "debug": payload.get("_debug"),
+            "metacognition": payload.get("metacognition"),
+            "failure_mode": _classify_failure_mode(q, ranked_keys, payload),
             "p_at_1": p_at_k(ranked_keys, q.relevance, 1),
             "p_at_5": p_at_k(ranked_keys, q.relevance, 5),
             "recall_at_5": recall_at_k(ranked_keys, q.relevance, 5),
@@ -267,8 +340,11 @@ def aggregate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
             "mrr": mean(bucket["mrr"]),
             "ndcg_at_5": mean(bucket["ndcg_at_5"]),
         }
+    failure_breakdown: Dict[str, int] = {}
+    for row in rows:
+        failure_breakdown[row["failure_mode"]] = failure_breakdown.get(row["failure_mode"], 0) + 1
 
-    return {"overall": overall, "by_category": by_category}
+    return {"overall": overall, "by_category": by_category, "failure_breakdown": failure_breakdown}
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +363,9 @@ def _build_brain_search_fn(db_path: Path):
     from agentmemory.brain import Brain  # local import; respects sys.path tweak above
     brain = Brain(db_path=str(db_path), agent_id="bench-agent")
     def search_fn(query: str, k: int):
-        return brain.search(query, limit=k)
+        results = brain.search(query, limit=k)
+        search_fn.last_payload = {"memories": results}
+        return results
     return brain, search_fn
 
 
@@ -327,7 +405,7 @@ def _build_cmd_search_fn(db_path: Path):
         args = types.SimpleNamespace(
             query=query,
             limit=k,
-            tables="memories,events,context",   # explicit: skip intent table routing
+            tables="memories,events,context,decisions,procedures",
             no_recency=False,
             no_graph=True,                      # graph expansion adds noise for the bench
             budget=None,
@@ -338,7 +416,7 @@ def _build_cmd_search_fn(db_path: Path):
             profile=None,
             pagerank_boost=0.0,
             quantum=False,
-            benchmark=False,
+            benchmark=True,
             agent="bench-agent",
             format="json",
             oneline=False,
@@ -362,12 +440,13 @@ def _build_cmd_search_fn(db_path: Path):
         if not captured:
             return []
         payload = captured[0] if isinstance(captured[0], dict) else {}
+        search_fn.last_payload = payload
 
-        # Flatten buckets (memories/events/context/entities/decisions) into
+        # Flatten buckets (memories/events/context/entities/decisions/procedures) into
         # a single ranking, preserving final_score order. cmd_search already
         # sorted each bucket by final_score desc.
         flat: List[Dict[str, Any]] = []
-        for bucket in ("memories", "events", "context", "entities", "decisions"):
+        for bucket in ("procedures", "memories", "events", "context", "entities", "decisions"):
             flat.extend(payload.get(bucket, []) or [])
         flat.sort(key=lambda r: r.get("final_score", 0.0), reverse=True)
         return flat[:k]
