@@ -1,0 +1,30 @@
+{
+  "argv": [
+    "benchmarks\\compare_memory_engines.py",
+    "--label",
+    "prepush_smoke",
+    "--longmemeval-limit",
+    "1",
+    "--locomo-limit",
+    "1",
+    "--membench-limit",
+    "1",
+    "--convomem-limit-per-category",
+    "1"
+  ],
+  "cwd": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl",
+  "datasets": {
+    "convomem_cache": "C:\\Users\\mario\\Documents\\GitHub\\mempalace\\benchmarks\\convomem_cache",
+    "locomo_data": "C:\\Users\\mario\\Documents\\GitHub\\locomo\\data\\locomo10.json",
+    "longmemeval_data": "C:\\Users\\mario\\Documents\\GitHub\\LongMemEval\\data\\longmemeval_s_cleaned.json",
+    "membench_data": "C:\\Users\\mario\\Documents\\GitHub\\Membench\\MemData\\FirstAgent"
+  },
+  "generated_at_utc": "2026-04-23T12:33:49.807677+00:00",
+  "git_commit": "c130fbd47174a0932822db2ef7fe64e18a74d30d",
+  "historical_summary_mode": "recovered",
+  "historical_summary_path": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\benchmarks\\results\\full_compare_20260418_033425\\summary.json",
+  "machine": "AMD64",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 189 Stepping 1, GenuineIntel",
+  "python_version": "3.14.4 (tags/v3.14.4:23116f9, Apr  7 2026, 14:10:54) [MSC v.1944 64 bit (AMD64)]"
+}

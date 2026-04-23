@@ -1,0 +1,509 @@
+{
+  "generated_at_utc": "2026-04-23T10:55:38.026703+00:00",
+  "metadata": {
+    "argv": [
+      "benchmarks\\compare_memory_engines.py",
+      "--label",
+      "smoke_legacy_compare",
+      "--longmemeval-limit",
+      "3",
+      "--locomo-limit",
+      "1",
+      "--membench-limit",
+      "3",
+      "--convomem-limit-per-category",
+      "1"
+    ],
+    "cwd": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl",
+    "datasets": {
+      "convomem_cache": "C:\\Users\\mario\\Documents\\GitHub\\mempalace\\benchmarks\\convomem_cache",
+      "locomo_data": "C:\\Users\\mario\\Documents\\GitHub\\locomo\\data\\locomo10.json",
+      "longmemeval_data": "C:\\Users\\mario\\Documents\\GitHub\\LongMemEval\\data\\longmemeval_s_cleaned.json",
+      "membench_data": "C:\\Users\\mario\\Documents\\GitHub\\Membench\\MemData\\FirstAgent"
+    },
+    "generated_at_utc": "2026-04-23T10:55:37.887986+00:00",
+    "git_commit": "c130fbd47174a0932822db2ef7fe64e18a74d30d",
+    "historical_summary_mode": "recovered",
+    "historical_summary_path": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\benchmarks\\results\\full_compare_20260418_033425\\summary.json",
+    "machine": "AMD64",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 189 Stepping 1, GenuineIntel",
+    "python_version": "3.14.4 (tags/v3.14.4:23116f9, Apr  7 2026, 14:10:54) [MSC v.1944 64 bit (AMD64)]"
+  },
+  "notes": [
+    "Historical old-BrainCTL and MemPalace series come from the recovered 2026-04-18 comparison bundle.",
+    "New BrainCTL series are rerun in the current checked-out repo using the legacy benchmark definitions.",
+    "MemBench remains intentionally partial because the legacy comparison only covered the FirstAgent slice.",
+    "ConvoMem remains a coverage/status benchmark here; it has no dedicated comparison chart in the legacy chart pack."
+  ],
+  "runs": [
+    {
+      "artifacts": {
+        "aggregate_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\aggregate_primary_metrics.png",
+        "benchmark_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\longmemeval_comparison.png",
+        "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\runs\\longmemeval_old_brainctl_brain.json",
+        "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\coverage_status.png"
+      },
+      "benchmark": "longmemeval",
+      "caveats": [],
+      "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\LongMemEval\\data\\longmemeval_s_cleaned.json",
+      "example_count": 470,
+      "measured": false,
+      "metadata": {},
+      "metrics": {
+        "ndcg_at_10": 0.9253,
+        "ndcg_at_5": 0.9204,
+        "r_at_10": 0.9894,
+        "r_at_5": 0.9681
+      },
+      "mode": "brain",
+      "notes": [
+        "top_k=10"
+      ],
+      "primary_metric": "r_at_5",
+      "primary_metric_value": 0.9681,
+      "reference_kind": "historical",
+      "runtime_seconds": 85.439,
+      "series_name": "old_brainctl",
+      "source_path": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\benchmarks\\results\\full_compare_20260418_033425\\summary.json",
+      "status": "full_same_machine",
+      "system_name": "brainctl"
+    },
+    {
+      "artifacts": {
+        "aggregate_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\aggregate_primary_metrics.png",
+        "benchmark_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\longmemeval_comparison.png",
+        "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\runs\\longmemeval_old_brainctl_cmd.json",
+        "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\coverage_status.png"
+      },
+      "benchmark": "longmemeval",
+      "caveats": [],
+      "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\LongMemEval\\data\\longmemeval_s_cleaned.json",
+      "example_count": 470,
+      "measured": false,
+      "metadata": {},
+      "metrics": {
+        "ndcg_at_10": 0.9247,
+        "ndcg_at_5": 0.9206,
+        "r_at_10": 0.9894,
+        "r_at_5": 0.9702
+      },
+      "mode": "cmd",
+      "notes": [
+        "top_k=10"
+      ],
+      "primary_metric": "r_at_5",
+      "primary_metric_value": 0.9702,
+      "reference_kind": "historical",
+      "runtime_seconds": 130.863,
+      "series_name": "old_brainctl",
+      "source_path": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\benchmarks\\results\\full_compare_20260418_033425\\summary.json",
+      "status": "full_same_machine",
+      "system_name": "brainctl"
+    },
+    {
+      "artifacts": {
+        "aggregate_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\aggregate_primary_metrics.png",
+        "benchmark_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\longmemeval_comparison.png",
+        "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\runs\\longmemeval_mempalace_raw_session.json",
+        "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\coverage_status.png"
+      },
+      "benchmark": "longmemeval",
+      "caveats": [],
+      "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\LongMemEval\\data\\longmemeval_s_cleaned.json",
+      "example_count": 470,
+      "measured": false,
+      "metadata": {},
+      "metrics": {
+        "ndcg_at_10": 0.8948,
+        "ndcg_at_5": 0.893,
+        "r_at_10": 0.983,
+        "r_at_5": 0.966
+      },
+      "mode": "raw_session",
+      "notes": [
+        "top_k=10",
+        "Runs MemPalace benchmark module raw session retrieval logic directly."
+      ],
+      "primary_metric": "r_at_5",
+      "primary_metric_value": 0.966,
+      "reference_kind": "historical",
+      "runtime_seconds": 695.36,
+      "series_name": "mempalace",
+      "source_path": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\benchmarks\\results\\full_compare_20260418_033425\\summary.json",
+      "status": "full_same_machine",
+      "system_name": "mempalace"
+    },
+    {
+      "artifacts": {
+        "aggregate_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\aggregate_primary_metrics.png",
+        "benchmark_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\locomo_comparison.png",
+        "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\runs\\locomo_old_brainctl_cmd_session.json",
+        "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\coverage_status.png"
+      },
+      "benchmark": "locomo",
+      "caveats": [],
+      "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\locomo\\data\\locomo10.json",
+      "example_count": 1986,
+      "measured": false,
+      "metadata": {},
+      "metrics": {
+        "avg_recall": 0.9217,
+        "cat_1_recall": 0.7614,
+        "cat_2_recall": 0.92,
+        "cat_3_recall": 0.6616,
+        "cat_4_recall": 0.9738,
+        "cat_5_recall": 0.9821,
+        "perfect_rate": 0.8817,
+        "top_k": 10,
+        "zero_rate": 0.0438
+      },
+      "mode": "cmd_session",
+      "notes": [
+        "granularity=session",
+        "top_k=10"
+      ],
+      "primary_metric": "avg_recall",
+      "primary_metric_value": 0.9217,
+      "reference_kind": "historical",
+      "runtime_seconds": 445.74,
+      "series_name": "old_brainctl",
+      "source_path": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\benchmarks\\results\\full_compare_20260418_033425\\summary.json",
+      "status": "full_same_machine",
+      "system_name": "brainctl"
+    },
+    {
+      "artifacts": {
+        "aggregate_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\aggregate_primary_metrics.png",
+        "benchmark_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\locomo_comparison.png",
+        "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\runs\\locomo_mempalace_raw_session.json",
+        "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\coverage_status.png"
+      },
+      "benchmark": "locomo",
+      "caveats": [],
+      "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\locomo\\data\\locomo10.json",
+      "example_count": 1986,
+      "measured": false,
+      "metadata": {},
+      "metrics": {
+        "avg_recall": 0.6028,
+        "cat_1_recall": 0.5899,
+        "cat_2_recall": 0.6921,
+        "cat_3_recall": 0.4604,
+        "cat_4_recall": 0.5809,
+        "cat_5_recall": 0.6188,
+        "perfect_rate": 0.5534,
+        "top_k": 10,
+        "zero_rate": 0.3499
+      },
+      "mode": "raw_session",
+      "notes": [
+        "granularity=session",
+        "top_k=10"
+      ],
+      "primary_metric": "avg_recall",
+      "primary_metric_value": 0.6028,
+      "reference_kind": "historical",
+      "runtime_seconds": 2106.411,
+      "series_name": "mempalace",
+      "source_path": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\benchmarks\\results\\full_compare_20260418_033425\\summary.json",
+      "status": "full_same_machine",
+      "system_name": "mempalace"
+    },
+    {
+      "artifacts": {
+        "aggregate_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\aggregate_primary_metrics.png",
+        "benchmark_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\membench_comparison.png",
+        "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\runs\\membench_old_brainctl_cmd_turn.json",
+        "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\coverage_status.png"
+      },
+      "benchmark": "membench",
+      "caveats": [
+        "MemBench comparison is partial because ThirdAgent and noise-extended slices are not included."
+      ],
+      "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\Membench\\MemData\\FirstAgent",
+      "example_count": 200,
+      "measured": false,
+      "metadata": {},
+      "metrics": {
+        "hit_at_5": 0.93,
+        "simple_hit_at_5": 0.93,
+        "top_k": 5
+      },
+      "mode": "cmd_turn",
+      "notes": [
+        "FirstAgent slice only",
+        "turn-level retrieval",
+        "topic=all"
+      ],
+      "primary_metric": "hit_at_5",
+      "primary_metric_value": 0.93,
+      "reference_kind": "historical",
+      "runtime_seconds": 140.592,
+      "series_name": "old_brainctl",
+      "source_path": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\benchmarks\\results\\full_compare_20260418_033425\\summary.json",
+      "status": "partial",
+      "system_name": "brainctl"
+    },
+    {
+      "artifacts": {
+        "aggregate_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\aggregate_primary_metrics.png",
+        "benchmark_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\membench_comparison.png",
+        "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\runs\\membench_mempalace_raw_turn.json",
+        "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\coverage_status.png"
+      },
+      "benchmark": "membench",
+      "caveats": [
+        "MemBench comparison is partial because ThirdAgent and noise-extended slices are not included."
+      ],
+      "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\Membench\\MemData\\FirstAgent",
+      "example_count": 200,
+      "measured": false,
+      "metadata": {},
+      "metrics": {
+        "hit_at_5": 0.885,
+        "simple_hit_at_5": 0.885,
+        "top_k": 5
+      },
+      "mode": "raw_turn",
+      "notes": [
+        "FirstAgent slice only",
+        "turn-level retrieval",
+        "topic=all"
+      ],
+      "primary_metric": "hit_at_5",
+      "primary_metric_value": 0.885,
+      "reference_kind": "historical",
+      "runtime_seconds": 804.35,
+      "series_name": "mempalace",
+      "source_path": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\benchmarks\\results\\full_compare_20260418_033425\\summary.json",
+      "status": "partial",
+      "system_name": "mempalace"
+    },
+    {
+      "artifacts": {
+        "aggregate_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\benchmarks\\results\\full_compare_20260418_033425\\charts\\aggregate_primary_metrics.png",
+        "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\runs\\convomem_old_brainctl_cmd.json",
+        "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\coverage_status.png"
+      },
+      "benchmark": "convomem",
+      "caveats": [
+        "Blocked while loading ConvoMem evidence data: <urlopen error [WinError 10054] An existing connection was forcibly closed by the remote host>"
+      ],
+      "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\mempalace\\benchmarks\\convomem_cache",
+      "example_count": 0,
+      "measured": false,
+      "metadata": {},
+      "metrics": {},
+      "mode": "cmd",
+      "notes": [
+        "limit_per_category=1",
+        "top_k=10"
+      ],
+      "primary_metric": "avg_recall",
+      "primary_metric_value": null,
+      "reference_kind": "historical",
+      "runtime_seconds": null,
+      "series_name": "old_brainctl",
+      "source_path": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\benchmarks\\results\\full_compare_20260418_033425\\summary.json",
+      "status": "blocked",
+      "system_name": "brainctl"
+    },
+    {
+      "artifacts": {
+        "aggregate_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\benchmarks\\results\\full_compare_20260418_033425\\charts\\aggregate_primary_metrics.png",
+        "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\runs\\convomem_mempalace_raw.json",
+        "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\coverage_status.png"
+      },
+      "benchmark": "convomem",
+      "caveats": [
+        "Blocked while loading ConvoMem evidence data: <urlopen error [WinError 10054] An existing connection was forcibly closed by the remote host>"
+      ],
+      "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\mempalace\\benchmarks\\convomem_cache",
+      "example_count": 0,
+      "measured": false,
+      "metadata": {},
+      "metrics": {},
+      "mode": "raw",
+      "notes": [
+        "limit_per_category=1",
+        "top_k=10"
+      ],
+      "primary_metric": "avg_recall",
+      "primary_metric_value": null,
+      "reference_kind": "historical",
+      "runtime_seconds": null,
+      "series_name": "mempalace",
+      "source_path": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\benchmarks\\results\\full_compare_20260418_033425\\summary.json",
+      "status": "blocked",
+      "system_name": "mempalace"
+    },
+    {
+      "artifacts": {
+        "aggregate_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\aggregate_primary_metrics.png",
+        "benchmark_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\longmemeval_comparison.png",
+        "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\runs\\longmemeval_new_brainctl_brain.json",
+        "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\coverage_status.png"
+      },
+      "benchmark": "longmemeval",
+      "caveats": [],
+      "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\LongMemEval\\data\\longmemeval_s_cleaned.json",
+      "example_count": 3,
+      "measured": true,
+      "metadata": {},
+      "metrics": {
+        "ndcg_at_10": 1.0,
+        "ndcg_at_5": 1.0,
+        "r_at_10": 1.0,
+        "r_at_5": 1.0
+      },
+      "mode": "brain",
+      "notes": [
+        "top_k=10",
+        "Legacy 470-question session-level slice."
+      ],
+      "primary_metric": "r_at_5",
+      "primary_metric_value": 1.0,
+      "reference_kind": "measured",
+      "runtime_seconds": 3.541,
+      "series_name": "new_brainctl",
+      "source_path": null,
+      "status": "full_same_machine",
+      "system_name": "brainctl"
+    },
+    {
+      "artifacts": {
+        "aggregate_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\aggregate_primary_metrics.png",
+        "benchmark_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\longmemeval_comparison.png",
+        "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\runs\\longmemeval_new_brainctl_cmd.json",
+        "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\coverage_status.png"
+      },
+      "benchmark": "longmemeval",
+      "caveats": [],
+      "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\LongMemEval\\data\\longmemeval_s_cleaned.json",
+      "example_count": 3,
+      "measured": true,
+      "metadata": {},
+      "metrics": {
+        "ndcg_at_10": 1.0,
+        "ndcg_at_5": 1.0,
+        "r_at_10": 1.0,
+        "r_at_5": 1.0
+      },
+      "mode": "cmd",
+      "notes": [
+        "top_k=10",
+        "Legacy 470-question session-level slice."
+      ],
+      "primary_metric": "r_at_5",
+      "primary_metric_value": 1.0,
+      "reference_kind": "measured",
+      "runtime_seconds": 3.384,
+      "series_name": "new_brainctl",
+      "source_path": null,
+      "status": "full_same_machine",
+      "system_name": "brainctl"
+    },
+    {
+      "artifacts": {
+        "aggregate_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\aggregate_primary_metrics.png",
+        "benchmark_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\locomo_comparison.png",
+        "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\runs\\locomo_new_brainctl_cmd_session.json",
+        "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\coverage_status.png"
+      },
+      "benchmark": "locomo",
+      "caveats": [],
+      "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\locomo\\data\\locomo10.json",
+      "example_count": 199,
+      "measured": true,
+      "metadata": {},
+      "metrics": {
+        "avg_recall": 0.9413,
+        "cat_1_recall": 0.8641,
+        "cat_2_recall": 1.0,
+        "cat_3_recall": 0.7436,
+        "cat_4_recall": 0.9571,
+        "cat_5_recall": 0.9787,
+        "perfect_rate": 0.9196,
+        "top_k": 10,
+        "zero_rate": 0.0402
+      },
+      "mode": "cmd_session",
+      "notes": [
+        "granularity=session",
+        "top_k=10"
+      ],
+      "primary_metric": "avg_recall",
+      "primary_metric_value": 0.9413,
+      "reference_kind": "measured",
+      "runtime_seconds": 37.507,
+      "series_name": "new_brainctl",
+      "source_path": null,
+      "status": "full_same_machine",
+      "system_name": "brainctl"
+    },
+    {
+      "artifacts": {
+        "aggregate_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\aggregate_primary_metrics.png",
+        "benchmark_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\membench_comparison.png",
+        "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\runs\\membench_new_brainctl_cmd_turn.json",
+        "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\coverage_status.png"
+      },
+      "benchmark": "membench",
+      "caveats": [
+        "MemBench comparison is partial because ThirdAgent and noise-extended slices are not included."
+      ],
+      "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\Membench\\MemData\\FirstAgent",
+      "example_count": 3,
+      "measured": true,
+      "metadata": {},
+      "metrics": {
+        "hit_at_5": 1.0,
+        "simple_hit_at_5": 1.0,
+        "top_k": 5
+      },
+      "mode": "cmd_turn",
+      "notes": [
+        "FirstAgent slice only",
+        "turn-level retrieval",
+        "topic=all"
+      ],
+      "primary_metric": "hit_at_5",
+      "primary_metric_value": 1.0,
+      "reference_kind": "measured",
+      "runtime_seconds": 1.919,
+      "series_name": "new_brainctl",
+      "source_path": null,
+      "status": "partial",
+      "system_name": "brainctl"
+    },
+    {
+      "artifacts": {
+        "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\runs\\convomem_new_brainctl_cmd.json",
+        "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\smoke_legacy_compare_20260423_105447\\charts\\coverage_status.png"
+      },
+      "benchmark": "convomem",
+      "caveats": [
+        "Blocked while loading ConvoMem evidence data: HTTP Error 404: Not Found"
+      ],
+      "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\mempalace\\benchmarks\\convomem_cache",
+      "example_count": 0,
+      "measured": true,
+      "metadata": {},
+      "metrics": {},
+      "mode": "cmd",
+      "notes": [
+        "limit_per_category=1",
+        "top_k=10"
+      ],
+      "primary_metric": "avg_recall",
+      "primary_metric_value": null,
+      "reference_kind": "measured",
+      "runtime_seconds": null,
+      "series_name": "new_brainctl",
+      "source_path": null,
+      "status": "blocked",
+      "system_name": "brainctl"
+    }
+  ]
+}

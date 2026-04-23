@@ -1,0 +1,32 @@
+{
+  "artifacts": {
+    "aggregate_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\prepush_smoke_20260423_123335\\charts\\aggregate_primary_metrics.png",
+    "benchmark_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\prepush_smoke_20260423_123335\\charts\\longmemeval_comparison.png",
+    "run_json": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\prepush_smoke_20260423_123335\\runs\\longmemeval_old_brainctl_cmd.json",
+    "status_chart": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\BRAINCTL WITH PRO\\brainctl\\benchmarks\\results\\prepush_smoke_20260423_123335\\charts\\coverage_status.png"
+  },
+  "benchmark": "longmemeval",
+  "caveats": [],
+  "dataset_path": "C:\\Users\\mario\\Documents\\GitHub\\LongMemEval\\data\\longmemeval_s_cleaned.json",
+  "example_count": 470,
+  "measured": false,
+  "metadata": {},
+  "metrics": {
+    "ndcg_at_10": 0.9247,
+    "ndcg_at_5": 0.9206,
+    "r_at_10": 0.9894,
+    "r_at_5": 0.9702
+  },
+  "mode": "cmd",
+  "notes": [
+    "top_k=10"
+  ],
+  "primary_metric": "r_at_5",
+  "primary_metric_value": 0.9702,
+  "reference_kind": "historical",
+  "runtime_seconds": 130.863,
+  "series_name": "old_brainctl",
+  "source_path": "C:\\Users\\mario\\Documents\\GitHub\\brainctl\\benchmarks\\results\\full_compare_20260418_033425\\summary.json",
+  "status": "full_same_machine",
+  "system_name": "brainctl"
+}
