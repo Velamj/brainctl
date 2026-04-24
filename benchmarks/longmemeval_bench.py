@@ -136,6 +136,7 @@ def run_entry(entry: QuestionEntry, *, pipeline: str = "cmd", top_k: int = 10) -
     return {
         "question_id": entry.question_id,
         "question_type": entry.question_type,
+        "question": entry.question,
         "r_at_5": recall_any(ranked_indices, correct_ids, corpus_ids, 5),
         "r_at_10": recall_any(ranked_indices, correct_ids, corpus_ids, 10),
         "r_all_at_5": recall_all(ranked_indices, correct_ids, corpus_ids, 5),
