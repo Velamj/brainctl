@@ -50,7 +50,11 @@ def _build_corpus(sessions: list[dict[str, Any]], granularity: str) -> list[tupl
     corpus: list[tuple[str, str]] = []
     for session in sessions:
         if granularity == "session":
-            texts = []
+            texts = [
+                f"Session ID: session_{session['session_num']}",
+                f"Session Date: {session.get('date', '')}",
+                "Conversation:",
+            ]
             for dialog in session["dialogs"]:
                 speaker = dialog.get("speaker", "?")
                 text = dialog.get("text", "")

@@ -145,6 +145,58 @@ def test_family_expansion_admits_sibling_evidence_for_multi_part_queries():
     assert "family" in selected_channels
 
 
+def test_whole_session_family_admission_promotes_compact_sibling_evidence():
+    docs = [
+        ("distractor_alpha", "Session ID: distractor_alpha\nSession Date: 2023/01/01\nConversation: User: I asked about museum tickets."),
+        ("noise_beta", "Session ID: noise_beta\nSession Date: 2023/01/02\nConversation: User: I discussed a museum blog post."),
+        ("answer_trip_1", "Session ID: answer_trip_1\nSession Date: 2023/01/03\nConversation: User: I visited the science museum."),
+        ("noise_gamma", "Session ID: noise_gamma\nSession Date: 2023/01/04\nConversation: User: I asked about travel planning."),
+        ("answer_trip_2", "Session ID: answer_trip_2\nSession Date: 2023/01/05\nConversation: User: I visited the art museum."),
+        ("answer_trip_3", "Session ID: answer_trip_3\nSession Date: 2023/01/06\nConversation: User: I visited the history museum."),
+    ]
+    retrieved_rows = [
+        {"id": 1, "final_score": 10.0},
+        {"id": 2, "final_score": 9.0},
+        {"id": 3, "final_score": 8.0},
+        {"id": 4, "final_score": 7.0},
+        {"id": 5, "final_score": 6.0},
+        {"id": 6, "final_score": 5.0},
+    ]
+
+    ranked, trace = _optimize(
+        "What is the order of the museums I visited from earliest to latest?",
+        docs,
+        retrieved_rows,
+        top_k=5,
+    )
+
+    assert ranked[:4] == ["distractor_alpha", "answer_trip_1", "answer_trip_2", "answer_trip_3"]
+    assert trace["strategy"] == "whole_session_family_admission"
+
+
+def test_session_id_corpus_preserves_first_stage_without_compact_families():
+    docs = [
+        ("session_1", "Alex said, \"I visited the museum on Monday.\""),
+        ("session_2", "Alex said, \"I visited the garden on Tuesday.\""),
+        ("session_3", "Alex said, \"I visited the library on Wednesday.\""),
+    ]
+    retrieved_rows = [
+        {"id": 1, "final_score": 10.0},
+        {"id": 2, "final_score": 9.0},
+        {"id": 3, "final_score": 8.0},
+    ]
+
+    ranked, trace = _optimize(
+        "What is the order of places Alex visited from earliest to latest?",
+        docs,
+        retrieved_rows,
+        top_k=3,
+    )
+
+    assert ranked == ["session_1", "session_2", "session_3"]
+    assert trace["strategy"] == "preserve_first_stage_order"
+
+
 def test_role_fact_uses_same_session_coreference_without_gold_ids():
     docs = [
         ("roles_1|sid=10|g=10|s=1|t=0", "I want to tell you about my sister, Sierra."),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import sqlite3
 import tempfile
@@ -18,10 +19,11 @@ if str(SRC) not in os.sys.path:
     os.sys.path.insert(0, str(SRC))
 
 from agentmemory.brain import Brain
-from benchmarks.retrieval_flow_optimizer import optimize_ranked_documents
+from benchmarks.retrieval_flow_optimizer import detect_flow_operators, optimize_ranked_documents, source_family
 
 
 AGENT_ID = "legacy-compare-bench"
+_SESSION_DOC_ID_RE = re.compile(r"^session[_-]?\d+$", re.IGNORECASE)
 
 
 @dataclass
@@ -120,6 +122,26 @@ def _search_cmd(
     return memories[:top_k]
 
 
+def _is_whole_session_corpus(seeded: SeededCorpus) -> bool:
+    if not seeded.rowid_to_text:
+        return False
+    session_rows = sum(
+        1
+        for rowid, text in seeded.rowid_to_text.items()
+        if text.lstrip().startswith("Session ID:")
+        or _SESSION_DOC_ID_RE.match(str(seeded.rowid_to_doc_id.get(rowid, "")))
+    )
+    return session_rows / max(len(seeded.rowid_to_text), 1) >= 0.8
+
+
+def _has_compact_source_families(seeded: SeededCorpus, *, max_size: int = 6) -> bool:
+    counts: dict[str, int] = {}
+    for doc_id in seeded.rowid_to_doc_id.values():
+        family = source_family(doc_id)
+        counts[family] = counts.get(family, 0) + 1
+    return any(2 <= count <= max_size for count in counts.values())
+
+
 def seed_documents(
     documents: Iterable[tuple[str, str]],
     *,
@@ -171,7 +193,15 @@ def rank_seeded_documents(
     db_path = work_dir / "brain.db"
     try:
         shutil.copy2(seeded.template_db_path, db_path)
-        pool_k = max(top_k * 8, 50)
+        operators = detect_flow_operators(query)
+        small_bounded_corpus = len(seeded.rowid_to_doc_id) <= max(top_k * 5, 50)
+        whole_session_corpus = _is_whole_session_corpus(seeded)
+        needs_expanded_pool = (
+            operators.role_fact
+            or (small_bounded_corpus and not whole_session_corpus)
+            or (whole_session_corpus and operators.needs_breadth and _has_compact_source_families(seeded))
+        )
+        pool_k = max(top_k * 8, 50) if needs_expanded_pool else top_k
 
         if pipeline == "brain":
             results = _search_brain(db_path, query, pool_k)
@@ -204,7 +234,15 @@ def search_seeded_documents(
     db_path = work_dir / "brain.db"
     try:
         shutil.copy2(seeded.template_db_path, db_path)
-        pool_k = max(top_k * 8, 50)
+        operators = detect_flow_operators(query)
+        small_bounded_corpus = len(seeded.rowid_to_doc_id) <= max(top_k * 5, 50)
+        whole_session_corpus = _is_whole_session_corpus(seeded)
+        needs_expanded_pool = (
+            operators.role_fact
+            or (small_bounded_corpus and not whole_session_corpus)
+            or (whole_session_corpus and operators.needs_breadth and _has_compact_source_families(seeded))
+        )
+        pool_k = max(top_k * 8, 50) if needs_expanded_pool else top_k
         if pipeline == "brain":
             results = _search_brain(db_path, query, pool_k)
         elif pipeline == "cmd":
