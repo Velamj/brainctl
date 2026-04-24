@@ -285,6 +285,7 @@ def _role_value_pattern(text: str) -> float:
         r"\b("
         r"works?\s+(?:as|in|at)|"
         r"is\s+(?:a|an|the)\b|"
+        r"owns?\b|owned\s+by|owner\s+(?:is|:)|"
         r"loves?\b|likes?\b|enjoys?\b|"
         r"passionate\s+about|really\s+into|free\s+time|"
         r"originally\s+from|grew\s+up\s+in|hails?\s+from|from\s+[A-Z][A-Za-z]+,\s*[A-Z][A-Za-z]+|"
@@ -433,7 +434,21 @@ def build_features(
     alias_overlap = len(query_entities & aliases) / max(len(query_entities), 1) if query_entities and aliases else 0.0
     role_overlap = 1.0 if (_ROLE_TERMS & query_tokens & cand_tokens) else 0.0
     attribute_overlap = 1.0 if (_ATTRIBUTE_TERMS & query_tokens & cand_tokens) else 0.0
-    role_value_pattern = role_overlap * _role_value_pattern(text)
+    # Some role/attribute questions ask for a value that is not repeated as a
+    # query token in the candidate ("what is Arlo's role" -> "Arlo is the
+    # quartermaster"). Let entity-aligned role/key queries activate the value
+    # pattern without requiring a synthetic benchmark-style field label.
+    value_pattern = _role_value_pattern(text)
+    role_value_pattern = max(role_overlap, attribute_overlap) * value_pattern
+    if (
+        value_pattern > 0.0
+        and entity_overlap > 0.0
+        and (
+            getattr(plan, "needs_role_fact", False)
+            or getattr(plan, "needs_synthetic_key_value", False)
+        )
+    ):
+        role_value_pattern = max(role_value_pattern, 1.0)
     query_temporal = 1.0 if (bool(getattr(plan, "requires_temporal_reasoning", False)) or _TEMPORAL_RE.search(query or "")) else 0.0
     candidate_temporal = 1.0 if _TEMPORAL_RE.search(text or "") or _DATE_RE.search(text or "") else 0.0
     temporal_anchor_overlap = _temporal_anchor_overlap(query, text)

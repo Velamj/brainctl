@@ -143,7 +143,7 @@ def _heuristic_score(plan: Any, features: dict[str, float]) -> float:
         score += (
             features.get("role_overlap", 0.0) * 0.11
             + features.get("attribute_overlap", 0.0) * 0.10
-            + features.get("role_value_pattern", 0.0) * 0.08
+            + features.get("role_value_pattern", 0.0) * 0.36
             + features.get("exact_phrase", 0.0) * 0.03
         )
     if features.get("query_needs_synthetic_key_value", 0.0) > 0.0:
