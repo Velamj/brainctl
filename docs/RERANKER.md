@@ -111,6 +111,12 @@ path passed through the internal reranker configuration. That artifact is not
 checked into git. If the file is absent, the second-stage path falls back to
 the deterministic heuristic slate scorer and search remains fully functional.
 
+The fallback is implemented in `src/agentmemory/retrieval/second_stage.py`:
+`rerank_top_candidates()` calls `TinyMLPModel.try_load(...)`; when that returns
+`None`, the MLP score vector is all zeros and `_heuristic_score()` plus
+`_rerank_slate()` produce the final deterministic listwise order. No network,
+model download, or checked-in weight file is required for the default path.
+
 This keeps the default package local-first and reviewable:
 
 - no mandatory network fetch,
@@ -123,6 +129,10 @@ artifacts into ignored benchmark/training output directories. If a trained
 artifact is published later, it should be attached as a release asset or LFS
 object with a short provenance record containing the source commit, training
 bundle, feature version, and held-out metrics.
+
+Benchmark numbers reported by a PR must state whether they were produced with
+an external MLP artifact present. If no artifact path is supplied and
+`tiny_mlp_v1.json` is absent, those numbers are heuristic-fallback numbers.
 
 ## Latency / quality tradeoff
 
