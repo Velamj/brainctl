@@ -20,11 +20,19 @@ Migration 052 adds procedural memory as a first-class layer:
 
 ## Transaction Safety
 
-The migration runs inside SQLite transaction semantics used by the existing
-migration runner. The `memories` table is rebuilt to widen the CHECK
-constraint because SQLite cannot alter CHECK constraints in place. The rebuild
-copies existing rows forward and preserves existing memory IDs before swapping
-the replacement table into place.
+Migration 052 contains its own explicit all-or-nothing transaction boundary:
+it starts with `PRAGMA foreign_keys = OFF; BEGIN;` and does not re-enable
+foreign keys until after `COMMIT;`. The migration runner records the
+`schema_versions` row only after the SQL script completes successfully. If any
+statement inside the script fails before `COMMIT`, SQLite rolls back the
+in-flight schema rebuild and the migration is not marked applied.
+
+The `memories` table is rebuilt to widen the CHECK constraint because SQLite
+cannot alter CHECK constraints in place. The rebuild copies existing rows
+forward into a temporary backup table, recreates `memories` with the expanded
+`episodic|semantic|procedural` constraint, restores the original IDs and column
+values, then recreates the FTS/index/trigger contracts expected by fresh
+install schemas.
 
 The procedural companion tables are additive. They do not delete or compress
 episodic evidence, semantic facts, events, decisions, entities, or graph edges.
@@ -35,10 +43,18 @@ Newer brainctl versions can read older databases and apply migration 052.
 
 Older brainctl versions are expected to keep reading migrated databases for
 ordinary episodic and semantic rows because the existing `memories` columns are
-preserved. Older versions will not understand canonical procedure tables or
-`memory_type='procedural'` rows. Operators that need strict older-version
-compatibility should not write procedural rows before rolling all clients
-forward.
+preserved and the widened CHECK constraint still accepts their existing
+`episodic` and `semantic` writes. Older versions will not understand canonical
+procedure tables or `memory_type='procedural'` rows. Older code paths that
+validate `memory_type` in Python may reject or ignore procedural rows, and
+older query surfaces will only see the bridge synopsis row in `memories` rather
+than the structured `procedures` payload.
+
+Forward compatibility is therefore read-mostly for older clients: legacy
+episodic/semantic reads and writes should continue, but procedure creation,
+procedure feedback, and procedure-aware search require the version that ships
+migration 052. Operators that need strict mixed-version compatibility should
+roll all active writers forward before enabling procedural writes.
 
 ## Failure and Rollback
 
