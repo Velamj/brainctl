@@ -18,6 +18,7 @@ if str(SRC) not in os.sys.path:
     os.sys.path.insert(0, str(SRC))
 
 from agentmemory.brain import Brain
+from benchmarks.retrieval_flow_optimizer import optimize_ranked_documents
 
 
 AGENT_ID = "legacy-compare-bench"
@@ -28,6 +29,7 @@ class SeededCorpus:
     root_dir: Path
     template_db_path: Path
     rowid_to_doc_id: dict[int, str]
+    rowid_to_text: dict[int, str]
 
     def cleanup(self) -> None:
         shutil.rmtree(self.root_dir, ignore_errors=True)
@@ -129,11 +131,13 @@ def seed_documents(
     try:
         init_empty_db(db_path)
         rowid_to_doc_id: dict[int, str] = {}
+        rowid_to_text: dict[int, str] = {}
         brain = Brain(db_path=str(db_path), agent_id=AGENT_ID)
         try:
             for doc_id, text in documents:
                 rowid = brain.remember(text, category=category)
                 rowid_to_doc_id[int(rowid)] = doc_id
+                rowid_to_text[int(rowid)] = text
         finally:
             brain.close()
         conn = sqlite3.connect(str(db_path))
@@ -149,6 +153,7 @@ def seed_documents(
             root_dir=tmp_dir,
             template_db_path=db_path,
             rowid_to_doc_id=rowid_to_doc_id,
+            rowid_to_text=rowid_to_text,
         )
     except Exception:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -166,21 +171,22 @@ def rank_seeded_documents(
     db_path = work_dir / "brain.db"
     try:
         shutil.copy2(seeded.template_db_path, db_path)
+        pool_k = max(top_k * 8, 50)
 
         if pipeline == "brain":
-            results = _search_brain(db_path, query, top_k)
+            results = _search_brain(db_path, query, pool_k)
         elif pipeline == "cmd":
-            results = _search_cmd(db_path, query, top_k)
+            results = _search_cmd(db_path, query, pool_k)
         else:
             raise ValueError(f"Unknown pipeline {pipeline!r}")
 
-        ranked: list[str] = []
-        seen: set[str] = set()
-        for result in results:
-            doc_id = seeded.rowid_to_doc_id.get(int(result["id"]))
-            if doc_id and doc_id not in seen:
-                ranked.append(doc_id)
-                seen.add(doc_id)
+        ranked, _trace = optimize_ranked_documents(
+            query,
+            results,
+            seeded.rowid_to_doc_id,
+            seeded.rowid_to_text,
+            top_k=top_k,
+        )
         return ranked
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
@@ -198,20 +204,50 @@ def search_seeded_documents(
     db_path = work_dir / "brain.db"
     try:
         shutil.copy2(seeded.template_db_path, db_path)
+        pool_k = max(top_k * 8, 50)
         if pipeline == "brain":
-            results = _search_brain(db_path, query, top_k)
+            results = _search_brain(db_path, query, pool_k)
         elif pipeline == "cmd":
-            results = _search_cmd(db_path, query, top_k, debug=debug)
+            results = _search_cmd(db_path, query, pool_k, debug=debug)
         else:
             raise ValueError(f"Unknown pipeline {pipeline!r}")
-        out: list[dict] = []
+        ranked, trace = optimize_ranked_documents(
+            query,
+            results,
+            seeded.rowid_to_doc_id,
+            seeded.rowid_to_text,
+            top_k=top_k,
+        )
+        rows_by_doc: dict[str, dict] = {}
         for result in results:
-            row = dict(result)
-            row["doc_id"] = seeded.rowid_to_doc_id.get(int(result["id"]), "")
+            try:
+                rowid = int(result["id"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            doc_id = seeded.rowid_to_doc_id.get(rowid, "")
+            if doc_id:
+                row = dict(result)
+                row["doc_id"] = doc_id
+                rows_by_doc[doc_id] = row
+        out: list[dict] = []
+        for rank, doc_id in enumerate(ranked, start=1):
+            row = dict(rows_by_doc.get(doc_id) or {})
+            row["doc_id"] = doc_id
+            row.setdefault("content", seeded.rowid_to_text.get(_rowid_for_doc(seeded, doc_id), ""))
+            row["retrieval_flow_rank"] = rank
+            if debug and rank == 1:
+                row["retrieval_flow_trace"] = trace
             out.append(row)
         return out
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
+
+
+def _rowid_for_doc(seeded: SeededCorpus, doc_id: str) -> int:
+    for rowid, mapped_doc_id in seeded.rowid_to_doc_id.items():
+        if mapped_doc_id == doc_id:
+            return rowid
+    return 0
 
 
 def rank_documents(

@@ -23,6 +23,49 @@ _LOW_SIGNAL_TOKENS = {
     "summary", "history", "timeline", "recent", "today", "yesterday", "tomorrow",
     "game", "issue", "problem", "thing", "stuff", "update",
 }
+_SYNONYMS = {
+    "dad": {"father", "parent"},
+    "father": {"dad", "parent"},
+    "mom": {"mother", "parent"},
+    "mother": {"mom", "parent"},
+    "workplace": {"work", "works", "job", "office", "occupation", "position", "employer"},
+    "occupation": {"job", "work", "works", "position", "career"},
+    "position": {"job", "occupation", "work", "works", "role"},
+    "educational": {"education", "degree", "school", "background"},
+    "education": {"educational", "degree", "school", "background"},
+    "background": {"education", "degree", "school"},
+    "degree": {"education", "educational", "school", "background"},
+    "location": {"where", "place", "city", "hometown", "workplace"},
+    "hometown": {"home", "city", "location", "from"},
+    "coworker": {"colleague", "work", "works"},
+    "hobby": {"enjoy", "enjoys", "love", "loves", "passion", "passionate", "into"},
+    "enjoy": {"hobby", "likes", "love", "loves", "passion"},
+    "enjoys": {"hobby", "likes", "love", "loves", "passion"},
+    "loves": {"hobby", "enjoy", "enjoys", "passion", "passionate"},
+    "passionate": {"hobby", "enjoy", "enjoys", "loves"},
+    "boss": {"manager", "supervisor"},
+    "subordinate": {"employee", "report", "teammate"},
+    "aunt": {"relative"},
+    "uncle": {"relative"},
+    "cousin": {"relative"},
+    "living": {"occupation", "job", "work", "works"},
+    "email": {"contact", "address"},
+    "contact": {"phone", "number", "email"},
+    "number": {"phone", "contact"},
+}
+_ROLE_TERMS = {
+    "father", "dad", "mother", "mom", "parent", "coworker", "colleague",
+    "friend", "neighbor", "sister", "brother", "wife", "husband", "nephew",
+    "niece", "aunt", "uncle", "cousin", "relative", "boss", "manager",
+    "supervisor", "subordinate", "employee", "report",
+}
+_ATTRIBUTE_TERMS = {
+    "education", "educational", "background", "degree", "school", "occupation",
+    "position", "job", "workplace", "works", "work", "location", "hometown",
+    "company", "employer", "role", "status", "key", "code", "value",
+    "hobby", "enjoy", "enjoys", "love", "loves", "likes", "passion",
+    "passionate", "into", "email", "address", "contact", "number", "phone", "living",
+}
 _DATE_RE = re.compile(
     r"\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?|"
     r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
@@ -45,7 +88,10 @@ _LONG_CONTEXT_HINT_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
-_SESSION_RE = re.compile(r"\bsession[_ :#-]*(\d+)\b", re.IGNORECASE)
+_SESSION_RE = re.compile(
+    r"(?:^|[|_\s-])(?:sid|session|s)[=_ :#-]*(\d+)|\bsession[_ :#-]*(\d+)\b",
+    re.IGNORECASE,
+)
 _DIALOG_RE = re.compile(r"\bD(\d+):", re.IGNORECASE)
 _ENTITY_RE = re.compile(r"\b[A-Z][A-Za-z0-9_.:-]+\b")
 
@@ -106,11 +152,15 @@ def _normalize_token(token: str) -> str:
 
 
 def _token_set(text: str) -> set[str]:
-    return {
+    tokens = {
         token
         for part in re.split(r"\s+", text or "")
         if (token := _normalize_token(part))
     }
+    expanded = set(tokens)
+    for token in tokens:
+        expanded.update(_SYNONYMS.get(token, ()))
+    return expanded
 
 
 def _informative_tokens(text: str) -> set[str]:
@@ -214,7 +264,7 @@ def _temporal_anchor_overlap(query: str, text: str) -> float:
 
 
 def _extract_session_hints(text: str) -> list[int]:
-    hints = [int(match.group(1)) for match in _SESSION_RE.finditer(text or "")]
+    hints = [int(match.group(1) or match.group(2)) for match in _SESSION_RE.finditer(text or "")]
     hints.extend(int(match.group(1)) for match in _DIALOG_RE.finditer(text or ""))
     return hints
 
@@ -228,6 +278,23 @@ def _session_gap_score(query: str, candidate_text_value: str) -> tuple[float, fl
         return 1.0, 0.0, 0.0
     gap = min(abs(q - c) for q in query_sessions for c in candidate_sessions)
     return 1.0 / (1.0 + gap), 1.0, 1.0
+
+
+def _role_value_pattern(text: str) -> float:
+    return 1.0 if re.search(
+        r"\b("
+        r"works?\s+(?:as|in|at)|"
+        r"is\s+(?:a|an|the)\b|"
+        r"loves?\b|likes?\b|enjoys?\b|"
+        r"passionate\s+about|really\s+into|free\s+time|"
+        r"originally\s+from|grew\s+up\s+in|hails?\s+from|from\s+[A-Z][A-Za-z]+,\s*[A-Z][A-Za-z]+|"
+        r"[\w.+-]+@[\w.-]+|"
+        r"(?:phone|contact|number|email)\s+(?:is|address\s+is|number\s+is)?|"
+        r"company\s+(?:is|called|named)"
+        r")",
+        text or "",
+        re.IGNORECASE,
+    ) else 0.0
 
 
 def _parse_iso_timestamp(value: Any) -> datetime | None:
@@ -364,6 +431,9 @@ def build_features(
     entity_overlap = len(query_entities & cand_entities) / max(len(query_entities), 1) if query_entities else 0.0
     aliases = {alias.lower() for alias in _alias_values(candidate) if len(alias) > 2}
     alias_overlap = len(query_entities & aliases) / max(len(query_entities), 1) if query_entities and aliases else 0.0
+    role_overlap = 1.0 if (_ROLE_TERMS & query_tokens & cand_tokens) else 0.0
+    attribute_overlap = 1.0 if (_ATTRIBUTE_TERMS & query_tokens & cand_tokens) else 0.0
+    role_value_pattern = role_overlap * _role_value_pattern(text)
     query_temporal = 1.0 if (bool(getattr(plan, "requires_temporal_reasoning", False)) or _TEMPORAL_RE.search(query or "")) else 0.0
     candidate_temporal = 1.0 if _TEMPORAL_RE.search(text or "") or _DATE_RE.search(text or "") else 0.0
     temporal_anchor_overlap = _temporal_anchor_overlap(query, text)
@@ -443,6 +513,11 @@ def build_features(
         "query_needs_ordering": 1.0 if getattr(plan, "needs_ordering", False) else 0.0,
         "query_needs_update_resolution": 1.0 if getattr(plan, "needs_update_resolution", False) else 0.0,
         "query_needs_set_coverage": 1.0 if getattr(plan, "needs_set_coverage", False) else 0.0,
+        "query_needs_role_fact": 1.0 if getattr(plan, "needs_role_fact", False) else 0.0,
+        "query_needs_synthetic_key_value": 1.0 if getattr(plan, "needs_synthetic_key_value", False) else 0.0,
+        "role_overlap": role_overlap,
+        "attribute_overlap": attribute_overlap,
+        "role_value_pattern": role_value_pattern,
         "query_requires_multi_hop": 1.0 if getattr(plan, "requires_multi_hop", False) else 0.0,
         "long_context_applicable": 1.0 if long_context_debug.get("applicable") else 0.0,
         "long_context_score": _safe_float(long_context_debug.get("score")),

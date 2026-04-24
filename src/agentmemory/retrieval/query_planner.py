@@ -82,6 +82,22 @@ _COVERAGE_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+_ROLE_FACT_RE = re.compile(
+    r"\b("
+    r"father|dad|mother|mom|parent|coworker|colleague|friend|neighbor|"
+    r"brother|sister|nephew|niece|aunt|uncle|cousin|boss|manager|supervisor|subordinate|employee|"
+    r"workplace|occupation|position|job|employer|education|educational|"
+    r"degree|background|location|hometown|role|hobby|enjoys?|loves?|passion|"
+    r"email|contact|phone|number|company|living"
+    r")\b",
+    re.IGNORECASE,
+)
+_SYNTHETIC_KV_RE = re.compile(
+    r"\b("
+    r"id|key|code|value|field|role|status|attribute|group|session|step"
+    r")\b|[A-Za-z]+[_-]\d+|\w+[=:]\w+",
+    re.IGNORECASE,
+)
 _NEGATIVE_RE = re.compile(
     r"\b("
     r"no answer|"
@@ -110,6 +126,8 @@ class QueryPlan:
     needs_ordering: bool = False
     needs_update_resolution: bool = False
     needs_set_coverage: bool = False
+    needs_role_fact: bool = False
+    needs_synthetic_key_value: bool = False
     prefer_memory_types: list[str] = field(default_factory=list)
     candidate_tables: list[str] = field(default_factory=list)
     abstain_allowed: bool = False
@@ -250,6 +268,8 @@ def plan_query(
     needs_ordering = bool(_ORDER_RE.search(query))
     needs_update_resolution = bool(_UPDATE_RE.search(query))
     needs_set_coverage = bool(_COVERAGE_RE.search(query))
+    needs_role_fact = bool(_ROLE_FACT_RE.search(query))
+    needs_synthetic_key_value = bool(_SYNTHETIC_KV_RE.search(query))
     if requires_multi_hop and normalized_intent in {"temporal", "decision", "graph"}:
         needs_set_coverage = True
     if needs_counting or needs_comparison or needs_ordering:
@@ -271,6 +291,10 @@ def plan_query(
         reasons.append("operator:update_resolution")
     if needs_set_coverage:
         reasons.append("operator:set_coverage")
+    if needs_role_fact:
+        reasons.append("operator:role_fact")
+    if needs_synthetic_key_value:
+        reasons.append("operator:synthetic_key_value")
     if "summary of yesterday" in query_lower:
         abstain_allowed = True
         reasons.append("negative_or_out_of_domain_summary")
@@ -290,6 +314,8 @@ def plan_query(
         needs_ordering=needs_ordering,
         needs_update_resolution=needs_update_resolution,
         needs_set_coverage=needs_set_coverage,
+        needs_role_fact=needs_role_fact,
+        needs_synthetic_key_value=needs_synthetic_key_value,
         prefer_memory_types=prefer_memory_types,
         candidate_tables=candidate_tables,
         abstain_allowed=abstain_allowed,

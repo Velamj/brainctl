@@ -24,7 +24,10 @@ _BUCKET_TYPE_MAP = {
     "entities": "entity",
     "decisions": "decision",
 }
-_SESSION_RE = re.compile(r"\bsession[_ :#-]*(\d+)\b", re.IGNORECASE)
+_SESSION_RE = re.compile(
+    r"(?:^|[|_\s-])(?:sid|session|s)[=_ :#-]*(\d+)|\bsession[_ :#-]*(\d+)\b",
+    re.IGNORECASE,
+)
 _DATE_RE = re.compile(
     r"\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/\d{2,4})?|"
     r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
@@ -33,6 +36,7 @@ _DATE_RE = re.compile(
     re.IGNORECASE,
 )
 _ENTITY_RE = re.compile(r"\b[A-Z][A-Za-z0-9_.:-]+\b")
+_SOURCE_NUM_SUFFIX_RE = re.compile(r"^(.+?)[_-](\d+)$")
 
 
 def _resolve_benchmark_ranking_mode(args: Any) -> str:
@@ -135,6 +139,15 @@ def _heuristic_score(plan: Any, features: dict[str, float]) -> float:
         score += features["temporal_anchor_overlap"] * 0.05 + features["session_gap_score"] * 0.05
     if features.get("query_needs_update_resolution", 0.0) > 0.0:
         score += features["status_active"] * 0.04
+    if features.get("query_needs_role_fact", 0.0) > 0.0:
+        score += (
+            features.get("role_overlap", 0.0) * 0.11
+            + features.get("attribute_overlap", 0.0) * 0.10
+            + features.get("role_value_pattern", 0.0) * 0.08
+            + features.get("exact_phrase", 0.0) * 0.03
+        )
+    if features.get("query_needs_synthetic_key_value", 0.0) > 0.0:
+        score += features["source_keyword"] * 0.04 + features.get("attribute_overlap", 0.0) * 0.05
     if intent in {"temporal", "decision"}:
         score += features["bucket_events"] * 0.04 + features["bucket_decisions"] * 0.03
     if intent in {"procedural", "troubleshooting"}:
@@ -163,11 +176,27 @@ def _candidate_text(candidate: dict[str, Any]) -> str:
     return ""
 
 
+def _candidate_source_family(candidate: dict[str, Any]) -> str:
+    raw = (
+        candidate.get("doc_id")
+        or candidate.get("source_doc_id")
+        or candidate.get("source_key")
+        or candidate.get("external_id")
+        or ""
+    )
+    head = str(raw).split("|", 1)[0]
+    match = _SOURCE_NUM_SUFFIX_RE.match(head)
+    return match.group(1) if match else head
+
+
 def _candidate_cluster_keys(plan: Any, candidate: dict[str, Any]) -> set[str]:
     text = _candidate_text(candidate)
     keys: set[str] = set()
+    family = _candidate_source_family(candidate)
+    if family:
+        keys.add(f"family:{family}")
     for match in _SESSION_RE.finditer(text):
-        keys.add(f"session:{match.group(1)}")
+        keys.add(f"session:{match.group(1) or match.group(2)}")
     if getattr(plan, "requires_temporal_reasoning", False) or getattr(plan, "needs_ordering", False):
         for match in _DATE_RE.finditer(text):
             keys.add(f"date:{match.group(0).lower()}")
@@ -213,9 +242,9 @@ def _slate_score(
     localization_bonus = 0.0
 
     if getattr(plan, "needs_set_coverage", False):
-        coverage_bonus += min(0.14, 0.035 * len(new_keys))
+        coverage_bonus += min(0.20, 0.05 * len(new_keys))
         if not new_keys and selected_keys:
-            redundancy_penalty += 0.085
+            redundancy_penalty += 0.11
     elif selected_keys and not new_keys:
         redundancy_penalty += 0.03
 
@@ -232,6 +261,11 @@ def _slate_score(
             temporal_penalty += 0.05
         else:
             coverage_bonus += features.get("temporal_anchor_overlap", 0.0) * 0.03
+
+    if getattr(plan, "needs_role_fact", False):
+        coverage_bonus += features.get("role_overlap", 0.0) * 0.04
+        coverage_bonus += features.get("attribute_overlap", 0.0) * 0.04
+        coverage_bonus += features.get("role_value_pattern", 0.0) * 0.03
 
     if features.get("long_context_focused_program", 0.0) > 0.0:
         localization_bonus += (
@@ -299,6 +333,11 @@ def _rerank_slate(
                 "query_needs_ordering",
                 "query_needs_update_resolution",
                 "query_needs_set_coverage",
+                "query_needs_role_fact",
+                "query_needs_synthetic_key_value",
+                "role_overlap",
+                "attribute_overlap",
+                "role_value_pattern",
                 "long_context_score",
                 "long_context_confidence",
                 "long_context_agreement",
@@ -393,6 +432,8 @@ def rerank_top_candidates(
             "needs_ordering",
             "needs_update_resolution",
             "needs_set_coverage",
+            "needs_role_fact",
+            "needs_synthetic_key_value",
         )
     )
     raw_head_scores = [

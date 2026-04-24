@@ -201,6 +201,10 @@ def test_query_plan_sets_operator_flags():
     assert plan.needs_update_resolution is True
     assert plan.needs_set_coverage is True
 
+    role_plan = plan_query("What is the location of my father's workplace?", requested_tables=["memories"])
+    assert role_plan.needs_role_fact is True
+    assert role_plan.needs_synthetic_key_value is False
+
 
 def test_listwise_slate_avoids_duplicate_session_cluster(tmp_path: Path):
     plan = plan_query(
@@ -247,4 +251,41 @@ def test_listwise_slate_avoids_duplicate_session_cluster(tmp_path: Path):
         config=SecondStageConfig(top_n=3, model_path=str(model_path)),
     )
     assert {row["id"] for row in reranked[:2]} == {1, 3}
+    assert debug["strategy"] == "listwise_greedy_slate"
+
+
+def test_second_stage_promotes_role_fact_candidate(tmp_path: Path):
+    plan = plan_query("What is the location of my father's workplace?", requested_tables=["memories"])
+    model_path = _temp_model(tmp_path / "tiny.json")
+    candidates = [
+        {
+            "id": 1,
+            "bucket": "memories",
+            "type": "memory",
+            "content": "My friend enjoys hiking on weekends.",
+            "final_score": 0.92,
+            "retrieval_score": 0.92,
+            "source": "both",
+        },
+        {
+            "id": 2,
+            "bucket": "memories",
+            "type": "memory",
+            "content": "My dad works in Miami, FL.",
+            "final_score": 0.78,
+            "retrieval_score": 0.78,
+            "source": "keyword",
+        },
+    ]
+
+    reranked, debug = rerank_top_candidates(
+        "What is the location of my father's workplace?",
+        plan,
+        candidates,
+        config=SecondStageConfig(top_n=2, model_path=str(model_path)),
+    )
+
+    assert reranked[0]["id"] == 2
+    assert reranked[0]["second_stage_features"]["role_overlap"] == 1.0
+    assert reranked[0]["second_stage_features"]["attribute_overlap"] == 1.0
     assert debug["strategy"] == "listwise_greedy_slate"
