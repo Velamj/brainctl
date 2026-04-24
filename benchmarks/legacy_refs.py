@@ -1,3 +1,12 @@
+"""Frozen historical comparison values for chart rendering only.
+
+This module is intentionally scoped to the legacy comparison harness. It is
+used to draw old BrainCTL and MemPalace reference bars when the original result
+bundle is unavailable. Runtime retrieval code must not import this module:
+`cmd_search`, `Brain.search`, candidate generation, reranking, and answer
+selection are evaluated against live retrieved candidates only.
+"""
+
 from __future__ import annotations
 
 import json
