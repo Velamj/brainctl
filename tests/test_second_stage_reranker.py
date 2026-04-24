@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from agentmemory.retrieval.judge import JudgeConfig, judge_candidates
 from agentmemory.retrieval.mlp_reranker import TinyMLPModel
@@ -40,6 +41,19 @@ def _temp_model(path: Path) -> Path:
     payload["w3"][0][0] = 1.0
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
+
+
+def test_second_stage_from_args_is_opt_in_by_default():
+    cfg = SecondStageConfig.from_args(SimpleNamespace(benchmark=False))
+    assert cfg.enabled is False
+
+    cfg = SecondStageConfig.from_args(SimpleNamespace(benchmark=False, second_stage=True))
+    assert cfg.enabled is True
+
+    cfg = SecondStageConfig.from_args(
+        SimpleNamespace(benchmark=True, benchmark_ranking_mode="raw", second_stage=True)
+    )
+    assert cfg.enabled is False
 
 
 def test_tiny_mlp_load_and_score(tmp_path: Path):

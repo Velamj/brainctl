@@ -38,10 +38,14 @@ _ENTITY_RE = re.compile(r"\b[A-Z][A-Za-z0-9_.:-]+\b")
 def _resolve_benchmark_ranking_mode(args: Any) -> str:
     mode = str(
         getattr(args, "benchmark_ranking_mode", None)
-        or os.environ.get("BRAINCTL_BENCHMARK_RANKING_MODE", "full")
-        or "full"
+        or os.environ.get("BRAINCTL_BENCHMARK_RANKING_MODE", "raw")
+        or "raw"
     ).strip().lower()
-    return mode if mode in {"full", "raw"} else "full"
+    return mode if mode in {"full", "raw"} else "raw"
+
+
+def _env_flag(name: str) -> bool:
+    return str(os.environ.get(name, "")).strip().lower() in {"1", "true", "yes", "on"}
 
 
 @dataclass(slots=True)
@@ -67,6 +71,7 @@ class SecondStageConfig:
     def from_args(cls, args: Any) -> "SecondStageConfig":
         benchmark = bool(getattr(args, "benchmark", False))
         ranking_mode = _resolve_benchmark_ranking_mode(args) if benchmark else "live"
+        requested = bool(getattr(args, "second_stage", False)) or _env_flag("BRAINCTL_SECOND_STAGE")
         judge_enabled = bool(getattr(args, "judge_rerank", None))
         judge_provider = str(getattr(args, "judge_rerank", "ollama") or "ollama")
         judge_model = str(getattr(args, "judge_model", "llama3.2:3b") or "llama3.2:3b")
@@ -77,7 +82,7 @@ class SecondStageConfig:
             except (TypeError, ValueError):
                 top_n = 10
         return cls(
-            enabled=not bool(getattr(args, "no_second_stage", False)) and not (benchmark and ranking_mode == "raw"),
+            enabled=requested and not bool(getattr(args, "no_second_stage", False)) and not (benchmark and ranking_mode == "raw"),
             top_n=max(int(top_n or 10), 1),
             model_enabled=not bool(getattr(args, "no_second_stage_model", False)),
             model_path=getattr(args, "second_stage_model_path", None),

@@ -210,6 +210,7 @@ def _build_args(query: str, limit: int = 10, **overrides) -> types.SimpleNamespa
         quantum=False,
         benchmark=False,
         benchmark_ranking_mode="full",
+        second_stage=False,
         agent="robustness-agent",
         output="json",
         format="json",
@@ -427,8 +428,16 @@ class TestBenchmarkFlag:
         _seed_locomo_shape(db_path, n=50)
         return db_path
 
-    def test_benchmark_full_mode_retains_shared_reranking(self, db):
+    def test_benchmark_full_mode_keeps_second_stage_opt_in(self, db):
         args = _build_args("alice prefers dark mode", benchmark=True)
+        out = _call_cmd_search(db, args)
+        debug = out.get("_debug", {})
+        assert debug.get("benchmark.ranking_mode") == "full"
+        assert debug.get("second_stage", {}).get("enabled") is False
+        assert debug.get("memories.recency_skipped") == "benchmark_mode"
+        assert debug.get("memories.qvalue_skipped") == "benchmark_mode"
+
+        args = _build_args("alice prefers dark mode", benchmark=True, second_stage=True)
         out = _call_cmd_search(db, args)
         debug = out.get("_debug", {})
         assert debug.get("benchmark.ranking_mode") == "full"
@@ -457,7 +466,7 @@ class TestBenchmarkFlag:
                 with contextlib.redirect_stderr(buf_err):
                     _impl.cmd_search(args)
             assert "--benchmark" in buf_err.getvalue()
-            assert "full shared ranking" in buf_err.getvalue()
+            assert "stable-eval mode" in buf_err.getvalue()
         finally:
             _impl.json_out = saved_json
 
@@ -497,7 +506,7 @@ class TestBenchmarkFlag:
         # Parse the JSON payload off stdout.
         payload = json.loads(result.stdout)
         debug = payload.get("_debug", {})
-        assert debug.get("benchmark.ranking_mode") == "full"
+        assert debug.get("benchmark.ranking_mode") == "raw"
 
     def test_benchmark_raw_mode_preserves_legacy_ablation(self, db):
         args = _build_args("alice prefers dark mode", benchmark=True, benchmark_ranking_mode="raw")

@@ -6492,11 +6492,11 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
     benchmark_mode = getattr(args, "benchmark", False)
     benchmark_ranking_mode = str(
         getattr(args, "benchmark_ranking_mode", None)
-        or os.environ.get("BRAINCTL_BENCHMARK_RANKING_MODE", "full")
-        or "full"
+        or os.environ.get("BRAINCTL_BENCHMARK_RANKING_MODE", "raw")
+        or "raw"
     ).strip().lower()
     if benchmark_ranking_mode not in {"full", "raw"}:
-        benchmark_ranking_mode = "full"
+        benchmark_ranking_mode = "raw"
     benchmark_raw_ranking = bool(benchmark_mode and benchmark_ranking_mode == "raw")
     if benchmark_mode:
         if benchmark_raw_ranking:
@@ -17316,6 +17316,8 @@ def build_parser():
                        help="Apply phase-aware quantum amplitude re-ranking to memory results")
     srch.add_argument("--benchmark", action="store_true",
                        help="Disable the recency/salience/Q-value/source/context/PageRank/quantum/temporal-contiguity reranker chain and return the raw FTS+vec RRF-fused ranking. Trust reranker is preserved (different signal class). Use this for synthetic-conversational evals (LOCOMO, LongMemEval) where uniform timestamps make rerankers worse than no-op.")
+    srch.add_argument("--benchmark-ranking-mode", choices=["raw", "full"], default=None,
+                       help="Internal eval mode for --benchmark. Defaults to raw, matching the legacy benchmark profile.")
     # 2.4.0: optional cross-encoder reranker stage (off by default).
     # Uses nargs="?" + const so `--rerank` alone takes the default
     # model and `--rerank MODEL` lets the user pin a specific one.
@@ -17335,6 +17337,8 @@ def build_parser():
                             "Defaults to env BRAINCTL_CE_P95_BUDGET_MS or 350.")
     srch.add_argument("--no-second-stage", action="store_true", default=False,
                        help="Disable the shared deterministic second-stage reranker.")
+    srch.add_argument("--second-stage", action="store_true", default=False,
+                       help="Enable the opt-in shared deterministic second-stage reranker.")
     srch.add_argument("--no-second-stage-model", action="store_true", default=False,
                        help="Run the second-stage reranker without the tiny MLP residual model.")
     srch.add_argument("--second-stage-top-n", type=int, default=None, metavar="N",
