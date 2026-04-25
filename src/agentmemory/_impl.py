@@ -7034,35 +7034,53 @@ def cmd_search(args, *, db=None, db_path: Optional[str] = None):
     _pre_answerability_candidates = []
     if "procedures" in tables:
         try:
-            from agentmemory.retrieval.candidate_generation import generate_procedure_candidates as _generate_procedure_candidates
-            from agentmemory.retrieval.evidence_graph import expand_procedure_evidence as _expand_procedure_evidence
-            from agentmemory.retrieval.late_reranker import rerank_procedure_candidates as _rerank_procedure_candidates
-            from agentmemory.retrieval.query_planner import plan_query as _plan_query
-
-            if _query_plan is None:
-                _query_plan = _plan_query(query, requested_tables=tables)
-                _query_plan_dict = _query_plan.as_dict()
             proc_scope = None
             if getattr(args, "project", None):
                 proc_scope = f"project:{args.project}"
-            generated = _generate_procedure_candidates(
-                db,
-                query,
-                _query_plan,
-                limit=fetch_limit,
-                scope=proc_scope,
-            )
-            evidence = _expand_procedure_evidence(
-                db,
-                generated.get("candidates", []),
-                max_sources_per_candidate=4,
-            )
-            reranked = _rerank_procedure_candidates(
-                generated.get("candidates", []),
-                evidence,
-                benchmark_mode=benchmark_mode,
-            )
-            results["procedures"] = reranked[:limit]
+            try:
+                from agentmemory.retrieval.candidate_generation import generate_procedure_candidates as _generate_procedure_candidates
+                from agentmemory.retrieval.evidence_graph import expand_procedure_evidence as _expand_procedure_evidence
+                from agentmemory.retrieval.late_reranker import rerank_procedure_candidates as _rerank_procedure_candidates
+                from agentmemory.retrieval.query_planner import plan_query as _plan_query
+            except ImportError:
+                from agentmemory import procedural as _procedural
+
+                direct = _procedural.search_procedures(
+                    db,
+                    query,
+                    limit=limit,
+                    scope=proc_scope,
+                    debug=True,
+                )
+                rows = direct.get("procedures", []) or []
+                for row in rows:
+                    row.setdefault("source", "procedure_fts")
+                    row.setdefault("type", "procedure")
+                results["procedures"] = rows[:limit]
+                generated = {"debug": {"fallback": "procedural_service", **(direct.get("debug") or {})}}
+                evidence = {}
+            else:
+                if _query_plan is None:
+                    _query_plan = _plan_query(query, requested_tables=tables)
+                    _query_plan_dict = _query_plan.as_dict()
+                generated = _generate_procedure_candidates(
+                    db,
+                    query,
+                    _query_plan,
+                    limit=fetch_limit,
+                    scope=proc_scope,
+                )
+                evidence = _expand_procedure_evidence(
+                    db,
+                    generated.get("candidates", []),
+                    max_sources_per_candidate=4,
+                )
+                reranked = _rerank_procedure_candidates(
+                    generated.get("candidates", []),
+                    evidence,
+                    benchmark_mode=benchmark_mode,
+                )
+                results["procedures"] = reranked[:limit]
             _pre_answerability_candidates = list(results["procedures"])
             _procedure_debug = {
                 "candidate_generation": generated.get("debug") or {},
