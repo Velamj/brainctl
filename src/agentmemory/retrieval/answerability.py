@@ -23,6 +23,8 @@ def _normalize_token(token: str) -> str:
         return ""
     if tok.endswith("ies") and len(tok) > 4:
         tok = tok[:-3] + "y"
+    elif tok.endswith("ing") and len(tok) > 5:
+        tok = tok[:-3]
     elif tok.endswith("ed") and len(tok) > 4:
         tok = tok[:-2]
     elif tok.endswith("es") and len(tok) > 4:
@@ -35,7 +37,7 @@ def _normalize_token(token: str) -> str:
 def _token_set(text: str) -> set[str]:
     return {
         norm
-        for part in re.split(r"\s+", text or "")
+        for part in re.split(r"[^A-Za-z0-9]+", text or "")
         if (norm := _normalize_token(part))
     }
 

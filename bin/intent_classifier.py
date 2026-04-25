@@ -42,16 +42,16 @@ class IntentResult:
 # Each entry is (primary_tables, secondary_tables).
 # The final merged list fed to --tables is primary + secondary (de-duped).
 _TABLE_ROUTES = {
-    "cross_reference":    ["events", "memories", "context", "procedures"],
-    "troubleshooting":    ["procedures", "events", "memories", "context", "decisions"],
+    "cross_reference":    ["events", "memories", "context"],
+    "troubleshooting":    ["events", "memories", "context", "decisions"],
     "task_status":        ["events", "context", "memories"],
-    "entity_lookup":      ["memories", "entities", "context", "events", "procedures"],
-    "historical_timeline":["events", "memories", "context", "procedures"],
-    "how_to":             ["procedures", "memories", "context", "events", "decisions"],
-    "decision_rationale": ["decisions", "memories", "context", "events", "procedures"],
-    "research_concept":   ["memories", "procedures", "context"],
-    "orientation":        ["memories", "events", "context", "procedures"],
-    "factual_lookup":     ["memories", "entities", "decisions", "context", "events", "procedures"],
+    "entity_lookup":      ["memories", "events", "context"],
+    "historical_timeline":["events", "memories", "context"],
+    "how_to":             ["memories", "context", "events", "decisions"],
+    "decision_rationale": ["decisions", "memories", "context", "events"],
+    "research_concept":   ["memories", "context"],
+    "orientation":        ["memories", "events", "context"],
+    "factual_lookup":     ["memories", "entities", "decisions", "context", "events"],
 }
 
 _FORMAT_HINTS = {

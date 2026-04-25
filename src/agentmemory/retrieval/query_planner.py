@@ -159,13 +159,13 @@ _INTENT_ALIASES = {
 
 
 _TABLE_ROUTES = {
-    "procedural": ["procedures", "memories", "decisions", "events", "context", "policy"],
-    "troubleshooting": ["procedures", "events", "memories", "decisions", "context", "policy"],
-    "decision": ["decisions", "memories", "procedures", "events", "context"],
-    "temporal": ["events", "memories", "context", "entities", "procedures"],
-    "factual": ["memories", "entities", "decisions", "context", "events", "procedures"],
-    "graph": ["memories", "events", "context", "decisions", "procedures"],
-    "orientation": ["memories", "events", "context", "procedures"],
+    "procedural": ["memories", "decisions", "events", "context", "policy"],
+    "troubleshooting": ["events", "memories", "decisions", "context", "policy"],
+    "decision": ["decisions", "memories", "events", "context"],
+    "temporal": ["events", "memories", "context", "entities"],
+    "factual": ["memories", "entities", "decisions", "context", "events"],
+    "graph": ["memories", "events", "context", "decisions"],
+    "orientation": ["memories", "events", "context"],
 }
 
 
