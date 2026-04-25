@@ -9,12 +9,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-import matplotlib
-
-matplotlib.use("Agg")
-
-import matplotlib.pyplot as plt
-
 
 FULL_SAME_MACHINE = "full_same_machine"
 PARTIAL = "partial"
@@ -31,6 +25,17 @@ SERIES_ORDER = {
     "new_brainctl": 1,
     "mempalace": 2,
 }
+
+
+def _load_matplotlib():
+    """Import matplotlib only when chart rendering is actually requested."""
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    return matplotlib, plt
 
 
 @dataclass
@@ -230,6 +235,7 @@ def plot_benchmark_chart(
     runs: list[BenchmarkRunResult],
     metric_keys: list[str],
 ) -> Path | None:
+    _matplotlib, plt = _load_matplotlib()
     plotted = [
         run
         for run in _sort_runs_for_plot(runs)
@@ -267,6 +273,7 @@ def plot_aggregate_primary_chart(
     runs: list[BenchmarkRunResult],
     benchmarks: list[str],
 ) -> Path | None:
+    _matplotlib, plt = _load_matplotlib()
     measured = [
         run
         for run in runs
@@ -322,6 +329,7 @@ def plot_aggregate_primary_chart(
 
 
 def plot_status_chart(path: Path, runs: list[BenchmarkRunResult], benchmarks: list[str]) -> Path:
+    _matplotlib, plt = _load_matplotlib()
     status_order = [FULL_SAME_MACHINE, PARTIAL, BLOCKED]
     colors = {
         FULL_SAME_MACHINE: "#4c78a8",
